@@ -92,3 +92,42 @@ def test_create_superuser_forces_rol_administrador():
     )
     assert usuario.rol == "administrador"
     assert usuario.is_staff is True
+
+
+@pytest.mark.django_db
+def test_bulk_update_demoting_superuser_rol_raises_integrity_error():
+    """QuerySet.update() bypasses Usuario.save(), so the CheckConstraint
+    usuario_superuser_es_administrador must reject a superuser whose rol is
+    downgraded.
+
+    The update also clears is_staff so that usuario_rol_implica_is_staff stays
+    satisfied. That isolation matters: the only constraint that can reject this
+    write is usuario_superuser_es_administrador.
+    """
+    superusuario = Usuario.objects.create_superuser(
+        username="root_degradado", email="root2@example.com", password="irrelevant"
+    )
+
+    with pytest.raises(IntegrityError, match="usuario_superuser_es_administrador"):
+        with transaction.atomic():
+            Usuario.objects.filter(pk=superusuario.pk).update(
+                rol="usuario", is_staff=False
+            )
+
+
+@pytest.mark.django_db
+def test_bulk_update_granting_is_superuser_without_administrador_rol_raises_integrity_error(
+    usuario_factory,
+):
+    """Granting is_superuser through QuerySet.update() without also promoting
+    rol must be rejected by usuario_superuser_es_administrador.
+
+    The row keeps rol="usuario" and is_staff=False, which satisfies
+    usuario_rol_implica_is_staff, so again only the superuser constraint can
+    reject this write.
+    """
+    usuario = usuario_factory(username="escalada", rol="usuario")
+
+    with pytest.raises(IntegrityError, match="usuario_superuser_es_administrador"):
+        with transaction.atomic():
+            Usuario.objects.filter(pk=usuario.pk).update(is_superuser=True)
