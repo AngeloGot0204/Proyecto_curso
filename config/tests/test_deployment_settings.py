@@ -90,7 +90,9 @@ def test_a5_secure_proxy_ssl_header_exact_tuple(load_settings):
 def test_a8_debug_is_false_under_prod_env(load_settings):
     """
     Spec: Secrets handling — DEBUG is False (Automatable).
-    Weak name-absence RED (DEBUG already defaults False in item #1).
+    Regression guard, not RED-tested behavior: `DEBUG`'s defaulting comes
+    from item #1 and is unchanged by this diff, so this assertion is
+    vacuously green from the first run. No RED was manufactured for it.
     """
     module = load_settings(PROD_ENV)
 
