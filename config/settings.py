@@ -37,13 +37,54 @@ def require_env(name):
         raise ImproperlyConfigured(f"Missing required environment variable: {name}")
 
 
+def require_bool_env(name):
+    """require_env() for a strict boolean. Rejects 'true', '1', 'yes'."""
+    value = require_env(name)
+    if value not in ("True", "False"):
+        raise ImproperlyConfigured(
+            f"{name} must be exactly 'True' or 'False', got {value!r}"
+        )
+    return value == "True"
+
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = require_env("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [h.strip() for h in require_env("DJANGO_ALLOWED_HOSTS").split(",")]
+
+CSRF_TRUSTED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if o.strip()
+]
+
+# Vercel terminates TLS at its edge and forwards the original scheme in this
+# header, so request.is_secure() is False without it (design decision 4).
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Is this deployment served exclusively over HTTPS? A deployment fact the
+# app is told, never infers. No value is safe in both places, so it is
+# fail-loud (design decision 11).
+HTTPS_ONLY = require_bool_env("DJANGO_HTTPS_ONLY")
+
+SESSION_COOKIE_SECURE = HTTPS_ONLY
+CSRF_COOKIE_SECURE = HTTPS_ONLY
+SECURE_SSL_REDIRECT = HTTPS_ONLY
+
+# One hour, deliberately short: browsers cache HSTS, so it cannot be
+# withdrawn from the server side (design decision 11).
+SECURE_HSTS_SECONDS = 3600 if HTTPS_ONLY else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = HTTPS_ONLY
+SECURE_HSTS_PRELOAD = False
+
+# security.W021 asks for SECURE_HSTS_PRELOAD. The browser preload list is
+# keyed on registrable domains; vercel.app is a public suffix this project
+# does not own, so the directive could never take effect. Silenced
+# deliberately, with a reason - not ignored (design decision 11).
+SILENCED_SYSTEM_CHECKS = ["security.W021"]
 
 
 # Application definition
@@ -101,6 +142,9 @@ DATABASES["default"]["TEST"] = {
     "NAME": os.environ.get("TEST_DB_NAME", "test_reportes_dev"),
 }
 
+# Connection-per-request: Neon's pooler absorbs the churn (design decision 6).
+DATABASES["default"]["CONN_MAX_AGE"] = 0
+
 
 # Custom user model (decision 1). Must be set before the first migration.
 AUTH_USER_MODEL = "usuarios.Usuario"
@@ -141,6 +185,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
