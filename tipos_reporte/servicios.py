@@ -18,8 +18,12 @@ from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
 
-from tipos_reporte.models import DefinicionDeTipo, Estado
-from tipos_reporte.validacion import ResultadoDeValidacion, validar_definicion
+from tipos_reporte.models import DefinicionDeTipo, Estado, TipoDeReporte
+from tipos_reporte.validacion import (
+    ProblemaDeDefinicion,
+    ResultadoDeValidacion,
+    validar_definicion,
+)
 
 
 def _siguiente_version(tipo) -> int:
@@ -37,7 +41,23 @@ def activar_definicion(definicion: DefinicionDeTipo) -> ResultadoDeValidacion:
     `ResultadoDeValidacion` — never raises for a validation failure."""
     tipo = definicion.tipo
     plantilla = tipo.plantilla
-    plantilla.open("rb")
+    try:
+        plantilla.open("rb")
+    except (OSError, FileNotFoundError):
+        # Mirrors `validacion.validar_contra_plantilla`'s own contract: a
+        # template problem is NEVER an uncaught exception, always a
+        # `plantilla-ilegible` problem. An unreadable/missing file in
+        # storage (deleted, ephemeral filesystem) must reach here the same
+        # way an unparseable-but-present file does.
+        return ResultadoDeValidacion(
+            problemas=(
+                ProblemaDeDefinicion(
+                    regla="plantilla-ilegible",
+                    ubicacion="plantilla",
+                    mensaje="No se pudo leer el archivo de plantilla (.xlsx).",
+                ),
+            )
+        )
     try:
         resultado = validar_definicion(definicion.estructura, plantilla)
     finally:
@@ -47,6 +67,19 @@ def activar_definicion(definicion: DefinicionDeTipo) -> ResultadoDeValidacion:
         return resultado
 
     with transaction.atomic():
+        # Lock the tipo row for the rest of this transaction (code review
+        # fix): without it, two concurrent activations of the SAME tipo
+        # could both read the same "next version" (`_siguiente_version()`)
+        # before either commits, and the second would crash with an
+        # uncaught `IntegrityError` against
+        # `definicion_version_unica_por_tipo`. Every other activation of
+        # this tipo now blocks here until this transaction commits or
+        # rolls back. Deliberately NOT rebound to `tipo`: callers rely on
+        # mutating their own `tipo` instance (e.g. it stays the same object
+        # `desactivar_tipo` is later called with) — only the row LOCK is
+        # needed here, not a replacement in-memory object.
+        TipoDeReporte.objects.select_for_update().get(pk=tipo.pk)
+
         anterior_activa = (
             DefinicionDeTipo.objects.filter(tipo=tipo, estado=Estado.ACTIVA)
             .exclude(pk=definicion.pk)

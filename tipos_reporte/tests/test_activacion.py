@@ -11,8 +11,12 @@ by a later re-activation of the same row).
 (the admin action) decide how to surface `es_valida is False`.
 """
 
+import threading
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from tipos_reporte.models import DefinicionDeTipo, Estado
 from tipos_reporte.servicios import activar_definicion, desactivar_tipo
@@ -157,6 +161,124 @@ def test_desactivar_tipo_sin_definicion_activa_es_no_op(tipo_de_reporte_factory)
     desactivar_tipo(tipo)
 
     tipo.refresh_from_db()
+    assert tipo.definicion_activa_id is None
+
+
+@pytest.mark.django_db
+def test_activar_definicion_lockea_el_tipo_con_select_for_update(
+    tipo_de_reporte_factory, plantilla_xlsx, definicion_valida
+):
+    """Code-review fix: concurrent activations of the SAME tipo must be
+    serialized — two overlapping calls could otherwise both compute the
+    same "next version" (`_siguiente_version()`) before either commits, and
+    the second crashes with an uncaught `IntegrityError` against
+    `definicion_version_unica_por_tipo`. Proven here by asserting the SQL
+    Django actually executes inside `activar_definicion`'s atomic block
+    includes a row lock (`FOR UPDATE`) on the tipo."""
+    tipo = _tipo_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx)
+    definicion = _crear_borrador(tipo, definicion_valida())
+
+    with CaptureQueriesContext(connection) as contexto:
+        resultado = activar_definicion(definicion)
+
+    assert resultado.es_valida is True
+    consultas_con_lock = [
+        q["sql"] for q in contexto.captured_queries if "FOR UPDATE" in q["sql"].upper()
+    ]
+    assert consultas_con_lock, (
+        "activar_definicion debe lockear el tipo (select_for_update) para "
+        "serializar activaciones concurrentes del mismo tipo"
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_activar_definicion_serializa_con_una_activacion_concurrente_del_mismo_tipo(
+    tipo_de_reporte_factory, plantilla_xlsx, definicion_valida
+):
+    """Functional proof of the same fix: while another transaction holds the
+    tipo's row lock open (an in-flight, uncommitted activation), a second
+    `activar_definicion` call for that SAME tipo must block instead of
+    racing ahead — and must complete successfully once the first releases
+    the lock (commits)."""
+    tipo = _tipo_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx)
+    definicion = _crear_borrador(tipo, definicion_valida())
+
+    lock_adquirido = threading.Event()
+    liberar_lock = threading.Event()
+    orden = []
+
+    def _mantener_lock_externo():
+        from django.db import transaction as tx
+
+        from tipos_reporte.models import TipoDeReporte
+
+        try:
+            with tx.atomic():
+                TipoDeReporte.objects.select_for_update().get(pk=tipo.pk)
+                orden.append("lock-externo-adquirido")
+                lock_adquirido.set()
+                liberar_lock.wait(timeout=5)
+            orden.append("lock-externo-liberado")
+        finally:
+            connection.close()
+
+    resultado_contenedor = {}
+
+    def _activar_en_hilo():
+        try:
+            resultado_contenedor["resultado"] = activar_definicion(definicion)
+            orden.append("activacion-completada")
+        finally:
+            connection.close()
+
+    hilo_lock = threading.Thread(target=_mantener_lock_externo)
+    hilo_lock.start()
+    assert lock_adquirido.wait(timeout=5)
+
+    hilo_activacion = threading.Thread(target=_activar_en_hilo)
+    hilo_activacion.start()
+    hilo_activacion.join(timeout=1)
+    assert hilo_activacion.is_alive(), (
+        "activar_definicion no debería completar mientras otra transacción "
+        "mantiene el lock del mismo tipo"
+    )
+
+    liberar_lock.set()
+    hilo_lock.join(timeout=5)
+    hilo_activacion.join(timeout=5)
+
+    assert not hilo_activacion.is_alive()
+    assert orden.index("lock-externo-liberado") < orden.index("activacion-completada")
+    assert resultado_contenedor["resultado"].es_valida is True
+    definicion.refresh_from_db()
+    assert definicion.estado == Estado.ACTIVA
+    assert definicion.version == 1
+
+
+@pytest.mark.django_db
+def test_activar_definicion_con_plantilla_ilegible_en_storage_reporta_problema(
+    tipo_de_reporte_factory, plantilla_xlsx, definicion_valida
+):
+    """Code-review fix: `validacion.validar_contra_plantilla` documents that a
+    template problem must NEVER be an uncaught exception — it always becomes
+    a `plantilla-ilegible` problem. If the template file is missing from
+    storage (deleted, or an ephemeral filesystem), `plantilla.open("rb")`
+    itself raises `FileNotFoundError` before `validar_contra_plantilla` ever
+    gets a chance to catch anything, so the service must guard that open()
+    too instead of letting it propagate as an uncaught 500."""
+    tipo = _tipo_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx)
+    import os
+
+    os.remove(tipo.plantilla.path)
+    definicion = _crear_borrador(tipo, definicion_valida())
+
+    resultado = activar_definicion(definicion)
+
+    definicion.refresh_from_db()
+    tipo.refresh_from_db()
+    assert resultado.es_valida is False
+    assert any(p.regla == "plantilla-ilegible" for p in resultado.problemas)
+    assert definicion.estado == Estado.BORRADOR
     assert tipo.definicion_activa_id is None
 
 
