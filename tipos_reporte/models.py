@@ -203,19 +203,25 @@ class DefinicionDeTipo(models.Model):
         return f"{self.tipo.codigo} v{self.version or '(borrador)'}"
 
     def save(self, *args, **kwargs):
-        if self.pk and self.estado != Estado.BORRADOR:
+        # Checked against `anterior.estado` (the row's state BEFORE this
+        # save), not `self.estado`: the borrador -> activa transition
+        # itself legitimately assigns `version` for the first time (design
+        # D2), so it must not trip this guard. Immutability only applies
+        # once the row has ALREADY left borrador (design D3).
+        if self.pk:
             anterior = type(self).objects.get(pk=self.pk)
-            cambiados = [
-                campo
-                for campo in CONGELADOS
-                if getattr(anterior, campo) != getattr(self, campo)
-            ]
-            if cambiados:
-                raise ValidationError(
-                    f"Una definición {self.estado} es inmutable; "
-                    f"campos modificados: {', '.join(cambiados)}. "
-                    "Desactivá el tipo y subí una definición nueva."
-                )
+            if anterior.estado != Estado.BORRADOR:
+                cambiados = [
+                    campo
+                    for campo in CONGELADOS
+                    if getattr(anterior, campo) != getattr(self, campo)
+                ]
+                if cambiados:
+                    raise ValidationError(
+                        f"Una definición {anterior.estado} es inmutable; "
+                        f"campos modificados: {', '.join(cambiados)}. "
+                        "Desactivá el tipo y subí una definición nueva."
+                    )
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):

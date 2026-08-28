@@ -81,6 +81,25 @@ def plantilla_xlsx(tmp_path):
 
 
 @pytest.fixture
+def usuario_factory(db):
+    """Create a Usuario with sensible defaults, overridable by kwargs.
+    Mirrors `usuarios/tests/conftest.py`'s fixture (app-local test
+    convention) — this app's admin tests (Slice 4) need one too and cross-
+    app fixture sharing is not this project's pattern."""
+    from usuarios.models import Usuario
+
+    def _create(**kwargs):
+        defaults = {
+            "username": "usuario_test",
+            "password": "irrelevant-not-hashed-for-this-fixture",
+        }
+        defaults.update(kwargs)
+        return Usuario.objects.create(**defaults)
+
+    return _create
+
+
+@pytest.fixture
 def tipo_de_reporte_factory(db):
     """Create a TipoDeReporte with sensible defaults, overridable by kwargs.
 

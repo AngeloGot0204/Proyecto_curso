@@ -172,6 +172,27 @@ def test_queryset_update_bypassing_immutability_on_activa_row_raises(
 
 
 @pytest.mark.django_db
+def test_primera_activacion_asigna_version_sin_disparar_inmutabilidad(
+    tipo_de_reporte_factory,
+):
+    """Regression (found while building Slice 4's activation service): the
+    borrador -> activa transition itself assigns `version` for the first
+    time, which must NOT trip the immutability guard — only a row that was
+    ALREADY non-borrador before this save is frozen (design D3)."""
+    tipo = tipo_de_reporte_factory()
+    definicion = _crear_definicion(tipo, estado=Estado.BORRADOR)
+
+    definicion.version = 1
+    definicion.activada_en = timezone.now()
+    definicion.estado = Estado.ACTIVA
+    definicion.save()
+    definicion.refresh_from_db()
+
+    assert definicion.estado == Estado.ACTIVA
+    assert definicion.version == 1
+
+
+@pytest.mark.django_db
 def test_queryset_update_on_borrador_row_is_allowed(tipo_de_reporte_factory):
     """The `update()` guard must only block non-draft rows — a borrador stays
     editable through `update()` too."""
