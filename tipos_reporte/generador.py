@@ -8,14 +8,15 @@ rebuilt workbook (ADR-0002) — and reuses `tipos_reporte/validacion.py`'s
 `_iterar_nodos`/`_claves_de_celda_requeridas` so anchor logic exists in
 exactly one place (design D1).
 
-This module currently implements Phase 1 (exceptions), Phase 2 (template
-loading + completeness validation) and Phase 3 (cell writing + sheet-only
-export) of the change's `tasks.md`. Logo swap lands in a later PR.
+This module implements every phase of the change's `tasks.md`: Phase 1
+(exceptions), Phase 2 (template loading + completeness validation), Phase 3
+(cell writing + sheet-only export) and Phase 4 (logo swap).
 """
 
 from io import BytesIO
 
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image as ImagenOpenpyxl
 
 from tipos_reporte.validacion import _claves_de_celda_requeridas, _iterar_nodos
 
@@ -87,6 +88,29 @@ def _validar_completitud(estructura, valores):
         raise ValoresIncompletos(faltantes)
 
 
+def _intercambiar_logo(hoja, logo):
+    """Swap the template's original image for `logo` at the SAME anchor
+    (design D4, Sequence step 5). Reusing the loaded `anchor` OBJECT (not
+    just its coordinates) preserves both position and extent — openpyxl
+    serializes an image's box from `anchor._from`/`anchor.ext`, ignoring
+    `Image.width`/`height`, so copying pixel dimensions instead would
+    resize the drawing box to the new image's size.
+
+    - No `logo` set → leave `hoja._images` untouched (template's original
+      logo stays, per the confirmed proposal decision).
+    - `logo` set but the template has no image (`hoja._images` empty) →
+      no anchor exists to honor, so nothing is inserted (rejected
+      alternative: a hardcoded cell, which would drop the logo over report
+      data)."""
+    originales = hoja._images
+    if logo and originales:
+        original = originales[0]
+        nueva = ImagenOpenpyxl(BytesIO(logo.read()))
+        nueva.anchor = original.anchor
+        hoja._images.remove(original)
+        hoja.add_image(nueva)
+
+
 def _escribir_valores(hoja, estructura, valores):
     """Write every present `valores` key into its anchor cell (design's
     Sequence, step 6). Walks the same nodes `_validar_completitud` walks,
@@ -113,8 +137,7 @@ def _exportar_solo_hoja_declarada(libro, nombre_hoja):
 
 def generar_reporte(definicion, valores: dict):
     """Fill `definicion`'s template with `valores` and return the generated
-    `.xlsx` bytes (design's Sequence, steps 1-4, 6-8 in this PR slice; step
-    5 — logo swap — lands in the next PR).
+    `.xlsx` bytes (design's Sequence, steps 1-8).
 
     `definicion` must already be an ACTIVATED `DefinicionDeTipo` — this
     function trusts `definicion.estructura` and adds no re-validation of
@@ -160,12 +183,15 @@ def generar_reporte(definicion, valores: dict):
         ) from error
 
     # Design's Sequence, step 4: validation precedes every mutation, so no
-    # partial write is ever observable, even in-memory (step 5, logo swap,
-    # lands in a later PR).
+    # partial write is ever observable, even in-memory.
     _validar_completitud(estructura, valores)
 
+    # Design's Sequence, step 5: swap the logo (if any) before writing
+    # values, reusing the original image's anchor object (D4).
+    _intercambiar_logo(hoja, tipo.logo)
+
     # Design's Sequence, step 6: write every present value into its anchor
-    # cell (step 5, logo swap, is not yet implemented in this PR slice).
+    # cell.
     _escribir_valores(hoja, estructura, valores)
 
     # Design's Sequence, step 7: export only the declared sheet.

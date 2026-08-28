@@ -1,11 +1,13 @@
 # Apply Progress: Generador de Excel desde plantilla (backlog #4)
 
 **Mode**: Strict TDD
-**This run (PR 2 of 3)**: Phase 3 (Cell Writing and Sheet Export) only — tasks 3.1-3.9. Phase 4
-(logo swap) remains explicitly OUT of scope and untouched. PR 1 (Phase 1+2) is merged to `main`;
-its record below is copied forward for continuity, not re-applied.
+**This run (PR 3 of 3, FINAL)**: Phase 4 (logo swap) and Phase 5
+(integration/cleanup) — tasks 4.1-4.5 and 5.1-5.4. PR 1 (Phase 1+2) and PR 2
+(Phase 3) are merged to `main`; their records below are copied forward for
+continuity, not re-applied. This completes ALL tasks in `tasks.md` — the
+change is fully implemented.
 
-## Completed Tasks (cumulative)
+## Completed Tasks (cumulative — ALL 34/34)
 
 ### Phase 1: Foundation — Exceptions and Test Fixtures (PR 1, merged)
 - [x] 1.1 RED: failing test for `ProblemaDeGeneracion` importability/subclass
@@ -30,13 +32,12 @@ its record below is copied forward for continuity, not re-applied.
 - [x] 2.10 GREEN: `_validar_completitud` implemented and wired into `generar_reporte` (design
       Sequence step 4; D2 membership test; D3 `obligatorio` requiredness)
 
-### Phase 3: Cell Writing and Sheet Export (PR 2, this run)
+### Phase 3: Cell Writing and Sheet Export (PR 2, merged)
 - [x] 3.1 RED: "Simple field value is written by id" scenario test (`turno`/`B2`/`"Mañana"`)
 - [x] 3.2 RED: "Range field values are written from two independent keys" scenario test
       (`descanso_inicio`→`C3`, `descanso_fin`→`C4`)
 - [x] 3.3 RED: falsy-value test — `False`/`0` via round trip; `""` via a unit-level companion
-      test against `_escribir_valores` directly (see Deviations from Design — openpyxl/XLSX
-      round-trip limitation, not an implementation gap)
+      test against `_escribir_valores` directly (see PR 2's Deviations from Design)
 - [x] 3.4 GREEN: cell-writing pass — `_escribir_valores(hoja, estructura, valores)` walks all
       nodes via `_iterar_nodos`, uses `_destinos(nodo)` for every present key in `valores`
       (membership test, D2/D3), writes `hoja[coordenada] = valores[clave]`
@@ -50,80 +51,88 @@ its record below is copied forward for continuity, not re-applied.
 - [x] 3.9 GREEN: `libro.save(buffer); buffer.seek(0); return buffer` wired as the final step,
       after cell writing and sheet-only export (design Sequence steps 6-8)
 
-## Remaining Tasks (deferred to PR 3)
+### Phase 4: Logo Swap (PR 3, this run)
+- [x] 4.1 RED: "Logo is present on the tipo" test — 10x10 template image, distinct 20x20
+      `logo`; asserts exported sheet's image at the original anchor has size `(20, 20)`
+- [x] 4.2 RED: "Logo is absent on the tipo" test — `logo=None`; asserts exported image size
+      stays `(10, 10)` and anchor `_from.col`/`_from.row` are unchanged (passed immediately —
+      no code touches `_images` without a `logo`, correctly describing current no-op behavior;
+      kept as a regression guard, same pattern as PR 2's task 3.6)
+- [x] 4.3 RED: "template has no image, logo is set" test — `imagen=None`, `logo=` set; asserts
+      `hoja._images == []` (also passed immediately for the same reason as 4.2 — no anchor to
+      swap onto; kept as a regression guard against the rejected hardcoded-cell alternative)
+- [x] 4.4 GREEN: `_intercambiar_logo(hoja, logo)` implemented in `generador.py` per design D4 —
+      `ImagenOpenpyxl(BytesIO(logo.read()))`, reuses `original.anchor` object (not just
+      coordinates), `hoja._images.remove(original)`, `hoja.add_image(nueva)`
+- [x] 4.5 Wired into `generar_reporte`'s main sequence as step 5, between `_validar_completitud`
+      (step 4) and `_escribir_valores` (step 6), matching the design sequence diagram exactly
 
-### Phase 4: Logo Swap (PR 3)
-- [ ] 4.1-4.5 — all pending (logo present/absent/template-has-no-image scenarios, `_images`
-      swap implementation, wiring into main sequence)
-
-### Phase 5: Integration and Cleanup
-- [ ] 5.1-5.4 — pending until Phase 4 lands (full-suite spec-coverage check, docstring review,
-      threat-matrix confirmation)
+### Phase 5: Integration and Cleanup (PR 3, this run)
+- [x] 5.1 Full `tipos_reporte/tests/test_generador.py` run: 22/22 passed. Every spec.md
+      requirement/scenario has a corresponding test (Template Loading → 2.1/2.2; Values-Dict
+      Contract → 3.1/3.2; Missing Required Values → 2.6/2.7/2.8; Logo Swap → 4.1/4.2;
+      Sheet-Only Export → 3.5/3.6; Return Value → 3.8)
+- [x] 5.2 Full `tipos_reporte/tests/` app suite: 102/102 passed (0 regressions vs. the 99-test
+      PR 2 baseline — the 3 new logo tests account for the delta). Default `hojas_extra=()`/
+      `imagen=None` fixture behavior confirmed unaffected — all pre-Slice-4 tests still pass.
+- [x] 5.3 Reviewed `generador.py` docstrings — `_destinos`, `_escribir_valores`,
+      `_validar_completitud` already document the values-dict contract (scalar `id` key vs.
+      `id_inicio`/`id_fin` range keys, membership-over-truthiness) from PR 1/2; module docstring
+      and `generar_reporte`'s docstring updated this run to drop the now-stale "logo swap lands
+      in a later PR" notes, since all 8 sequence steps are implemented
+- [x] 5.4 Confirmed: design's Threat Matrix remains `N/A` — no routing/shell/subprocess/VCS
+      boundary was introduced by the logo-swap implementation; the one untrusted-input surface
+      (admin-uploaded logo image parsed by openpyxl/Pillow via `ImagenOpenpyxl`) is unconditionally
+      wrapped by the same design that already converts template-parse failures into
+      `PlantillaIlegible` — no new exception path bypasses that
 
 ## TDD Cycle Evidence
 
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
 |------|-----------|-------|------------|-----|-------|-------------|----------|
 | 1.1-2.10 | see PR 1 record | — | — | ✅ | ✅ | ✅ | ➖ None needed |
-| 3.1 | `tipos_reporte/tests/test_generador.py` | Unit (DB) | ✅ 19/19 | ✅ Written, failed with `hoja["B2"].value is None` before 3.4 | ✅ Passed after 3.4 | ➖ Single scenario | ➖ None needed |
-| 3.2 | `tipos_reporte/tests/test_generador.py` | Unit (DB) | ✅ 19/19 | ✅ Written, failed (cells unwritten) before 3.4 | ✅ Passed after 3.4 | ✅ 2 cells (C3, C4) | ➖ None needed |
-| 3.3 | `tipos_reporte/tests/test_generador.py` | Unit (DB) + Unit (pure) | ✅ 19/19 | ✅ Written; `False`/`0` failed before 3.4; `""` unit test written after discovering the round-trip limitation | ✅ Passed after 3.4 | ✅ 3 falsy values (`False`, `0`, `""`) | ➖ None needed |
-| 3.4 | `tipos_reporte/generador.py` | Unit (DB) | ✅ 19/19 | — | ✅ Passed (3.1-3.3) | ➖ N/A | ➖ None needed |
-| 3.5 | `tipos_reporte/tests/test_generador.py` | Unit (DB) | ✅ 19/19 | ✅ Written, failed with `sheetnames == ['REPORTE', 'Otra']` before 3.7 | ✅ Passed after 3.7 | ➖ Single scenario | ➖ None needed |
-| 3.6 | `tipos_reporte/tests/test_generador.py` | Unit (DB) | ✅ 19/19 | ✅ Written; passed immediately (no prior code touched merges) — kept as a regression guard for D5 | ✅ Passed | ➖ Single scenario | ➖ None needed |
-| 3.7 | `tipos_reporte/generador.py` | Unit (DB) | ✅ 19/19 | — | ✅ Passed (3.5-3.6) | ➖ N/A | ➖ None needed |
-| 3.8 | `tipos_reporte/tests/test_generador.py` | Unit (DB) | ✅ 19/19 | ✅ Written; passed immediately (step 8 already existed from PR 1) — kept as an explicit spec-scenario regression guard | ✅ Passed | ➖ Single scenario | ➖ None needed |
-| 3.9 | `tipos_reporte/generador.py` | Unit (DB) | ✅ 19/19 | — | ✅ Confirmed by 3.8 (step reordered to run after 3.4/3.7, not re-implemented) | ➖ N/A | ➖ None needed |
+| 3.1-3.9 | see PR 2 record | — | — | ✅ | ✅ | ✅ | ➖ None needed |
+| 4.1 | `tipos_reporte/tests/test_generador.py` | Unit (DB) | ✅ 19/19 | ✅ Written, failed with `imagen_exportada.size == (10, 10)` (still the template's original image) before 4.4 | ✅ Passed after 4.4 | ➖ Single scenario (logo-present path has one shape) | ➖ None needed |
+| 4.2 | `tipos_reporte/tests/test_generador.py` | Unit (DB) | ✅ 19/19 | ✅ Written; passed immediately (no code path touches `_images` when `logo` is falsy) — kept as an explicit regression guard for the "logo absent → untouched" proposal decision | ✅ Passed | ➖ Single scenario | ➖ None needed |
+| 4.3 | `tipos_reporte/tests/test_generador.py` | Unit (DB) | ✅ 19/19 | ✅ Written; passed immediately (no anchor exists when `hoja._images` is empty, so the `originales` guard short-circuits) — kept as an explicit regression guard against the rejected hardcoded-cell alternative | ✅ Passed | ➖ Single scenario | ➖ None needed |
+| 4.4 | `tipos_reporte/generador.py` | Unit (DB) | ✅ 19/19 | — | ✅ Passed (drove 4.1's fix; confirmed 4.2/4.3 stayed green) | ✅ 3 cases (present/absent/no-template-image) | ✅ Docstring clarified anchor-object-vs-coordinates rationale |
+| 4.5 | `tipos_reporte/generador.py` | Unit (DB) | ✅ 19/19 | — | ✅ Confirmed by 4.1-4.3 (call site placed between steps 4 and 6) | ➖ N/A | ➖ None needed |
 
 ### Test Summary (this run)
-- **Total tests added this run**: 8 (`tipos_reporte/tests/test_generador.py`) — 6 new scenario
-  tests (3.1, 3.2, 3.3×2 parametrized cases, 3.5, 3.6, 3.8) + 1 unit-level companion test for the
-  `""` falsy case
-- **Total tests passing (module)**: 19/19 (11 from PR 1 + 8 new)
-- **Total tests passing (full `tipos_reporte/tests/` suite)**: 99/99 (91 from PR 1 baseline + 8
-  new — 0 regressions), run once cleanly (a prior parallel/racing run against the same
-  `--reuse-db` Postgres DB produced spurious `IntegrityError`s from two pytest processes writing
-  concurrently — not a real regression; the clean sequential re-run is authoritative)
+- **Total tests added this run**: 3 (`tipos_reporte/tests/test_generador.py`) — logo-present,
+  logo-absent, template-has-no-image-logo-set
+- **Total tests passing (module)**: 22/22 (19 from PR 1+2 + 3 new)
+- **Total tests passing (full `tipos_reporte/tests/` suite)**: 102/102 (99 from PR 2 baseline +
+  3 new — 0 regressions)
 - **Layers used**: Unit (`@pytest.mark.django_db` tests exercising `generar_reporte` against a
-  real in-memory `openpyxl` workbook round trip) + one pure unit test directly against
-  `_escribir_valores` (no DB, no round trip)
-- **Approval tests**: None — no refactoring tasks, only additive functions
-- **Pure functions created this run**: `_escribir_valores`, `_exportar_solo_hoja_declarada`
-  (both pure over `hoja`/`estructura`/`valores`/`libro`, no I/O beyond in-memory openpyxl object
-  mutation)
+  real in-memory `openpyxl`/Pillow workbook+image round trip)
+- **Approval tests**: None — no refactoring tasks, only one additive function
+- **Pure functions created this run**: `_intercambiar_logo` (pure over `hoja`/`logo`, no I/O
+  beyond in-memory openpyxl/Pillow object mutation and reading the uploaded `logo` field's bytes)
 
 ## Work Unit Evidence
 
 | Evidence | Value |
 |---|---|
-| Focused test command and exact result | `pytest tipos_reporte/tests/test_generador.py -k "escribe or hoja or export or exitosa or rango or byte" -q` → `11 passed, 8 deselected` |
-| Runtime harness command/scenario and exact result | `pytest tipos_reporte/tests/ -q` (full app suite, includes DB-backed `@pytest.mark.django_db` tests using real SQLite/Postgres via `--reuse-db` and real in-memory `openpyxl` workbooks) → `99 passed` (0 regressions vs. the 91-test PR-1 baseline) |
-| Rollback boundary | Revert the write-pass/export-pass code inside `tipos_reporte/generador.py` (the `_escribir_valores`/`_exportar_solo_hoja_declarada` functions and their call sites) and the 8 new tests appended to `tipos_reporte/tests/test_generador.py`. PR 1's exceptions, fixtures, template loading and completeness validation remain intact and untouched — zero blast radius outside this PR's slice. |
+| Focused test command and exact result | `pytest tipos_reporte/tests/test_generador.py -k "logo" -q` → `3 passed, 19 deselected` |
+| Runtime harness command/scenario and exact result | `pytest tipos_reporte/tests/ -q` (full app suite, includes DB-backed `@pytest.mark.django_db` tests using real Postgres via `--reuse-db` and real in-memory `openpyxl`/Pillow image round trips) → `102 passed` (0 regressions vs. the 99-test PR 2 baseline) |
+| Rollback boundary | Revert the `_intercambiar_logo` function and its call site inside `tipos_reporte/generador.py`, and the 3 new tests appended to `tipos_reporte/tests/test_generador.py`. PR 1's exceptions/fixtures/template-loading/completeness-validation and PR 2's cell-writing/sheet-export code remain intact and untouched — zero blast radius outside this PR's slice. |
 
 ## Files Changed (this run)
 
 | File | Action | What Was Done |
 |------|--------|----------------|
-| `tipos_reporte/generador.py` | Modified | Added `_escribir_valores` (cell-writing pass, design Sequence step 6) and `_exportar_solo_hoja_declarada` (sheet-only export, design D5, step 7); wired both into `generar_reporte` between completeness validation and the final `BytesIO` save; updated module docstring |
-| `tipos_reporte/tests/test_generador.py` | Modified | Added 8 tests covering Phase 3 scenarios: scalar write, range write, falsy-value handling (`False`/`0` round-trip + `""` unit-level), sheet-only export, merged-range preservation, and final-bytes readability |
-| `openspec/changes/generador-excel-plantilla/tasks.md` | Modified | Marked tasks 3.1-3.9 `[x]` |
+| `tipos_reporte/generador.py` | Modified | Added `_intercambiar_logo(hoja, logo)` (design D4, Sequence step 5); wired it into `generar_reporte` between `_validar_completitud` and `_escribir_valores`; updated module and `generar_reporte` docstrings to drop stale "lands in a later PR" notes now that all 8 sequence steps are implemented |
+| `tipos_reporte/tests/test_generador.py` | Modified | Added 3 tests covering Phase 4 scenarios: logo present (swapped at same anchor, new pixel size), logo absent (original image/anchor untouched), template has no image + logo set (no image inserted) |
+| `openspec/changes/generador-excel-plantilla/tasks.md` | Modified | Marked tasks 4.1-4.5 and 5.1-5.4 `[x]` — ALL 34 tasks now complete |
 
 ## Deviations from Design
 
-None from `design.md`'s architecture decisions (D1-D5, Sequence steps 6-8) — the implementation
-matches `_destinos`/`_iterar_nodos` reuse, membership-test semantics, and the delete-in-place
-sheet export exactly as specified.
-
-One test-design correction discovered during RED, not a design deviation: task 3.3's spec text
-lists `False`/`0`/`""` as the falsy values to prove are written verbatim. `""` cannot be asserted
-via a save/reload round trip because openpyxl/XLSX serializes an empty-string cell identically to
-a never-written (blank) cell — confirmed independently (`ws['B2'] = ''` → save → reload → `None`).
-This is an XLSX/openpyxl format limitation, not a defect in `_escribir_valores`'s membership-test
-logic (`clave in valores`, which does correctly assign `""` to the in-memory cell before save).
-The `""` case is therefore asserted at the unit level directly against `_escribir_valores`'s
-in-memory effect on the `openpyxl` worksheet, before serialization — `False`/`0` keep their
-original save/reload round-trip assertion since those two values DO survive XLSX serialization
-intact.
+None. Implementation matches design D4 exactly: reuses the loaded `anchor` OBJECT (not its
+coordinates) via `nueva.anchor = original.anchor`, uses `hoja._images.remove(original)` (not
+`.clear()`), and inserts nothing when the template has no original image (rejected alternative:
+hardcoded cell). Step ordering matches the Sequence diagram (step 5, between completeness
+validation and cell writing).
 
 ## Issues Found
 
@@ -131,17 +140,18 @@ None.
 
 ## Workload / PR Boundary
 
-- Mode: stacked-to-main chain, PR 2 of 3 (as scoped by the orchestrator's launch prompt)
-- Current work unit: Unit 2 — "`_destinos` helper + scalar/range cell-writing pass + sheet-only
-  export" (per tasks.md's Suggested Work Units table)
-- Boundary: starts from PR 1's merged state (template loading + completeness validation, no cell
-  writes or export logic yet); ends with cell writing (scalar + range) and sheet-only export
-  fully implemented and tested; explicitly excludes logo swap (PR 3)
-- Estimated review budget impact: ~120 authored changed lines (`generador.py` +50/-9,
-  `test_generador.py` +215) — within the forecasted PR 2 slice size; PR 3 remains separately
-  scoped per the tasks.md forecast
+- Mode: stacked-to-main chain, PR 3 of 3 (FINAL — as scoped by the orchestrator's launch prompt)
+- Current work unit: Unit 3 — "Logo swap (present/absent) implementation and tests" (per
+  tasks.md's Suggested Work Units table), plus Phase 5 integration/cleanup which was gated on
+  Phase 4 landing
+- Boundary: starts from PR 2's merged state (template loading, completeness validation, cell
+  writing, sheet-only export all implemented and tested); ends with logo swap (present/absent/
+  no-template-image paths) fully implemented and tested, and the full test suite confirmed
+  regression-free
+- Estimated review budget impact: ~90 authored changed lines (`generador.py` +30/-6,
+  `test_generador.py` +105, `tasks.md` +9/-9) — well within the forecasted PR 3 slice size
 
 ## Status
 
-30/34 tasks complete (Phase 1: 7/7, Phase 2: 10/10, Phase 3: 9/9, Phase 4: 0/5, Phase 5: 0/4
-gated on Phase 4). Ready for next batch (PR 3: Phase 4 — logo swap).
+34/34 tasks complete (Phase 1: 7/7, Phase 2: 10/10, Phase 3: 9/9, Phase 4: 5/5, Phase 5: 4/4).
+**The change is fully implemented. Ready for `sdd-verify`.**

@@ -61,15 +61,15 @@ Chain strategy: pending
 
 ## Phase 4: Logo Swap
 
-- [ ] 4.1 RED: Write "Logo is present on the tipo" test — `plantilla_xlsx` with `imagen=` a 10x10 PNG, `tipo_de_reporte_factory(logo=SimpleUploadedFile(...))` with a distinct 20x20 PNG; assert exported sheet's image at the original anchor has size `(20, 20)`.
-- [ ] 4.2 RED: Write "Logo is absent on the tipo" test — same template image, `logo=None`; assert exported sheet's image size remains `(10, 10)` and anchor position (`_from.col`/`_from.row`) is unchanged.
-- [ ] 4.3 RED: Write a "template has no image, logo is set" test — `imagen=None`, `logo=` set; assert no image is inserted (`hoja._images` stays empty) rather than defaulting to a hardcoded cell.
-- [ ] 4.4 GREEN: Implement the logo swap in `generador.py` per design D4 — when `definicion.tipo.logo` is set and `hoja._images` is non-empty, build `ImagenOpenpyxl(BytesIO(definicion.tipo.logo.read()))`, reuse `original.anchor`, `hoja._images.remove(original)`, `hoja.add_image(nueva)`; run this step before the cell-writing pass and after the completeness check.
-- [ ] 4.5 Wire the logo swap call site into `generar_reporte`'s main sequence (step 5, between completeness validation and cell writing) and confirm step ordering matches the design sequence diagram.
+- [x] 4.1 RED: Write "Logo is present on the tipo" test — `plantilla_xlsx` with `imagen=` a 10x10 PNG, `tipo_de_reporte_factory(logo=SimpleUploadedFile(...))` with a distinct 20x20 PNG; assert exported sheet's image at the original anchor has size `(20, 20)`.
+- [x] 4.2 RED: Write "Logo is absent on the tipo" test — same template image, `logo=None`; assert exported sheet's image size remains `(10, 10)` and anchor position (`_from.col`/`_from.row`) is unchanged.
+- [x] 4.3 RED: Write a "template has no image, logo is set" test — `imagen=None`, `logo=` set; assert no image is inserted (`hoja._images` stays empty) rather than defaulting to a hardcoded cell.
+- [x] 4.4 GREEN: Implement the logo swap in `generador.py` per design D4 — when `definicion.tipo.logo` is set and `hoja._images` is non-empty, build `ImagenOpenpyxl(BytesIO(definicion.tipo.logo.read()))`, reuse `original.anchor`, `hoja._images.remove(original)`, `hoja.add_image(nueva)`; run this step before the cell-writing pass and after the completeness check.
+- [x] 4.5 Wire the logo swap call site into `generar_reporte`'s main sequence (step 5, between completeness validation and cell writing) and confirm step ordering matches the design sequence diagram.
 
 ## Phase 5: Integration and Cleanup
 
-- [ ] 5.1 Run the full `tipos_reporte/tests/test_generador.py` suite and confirm every spec scenario in `openspec/changes/generador-excel-plantilla/specs/generacion-reporte-excel/spec.md` has a corresponding passing test.
-- [ ] 5.2 Run the existing `tipos_reporte/tests/` suite (Slice-3 tests) to confirm the `plantilla_xlsx`/`conftest.py` fixture extension did not break prior tests (default `hojas_extra=()`/`imagen=None` behavior preserved).
-- [ ] 5.3 Review `generador.py` docstrings/comments for clarity on the values-dict contract (scalar vs `_inicio`/`_fin` keys) so backlog #7's future `ValorDeReporte` adapter has a documented interface to satisfy.
-- [ ] 5.4 Confirm no threat-matrix-driven tasks are outstanding (design's Threat Matrix is `N/A` — no routing/shell/subprocess/VCS boundary in this change).
+- [x] 5.1 Run the full `tipos_reporte/tests/test_generador.py` suite and confirm every spec scenario in `openspec/changes/generador-excel-plantilla/specs/generacion-reporte-excel/spec.md` has a corresponding passing test.
+- [x] 5.2 Run the existing `tipos_reporte/tests/` suite (Slice-3 tests) to confirm the `plantilla_xlsx`/`conftest.py` fixture extension did not break prior tests (default `hojas_extra=()`/`imagen=None` behavior preserved).
+- [x] 5.3 Review `generador.py` docstrings/comments for clarity on the values-dict contract (scalar vs `_inicio`/`_fin` keys) so backlog #7's future `ValorDeReporte` adapter has a documented interface to satisfy.
+- [x] 5.4 Confirm no threat-matrix-driven tasks are outstanding (design's Threat Matrix is `N/A` — no routing/shell/subprocess/VCS boundary in this change).
