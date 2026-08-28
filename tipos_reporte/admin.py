@@ -33,17 +33,33 @@ class DefinicionDeTipoForm(forms.ModelForm):
     """Parses `archivo_yaml` at save time (design D4: "can this become a
     JSON document?", not "is this a valid definition?" — that gate is
     activation, not save). Only `yaml.safe_load` is used (Threat Matrix:
-    untrusted deserialization)."""
+    untrusted deserialization).
+
+    `yaml_fuente`/`estructura` are model-required fields, but they are
+    DERIVED from `archivo_yaml` here in `clean()`, not entered by hand.
+    Django's `_clean_fields()` runs its per-field "this field is required"
+    check BEFORE `clean()` ever gets a chance to populate them, so they must
+    be `required=False` at the form-field level — `clean()` is the single
+    place that both derives and validates them, including raising when
+    `archivo_yaml` itself is missing.
+    """
 
     class Meta:
         model = DefinicionDeTipo
         fields = "__all__"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["yaml_fuente"].required = False
+        self.fields["estructura"].required = False
+
     def clean(self):
         cleaned = super().clean()
         archivo = cleaned.get("archivo_yaml")
         if archivo is None:
-            return cleaned
+            raise ValidationError(
+                {"archivo_yaml": "Este campo es obligatorio."}
+            )
 
         archivo.seek(0)
         texto = archivo.read().decode("utf-8")

@@ -16,7 +16,7 @@ from django.contrib.messages.storage.cookie import CookieStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
-from tipos_reporte.admin import DefinicionDeTipoAdmin, TipoDeReporteAdmin
+from tipos_reporte.admin import DefinicionDeTipoAdmin, DefinicionDeTipoForm, TipoDeReporteAdmin
 from tipos_reporte.models import DefinicionDeTipo, Estado, TipoDeReporte
 
 
@@ -37,6 +37,55 @@ def rf_admin_request(rf, usuario_factory):
     )
     request._messages = CookieStorage(request)
     return request
+
+
+# --- CRITICAL (found by sdd-verify): DefinicionDeTipoForm must accept a ----
+# --- valid submission, and must still reject an unsafe/invalid one --------
+
+
+@pytest.mark.django_db
+def test_form_es_valido_con_yaml_valido_subido(tipo_de_reporte_factory):
+    """Reproduces the verify-report CRITICAL: `yaml_fuente`/`estructura` are
+    required `ModelForm` fields that Django's `_clean_fields()` marks as
+    missing BEFORE `clean()` ever runs to populate them from `archivo_yaml`.
+    Before the fix, this form is NEVER valid, even with a perfectly valid
+    upload — no test in the suite caught this because every other test
+    bypasses the form via `.objects.create()`."""
+    tipo = tipo_de_reporte_factory()
+    archivo = SimpleUploadedFile(
+        "d.yaml", b"secciones: []", content_type="application/x-yaml"
+    )
+
+    form = DefinicionDeTipoForm(
+        data={"tipo": tipo.pk, "estado": Estado.BORRADOR},
+        files={"archivo_yaml": archivo},
+    )
+
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["yaml_fuente"] == "secciones: []"
+    assert form.cleaned_data["estructura"] == {"secciones": []}
+
+
+@pytest.mark.django_db
+def test_form_sigue_rechazando_yaml_inseguro(tipo_de_reporte_factory):
+    """Companion negative test: fixing the required-fields bug must not
+    reopen the Threat Matrix's unsafe-deserialization gap (`analizar_yaml_
+    seguro` rejects non-`safe_load`-able constructs like `!!python/object/
+    apply`)."""
+    tipo = tipo_de_reporte_factory()
+    archivo = SimpleUploadedFile(
+        "d.yaml",
+        b"!!python/object/apply:os.system ['echo pwned']",
+        content_type="application/x-yaml",
+    )
+
+    form = DefinicionDeTipoForm(
+        data={"tipo": tipo.pk, "estado": Estado.BORRADOR},
+        files={"archivo_yaml": archivo},
+    )
+
+    assert not form.is_valid()
+    assert "archivo_yaml" in form.errors
 
 
 # --- Design D9: bulk delete_selected is removed, not just guarded ----------
