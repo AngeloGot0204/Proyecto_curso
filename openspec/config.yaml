@@ -1,0 +1,59 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Django 5.2 (Python 3.12), Postgres via psycopg + dj-database-url, WhiteNoise static files.
+  Deploy target: Vercel (config.wsgi entrypoint), Neon Postgres, Vercel Blob for attachments.
+  Apps: usuarios (auth/roles), tipos_reporte (report type engine, template/model definition).
+  Architecture: server-rendered Django views/templates; ADRs in adrs/ (0001-0009) define
+    component architecture, Excel generation via openpyxl, data model/templates, offline
+    strategy, auth/session, collaboration/permissions, resilience/observability, deployment.
+  Testing: pytest + pytest-django (DJANGO_SETTINGS_MODULE=config.settings, --reuse-db).
+  Style: no linter/formatter/type-checker config detected yet (no ruff/black/mypy/flake8).
+
+strict_tdd: true
+
+testing:
+  test_runner:
+    command: "pytest"
+    framework: "pytest-django"
+  test_layers:
+    unit: true
+    integration: true
+    e2e: false
+  coverage:
+    available: false
+    command: ""
+  quality_tools:
+    linter: ""
+    type_checker: ""
+    formatter: ""
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Reference the relevant ADR(s) under adrs/ when a change touches an existing decision
+    - Reference the matching BACKLOG.md item number when the change implements a backlog spec
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Keep domain language consistent with existing models (usuarios, tipos_reporte)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+    - Flag any deviation from an existing ADR explicitly
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Write a failing test before implementation code (Strict TDD)
+  apply:
+    guidelines:
+      - Follow existing code patterns (Django app structure, class-based/function views as already used)
+      - Keep migrations one per logical model change
+    tdd: true
+    test_command: "pytest"
+  verify:
+    test_command: "pytest"
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
