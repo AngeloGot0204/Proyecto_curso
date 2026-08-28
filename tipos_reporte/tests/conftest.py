@@ -1,5 +1,6 @@
 import copy
 
+import openpyxl
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -54,6 +55,27 @@ def definicion_valida():
                 ],
             }
         )
+
+    return _crear
+
+
+@pytest.fixture
+def plantilla_xlsx(tmp_path):
+    """A real `.xlsx` workbook built with openpyxl, not committed to the
+    repository (design's Testing Strategy). By default it declares one
+    sheet named "REPORTE" with one merged range `M12:P12`, whose anchor
+    (top-left) cell is `M12` — the exact shape ADR-0002 validated
+    empirically. Returns a factory so each test can vary the sheet name
+    and/or merged ranges."""
+
+    def _crear(nombre_hoja="REPORTE", rangos=("M12:P12",)):
+        wb = openpyxl.Workbook()
+        wb.active.title = nombre_hoja
+        for rango in rangos:
+            wb.active.merge_cells(rango)
+        destino = tmp_path / "plantilla.xlsx"
+        wb.save(destino)
+        return destino
 
     return _crear
 
