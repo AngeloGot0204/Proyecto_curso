@@ -285,3 +285,218 @@ def test_item_no_obligatorio_con_clave_ausente_no_lanza(
     resultado = generar_reporte(definicion, valores)
 
     assert isinstance(resultado, BytesIO)
+
+
+@pytest.mark.django_db
+def test_valor_de_campo_simple_se_escribe_por_id(
+    tipo_de_reporte_factory, plantilla_xlsx
+):
+    """Task 3.1 RED — spec scenario "Simple field value is written by id":
+    a `campo` with `id="turno"`/`celda="B2"` and `valores={"turno":
+    "Mañana"}` must leave `B2` containing `"Mañana"` in the exported
+    sheet."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = {
+        "tipo": "instalacion-resinas",
+        "plantilla": "JME.PC-0001.F1.xlsx",
+        "hoja": "REPORTE",
+        "secciones": [
+            {
+                "id": "datos-generales",
+                "titulo": "Datos generales",
+                "campos": [
+                    {
+                        "id": "turno",
+                        "etiqueta": "Turno",
+                        "tipo": "texto",
+                        "obligatorio": True,
+                        "celda": "B2",
+                    }
+                ],
+            }
+        ],
+    }
+    definicion = _definicion_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx, estructura)
+
+    resultado = generar_reporte(definicion, {"turno": "Mañana"})
+
+    libro = load_workbook(resultado)
+    hoja = libro["REPORTE"]
+    assert hoja["B2"].value == "Mañana"
+
+
+@pytest.mark.django_db
+def test_valores_de_rango_se_escriben_desde_dos_claves_independientes(
+    tipo_de_reporte_factory, plantilla_xlsx
+):
+    """Task 3.2 RED — spec scenario "Range field values are written from
+    two independent keys": `descanso_inicio` -> `C3`, `descanso_fin` ->
+    `C4`, written independently."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = _estructura_completitud()
+    definicion = _definicion_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx, estructura)
+    valores = {
+        "supervisor": "Ana",
+        "descanso_inicio": "08:00",
+        "descanso_fin": "08:30",
+    }
+
+    resultado = generar_reporte(definicion, valores)
+
+    libro = load_workbook(resultado)
+    hoja = libro["REPORTE"]
+    assert hoja["C3"].value == "08:00"
+    assert hoja["C4"].value == "08:30"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("valor", [False, 0])
+def test_valores_falsy_se_escriben_tal_cual(
+    tipo_de_reporte_factory, plantilla_xlsx, valor
+):
+    """Task 3.3 RED — design D2: `False`/`0` are legitimate values and must
+    be written as-is, never skipped as if absent (membership test, not
+    truthiness). `""` is covered separately at the unit level
+    (`test_escribir_valores_escribe_string_vacio_tal_cual`) because
+    openpyxl/XLSX round-trips an empty-string cell as `None` — the same
+    bytes a never-written cell would produce — so a save/reload assertion
+    cannot distinguish "written empty string" from "left untouched"."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = {
+        "tipo": "instalacion-resinas",
+        "plantilla": "JME.PC-0001.F1.xlsx",
+        "hoja": "REPORTE",
+        "secciones": [
+            {
+                "id": "datos-generales",
+                "titulo": "Datos generales",
+                "campos": [
+                    {
+                        "id": "activo",
+                        "etiqueta": "Activo",
+                        "tipo": "booleano",
+                        "obligatorio": True,
+                        "celda": "B2",
+                    }
+                ],
+            }
+        ],
+    }
+    definicion = _definicion_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx, estructura)
+
+    resultado = generar_reporte(definicion, {"activo": valor})
+
+    libro = load_workbook(resultado)
+    hoja = libro["REPORTE"]
+    assert hoja["B2"].value == valor
+
+
+def test_escribir_valores_escribe_string_vacio_tal_cual():
+    """Task 3.3 RED (unit-level companion): `_escribir_valores` must assign
+    `""` to the cell object (membership test, D2) even though XLSX itself
+    cannot distinguish that from a never-written cell after a save/reload
+    round trip — asserted directly on the in-memory `openpyxl` worksheet,
+    before any serialization happens."""
+    import openpyxl
+
+    from tipos_reporte.generador import _escribir_valores
+
+    estructura = {
+        "hoja": "REPORTE",
+        "secciones": [
+            {
+                "id": "datos-generales",
+                "campos": [
+                    {"id": "activo", "tipo": "booleano", "celda": "B2"}
+                ],
+            }
+        ],
+    }
+    hoja = openpyxl.Workbook().active
+
+    _escribir_valores(hoja, estructura, {"activo": ""})
+
+    assert hoja["B2"].value == ""
+
+
+@pytest.mark.django_db
+def test_solo_se_exporta_la_hoja_declarada(
+    tipo_de_reporte_factory, plantilla_xlsx, definicion_valida, valores_completos
+):
+    """Task 3.5 RED — spec scenario "Only the declared sheet is exported":
+    a template with an extra sheet (`hojas_extra=("Otra",)`) must export
+    only `estructura["hoja"]`."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    destino = plantilla_xlsx(nombre_hoja=estructura["hoja"], hojas_extra=("Otra",))
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    tipo = tipo_de_reporte_factory(plantilla=SimpleUploadedFile("plantilla.xlsx", contenido))
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("definicion.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+
+    resultado = generar_reporte(definicion, valores_completos())
+
+    libro = load_workbook(resultado)
+    assert libro.sheetnames == [estructura["hoja"]]
+
+
+@pytest.mark.django_db
+def test_contenido_no_tocado_de_la_hoja_permanece_estructuralmente_identico(
+    tipo_de_reporte_factory, plantilla_xlsx, definicion_valida, valores_completos
+):
+    """Task 3.6 RED — spec scenario "Untouched sheet content remains
+    byte-identical in structure": merged ranges outside the anchor cells
+    must survive generation unchanged."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    destino = plantilla_xlsx(
+        nombre_hoja=estructura["hoja"], rangos=("M12:P12", "A1:B1")
+    )
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    tipo = tipo_de_reporte_factory(plantilla=SimpleUploadedFile("plantilla.xlsx", contenido))
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("definicion.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+
+    resultado = generar_reporte(definicion, valores_completos())
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    rangos_resultantes = {str(rango) for rango in hoja.merged_cells.ranges}
+    assert rangos_resultantes == {"M12:P12", "A1:B1"}
+
+
+@pytest.mark.django_db
+def test_generacion_exitosa_devuelve_bytes_legibles(
+    tipo_de_reporte_factory, plantilla_xlsx, definicion_valida, valores_completos
+):
+    """Task 3.8 RED — spec scenario "Successful generation returns readable
+    bytes": the final `BytesIO` must re-open via `load_workbook` without
+    error, and its cursor must have been reset to the start."""
+    from tipos_reporte.generador import generar_reporte
+
+    definicion = _definicion_con_plantilla(
+        tipo_de_reporte_factory, plantilla_xlsx, definicion_valida()
+    )
+
+    resultado = generar_reporte(definicion, valores_completos())
+
+    assert resultado.tell() == 0
+    libro = load_workbook(resultado)
+    assert libro.sheetnames == ["REPORTE"]

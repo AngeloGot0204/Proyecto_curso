@@ -8,9 +8,9 @@ rebuilt workbook (ADR-0002) — and reuses `tipos_reporte/validacion.py`'s
 `_iterar_nodos`/`_claves_de_celda_requeridas` so anchor logic exists in
 exactly one place (design D1).
 
-This module currently implements Phase 1 (exceptions) and Phase 2
-(template loading + completeness validation) of the change's `tasks.md`.
-Cell writing, sheet-only export and logo swap land in later PRs.
+This module currently implements Phase 1 (exceptions), Phase 2 (template
+loading + completeness validation) and Phase 3 (cell writing + sheet-only
+export) of the change's `tasks.md`. Logo swap lands in a later PR.
 """
 
 from io import BytesIO
@@ -87,9 +87,34 @@ def _validar_completitud(estructura, valores):
         raise ValoresIncompletos(faltantes)
 
 
+def _escribir_valores(hoja, estructura, valores):
+    """Write every present `valores` key into its anchor cell (design's
+    Sequence, step 6). Walks the same nodes `_validar_completitud` walks,
+    but writes ANY key present in `valores` — not only required ones,
+    per D3: present-but-not-required keys are written; absent optional
+    keys leave their anchor cell untouched ("lo que no se escribe, no se
+    altera"). D2: membership test, so `False`/`0`/`""` are written as-is,
+    never skipped as if absent."""
+    for _ubicacion, nodo, _clave_de_etiqueta in _iterar_nodos(estructura):
+        for clave, coordenada in _destinos(nodo):
+            if clave in valores:
+                hoja[coordenada] = valores[clave]
+
+
+def _exportar_solo_hoja_declarada(libro, nombre_hoja):
+    """Delete every sheet other than the declared one and reset the active
+    index (design D5). Deleting sheet OBJECTS never touches the target
+    sheet's own merges/styles/drawings, since those live per-sheet or in
+    workbook-level shared tables — no rebuild."""
+    for nombre in [nombre for nombre in libro.sheetnames if nombre != nombre_hoja]:
+        del libro[nombre]
+    libro.active = 0
+
+
 def generar_reporte(definicion, valores: dict):
     """Fill `definicion`'s template with `valores` and return the generated
-    `.xlsx` bytes (design's Sequence, steps 1-3 in this PR slice).
+    `.xlsx` bytes (design's Sequence, steps 1-4, 6-8 in this PR slice; step
+    5 — logo swap — lands in the next PR).
 
     `definicion` must already be an ACTIVATED `DefinicionDeTipo` — this
     function trusts `definicion.estructura` and adds no re-validation of
@@ -135,10 +160,18 @@ def generar_reporte(definicion, valores: dict):
         ) from error
 
     # Design's Sequence, step 4: validation precedes every mutation, so no
-    # partial write is ever observable, even in-memory (steps 5-6, logo
-    # swap and cell writing, land in a later PR).
+    # partial write is ever observable, even in-memory (step 5, logo swap,
+    # lands in a later PR).
     _validar_completitud(estructura, valores)
 
+    # Design's Sequence, step 6: write every present value into its anchor
+    # cell (step 5, logo swap, is not yet implemented in this PR slice).
+    _escribir_valores(hoja, estructura, valores)
+
+    # Design's Sequence, step 7: export only the declared sheet.
+    _exportar_solo_hoja_declarada(libro, nombre_hoja)
+
+    # Design's Sequence, step 8: materialize the final bytes.
     buffer = BytesIO()
     libro.save(buffer)
     buffer.seek(0)
