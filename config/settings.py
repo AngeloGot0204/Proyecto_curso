@@ -97,6 +97,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'usuarios',
+    'tipos_reporte',
 ]
 
 MIDDLEWARE = [
@@ -187,6 +188,12 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Local media storage for uploaded templates/logos (tipos_reporte, backlog #3,
+# design decision D10). Production storage (Vercel Blob) is out of scope for
+# this item; locally and in tests this works via FileSystemStorage.
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / "media"
 
 # Vercel doesn't serve /static/ from outputDirectory the way it does for
 # static-site frameworks -- confirmed empirically (127 files collected but
