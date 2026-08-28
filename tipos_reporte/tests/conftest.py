@@ -60,22 +60,65 @@ def definicion_valida():
 
 
 @pytest.fixture
+def imagen_png(tmp_path):
+    """Distinct, identifiable PNGs: size is the discriminator after round
+    trip (design's Test Fixture Extension). Returns a factory so a test can
+    build several differently-sized/colored images (e.g. one for the
+    template's original image, a distinct one for the tipo's logo)."""
+    from PIL import Image
+
+    def _crear(nombre="img.png", tamano=(10, 10), color=(255, 0, 0)):
+        ruta = tmp_path / nombre
+        Image.new("RGB", tamano, color).save(ruta)
+        return ruta
+
+    return _crear
+
+
+@pytest.fixture
 def plantilla_xlsx(tmp_path):
     """A real `.xlsx` workbook built with openpyxl, not committed to the
     repository (design's Testing Strategy). By default it declares one
     sheet named "REPORTE" with one merged range `M12:P12`, whose anchor
     (top-left) cell is `M12` — the exact shape ADR-0002 validated
-    empirically. Returns a factory so each test can vary the sheet name
-    and/or merged ranges."""
+    empirically. Returns a factory so each test can vary the sheet name,
+    merged ranges, extra (non-target) sheets (`hojas_extra`, design's Test
+    Fixture Extension — proves sheet-only export) and an embedded image
+    (`imagen`, a path from `imagen_png` — proves the logo-swap scenarios).
+    Both new kwargs default to today's behavior, so existing Slice-3 tests
+    stay untouched."""
 
-    def _crear(nombre_hoja="REPORTE", rangos=("M12:P12",)):
+    def _crear(nombre_hoja="REPORTE", rangos=("M12:P12",), hojas_extra=(), imagen=None):
         wb = openpyxl.Workbook()
         wb.active.title = nombre_hoja
         for rango in rangos:
             wb.active.merge_cells(rango)
+        for nombre in hojas_extra:
+            wb.create_sheet(nombre)
+        if imagen is not None:
+            wb.active.add_image(openpyxl.drawing.image.Image(str(imagen)), "B2")
         destino = tmp_path / "plantilla.xlsx"
         wb.save(destino)
         return destino
+
+    return _crear
+
+
+@pytest.fixture
+def valores_completos(definicion_valida):
+    """A `valores` dict complete for `definicion_valida`'s default
+    structure — one scalar `campo` (`turno`) and one range `item`
+    (`p-01_inicio`/`p-01_fin`) — reusable across `test_generador.py`
+    scenarios that need a passing completeness check (design's Testing
+    Strategy). Returns a factory so callers can `dict(valores_completos())`
+    and delete/override keys to build partial scenarios."""
+
+    def _crear():
+        return {
+            "turno": "Día",
+            "p-01_inicio": "08:00",
+            "p-01_fin": "08:30",
+        }
 
     return _crear
 
