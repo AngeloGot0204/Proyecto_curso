@@ -30,16 +30,24 @@ from config.tests.conftest import PROD_ENV
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_a1_static_root_set_no_whitenoise(load_settings):
+def test_a1_static_root_set_whitenoise_serves_it(load_settings):
     """
-    Spec: Static file serving without WhiteNoise (Automatable).
-    Weak name-absence RED.
+    Spec: Static file serving via WhiteNoise (Automatable).
+
+    Superseded from "no WhiteNoise" after empirical deployment evidence:
+    Vercel's outputDirectory does not serve /static/ the way a static-site
+    framework would -- 127 collected files, every request still hit the
+    WSGI function and returned Django's own 404. WhiteNoise serves them
+    from inside the function instead (design Decision 5, superseded).
     """
     module = load_settings(PROD_ENV)
 
     assert str(module.STATIC_ROOT).endswith("staticfiles")
-    assert not any("whitenoise" in mw.lower() for mw in module.MIDDLEWARE)
-    assert not hasattr(module, "STORAGES")
+    assert any("whitenoise" in mw.lower() for mw in module.MIDDLEWARE)
+    assert (
+        module.STORAGES["staticfiles"]["BACKEND"]
+        == "whitenoise.storage.CompressedStaticFilesStorage"
+    )
 
 
 def test_a2_conn_max_age_is_zero(load_settings):

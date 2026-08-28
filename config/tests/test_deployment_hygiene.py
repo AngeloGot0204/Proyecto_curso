@@ -66,9 +66,13 @@ def test_a7_no_code_consumes_blob_token():
 
     import config.settings as settings_module
 
-    assert not hasattr(settings_module, "STORAGES"), (
-        "settings module must not override the default file-storage backend"
-    )
+    # STORAGES now exists (WhiteNoise's staticfiles backend, item #2 fix),
+    # but "default" -- where a Blob-consuming override would go -- must
+    # still be the plain filesystem backend, never a Blob storage class.
+    assert (
+        settings_module.STORAGES["default"]["BACKEND"]
+        == "django.core.files.storage.FileSystemStorage"
+    ), "settings module must not override the default file-storage backend"
 
 
 def test_a9_env_ignored_and_example_has_no_real_secrets():
