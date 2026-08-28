@@ -49,15 +49,15 @@ Chain strategy: pending
 
 ## Phase 3: Cell Writing and Sheet Export
 
-- [ ] 3.1 RED: Write "Simple field value is written by id" scenario test (`turno`/`B2`/`"Mañana"`).
-- [ ] 3.2 RED: Write "Range field values are written from two independent keys" scenario test (`descanso_inicio`→`C3`, `descanso_fin`→`C4`).
-- [ ] 3.3 RED: Write a falsy-value test — `False`/`0`/`""` values for scalar fields are written as-is (not skipped), asserting D2's membership-over-truthiness rule.
-- [ ] 3.4 GREEN: Implement the cell-writing pass in `generador.py` — walk all nodes via `_iterar_nodos`, use `_destinos(nodo)` for every present key in `valores` (present-but-not-required keys also written; absent optional keys leave cells untouched), write `hoja[coordenada] = valores[clave]`.
-- [ ] 3.5 RED: Write "Only the declared sheet is exported" test using `hojas_extra=("Otra",)`; assert returned workbook's `sheetnames == [estructura["hoja"]]`.
-- [ ] 3.6 RED: Write "Untouched sheet content remains byte-identical in structure" test — template with merged ranges outside anchor cells; assert `merged_cells.ranges` unchanged after generation.
-- [ ] 3.7 GREEN: Implement sheet-only export in `generador.py` per design D5 — `del libro[nombre]` for every sheet `!= estructura["hoja"]`, then `libro.active = 0`.
-- [ ] 3.8 RED: Write "Successful generation returns readable bytes" test — assert final `BytesIO` re-opens via `load_workbook` without error and `.seek(0)` was applied.
-- [ ] 3.9 GREEN: Implement `libro.save(buffer); buffer.seek(0); return buffer` as the final step of `generar_reporte`.
+- [x] 3.1 RED: Write "Simple field value is written by id" scenario test (`turno`/`B2`/`"Mañana"`).
+- [x] 3.2 RED: Write "Range field values are written from two independent keys" scenario test (`descanso_inicio`→`C3`, `descanso_fin`→`C4`).
+- [x] 3.3 RED: Write a falsy-value test — `False`/`0`/`""` values for scalar fields are written as-is (not skipped), asserting D2's membership-over-truthiness rule.
+- [x] 3.4 GREEN: Implement the cell-writing pass in `generador.py` — walk all nodes via `_iterar_nodos`, use `_destinos(nodo)` for every present key in `valores` (present-but-not-required keys also written; absent optional keys leave cells untouched), write `hoja[coordenada] = valores[clave]`.
+- [x] 3.5 RED: Write "Only the declared sheet is exported" test using `hojas_extra=("Otra",)`; assert returned workbook's `sheetnames == [estructura["hoja"]]`.
+- [x] 3.6 RED: Write "Untouched sheet content remains byte-identical in structure" test — template with merged ranges outside anchor cells; assert `merged_cells.ranges` unchanged after generation.
+- [x] 3.7 GREEN: Implement sheet-only export in `generador.py` per design D5 — `del libro[nombre]` for every sheet `!= estructura["hoja"]`, then `libro.active = 0`.
+- [x] 3.8 RED: Write "Successful generation returns readable bytes" test — assert final `BytesIO` re-opens via `load_workbook` without error and `.seek(0)` was applied.
+- [x] 3.9 GREEN: Implement `libro.save(buffer); buffer.seek(0); return buffer` as the final step of `generar_reporte`.
 
 ## Phase 4: Logo Swap
 
