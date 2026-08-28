@@ -14,6 +14,8 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -21,3 +23,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('usuarios.urls')),
 ]
+
+# Code-review fix: without this, uploaded files (TipoDeReporte.logo,
+# plantilla, DefinicionDeTipo.archivo_yaml) are unreachable at their URL
+# even locally — the admin's "Currently: <file>" link 404s. Standard
+# Django convention: only in development (DEBUG=True); production media
+# serving is out of scope here (design decision D10).
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
