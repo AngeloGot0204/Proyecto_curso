@@ -10,6 +10,8 @@ past a protected row; `delete_selected` must be removed from `actions`
 entirely).
 """
 
+import io
+
 import pytest
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.cookie import CookieStorage
@@ -86,6 +88,64 @@ def test_form_sigue_rechazando_yaml_inseguro(tipo_de_reporte_factory):
 
     assert not form.is_valid()
     assert "archivo_yaml" in form.errors
+
+
+# --- WARNING (found by sdd-verify): logo image validation, untested --------
+# --- `TipoDeReporte.logo` is a plain `models.ImageField` with no custom
+# --- `clean()`/`TipoDeReporteAdmin.form` override (unlike `DefinicionDeTipo
+# --- Form` above). Django's auto-generated `ModelAdmin` form therefore uses
+# --- `forms.ImageField`, whose `to_python()` opens the upload with Pillow
+# --- and rejects it if it isn't a real image — this is stock Django/Pillow
+# --- behaviour, not app-specific code, but until now nothing in the suite
+# --- exercised it (verify-report Engram #77, spec revision 2, "Local file
+# --- storage for uploads" / "logo validado como imagen"). Both tests below
+# --- pass on the very first run: this is coverage for existing behaviour,
+# --- not a bug fix.
+
+
+@pytest.mark.django_db
+def test_logo_no_imagen_es_rechazado_por_el_formulario(rf):
+    site = AdminSite()
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+    request = rf.get("/admin/")
+    FormClass = admin.get_form(request)
+    form = FormClass(
+        data={"nombre": "Instalación de resinas", "codigo": "logo-invalido"},
+        files={
+            "plantilla": SimpleUploadedFile("p.xlsx", b"contenido-irrelevante"),
+            "logo": SimpleUploadedFile(
+                "logo.jpg", b"esto no es una imagen", content_type="image/jpeg"
+            ),
+        },
+    )
+
+    assert not form.is_valid()
+    assert "logo" in form.errors
+
+
+@pytest.mark.django_db
+def test_logo_imagen_valida_es_aceptado_por_el_formulario(rf):
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (1, 1), color="red").save(buffer, format="PNG")
+    buffer.seek(0)
+
+    site = AdminSite()
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+    request = rf.get("/admin/")
+    FormClass = admin.get_form(request)
+    form = FormClass(
+        data={"nombre": "Instalación de resinas", "codigo": "logo-valido"},
+        files={
+            "plantilla": SimpleUploadedFile("p.xlsx", b"contenido-irrelevante"),
+            "logo": SimpleUploadedFile(
+                "logo.png", buffer.read(), content_type="image/png"
+            ),
+        },
+    )
+
+    assert form.is_valid(), form.errors
 
 
 # --- Design D9: bulk delete_selected is removed, not just guarded ----------
