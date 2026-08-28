@@ -1,0 +1,366 @@
+"""Django admin tests (Slice 4).
+
+Covers design D8 (activation is an explicit admin action calling the
+service, never a `save()` hook) and D9 (the delete guard is layered: the
+model already blocks deletion of an ever-activated row, but Django calls
+`has_delete_permission(request, obj=None)` — WITHOUT an object — when
+deciding whether to offer the changelist's bulk `delete_selected` action,
+so an object-sensitive override alone would let that bulk action slip
+past a protected row; `delete_selected` must be removed from `actions`
+entirely).
+"""
+
+import io
+
+import pytest
+from django.contrib.admin.sites import AdminSite
+from django.contrib.messages.storage.cookie import CookieStorage
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
+
+from tipos_reporte.admin import DefinicionDeTipoAdmin, DefinicionDeTipoForm, TipoDeReporteAdmin
+from tipos_reporte.models import DefinicionDeTipo, Estado, TipoDeReporte
+
+
+@pytest.fixture
+def site():
+    return AdminSite()
+
+
+@pytest.fixture
+def rf_admin_request(rf, usuario_factory):
+    """A request carrying a `rol=administrador` user (project convention:
+    admin access is gated by `Usuario.rol`, see `usuarios/models.py`), plus
+    a message storage so the action's `messages.error`/`messages.success`
+    calls (design D8) can be inspected without a full HTTP round trip."""
+    request = rf.get("/admin/")
+    request.user = usuario_factory(
+        username="admin_test", rol="administrador", is_staff=True, is_superuser=True
+    )
+    request._messages = CookieStorage(request)
+    return request
+
+
+# --- CRITICAL (found by sdd-verify): DefinicionDeTipoForm must accept a ----
+# --- valid submission, and must still reject an unsafe/invalid one --------
+
+
+@pytest.mark.django_db
+def test_form_es_valido_con_yaml_valido_subido(tipo_de_reporte_factory):
+    """Reproduces the verify-report CRITICAL: `yaml_fuente`/`estructura` are
+    required `ModelForm` fields that Django's `_clean_fields()` marks as
+    missing BEFORE `clean()` ever runs to populate them from `archivo_yaml`.
+    Before the fix, this form is NEVER valid, even with a perfectly valid
+    upload — no test in the suite caught this because every other test
+    bypasses the form via `.objects.create()`."""
+    tipo = tipo_de_reporte_factory()
+    archivo = SimpleUploadedFile(
+        "d.yaml", b"secciones: []", content_type="application/x-yaml"
+    )
+
+    form = DefinicionDeTipoForm(
+        data={"tipo": tipo.pk, "estado": Estado.BORRADOR},
+        files={"archivo_yaml": archivo},
+    )
+
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["yaml_fuente"] == "secciones: []"
+    assert form.cleaned_data["estructura"] == {"secciones": []}
+
+
+@pytest.mark.django_db
+def test_form_rechaza_archivo_no_decodificable_como_utf8(tipo_de_reporte_factory):
+    """Code-review fix: a file with bytes that are not valid UTF-8 (e.g.
+    exported from Excel/Notepad on Windows with a different encoding) must
+    become a `ValidationError` like every other `clean()` failure — not an
+    uncaught `UnicodeDecodeError` that would propagate as a 500."""
+    tipo = tipo_de_reporte_factory()
+    archivo = SimpleUploadedFile(
+        "d.yaml", b"\xff\xfe\x00\x01no-es-utf8", content_type="application/x-yaml"
+    )
+
+    form = DefinicionDeTipoForm(
+        data={"tipo": tipo.pk, "estado": Estado.BORRADOR},
+        files={"archivo_yaml": archivo},
+    )
+
+    assert not form.is_valid()
+    assert "archivo_yaml" in form.errors
+
+
+@pytest.mark.django_db
+def test_form_sigue_rechazando_yaml_inseguro(tipo_de_reporte_factory):
+    """Companion negative test: fixing the required-fields bug must not
+    reopen the Threat Matrix's unsafe-deserialization gap (`analizar_yaml_
+    seguro` rejects non-`safe_load`-able constructs like `!!python/object/
+    apply`)."""
+    tipo = tipo_de_reporte_factory()
+    archivo = SimpleUploadedFile(
+        "d.yaml",
+        b"!!python/object/apply:os.system ['echo pwned']",
+        content_type="application/x-yaml",
+    )
+
+    form = DefinicionDeTipoForm(
+        data={"tipo": tipo.pk, "estado": Estado.BORRADOR},
+        files={"archivo_yaml": archivo},
+    )
+
+    assert not form.is_valid()
+    assert "archivo_yaml" in form.errors
+
+
+# --- WARNING (found by sdd-verify): logo image validation, untested --------
+# --- `TipoDeReporte.logo` is a plain `models.ImageField` with no custom
+# --- `clean()`/`TipoDeReporteAdmin.form` override (unlike `DefinicionDeTipo
+# --- Form` above). Django's auto-generated `ModelAdmin` form therefore uses
+# --- `forms.ImageField`, whose `to_python()` opens the upload with Pillow
+# --- and rejects it if it isn't a real image — this is stock Django/Pillow
+# --- behaviour, not app-specific code, but until now nothing in the suite
+# --- exercised it (verify-report Engram #77, spec revision 2, "Local file
+# --- storage for uploads" / "logo validado como imagen"). Both tests below
+# --- pass on the very first run: this is coverage for existing behaviour,
+# --- not a bug fix.
+
+
+@pytest.mark.django_db
+def test_logo_no_imagen_es_rechazado_por_el_formulario(rf):
+    site = AdminSite()
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+    request = rf.get("/admin/")
+    FormClass = admin.get_form(request)
+    form = FormClass(
+        data={"nombre": "Instalación de resinas", "codigo": "logo-invalido"},
+        files={
+            "plantilla": SimpleUploadedFile("p.xlsx", b"contenido-irrelevante"),
+            "logo": SimpleUploadedFile(
+                "logo.jpg", b"esto no es una imagen", content_type="image/jpeg"
+            ),
+        },
+    )
+
+    assert not form.is_valid()
+    assert "logo" in form.errors
+
+
+@pytest.mark.django_db
+def test_logo_imagen_valida_es_aceptado_por_el_formulario(rf):
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (1, 1), color="red").save(buffer, format="PNG")
+    buffer.seek(0)
+
+    site = AdminSite()
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+    request = rf.get("/admin/")
+    FormClass = admin.get_form(request)
+    form = FormClass(
+        data={"nombre": "Instalación de resinas", "codigo": "logo-valido"},
+        files={
+            "plantilla": SimpleUploadedFile("p.xlsx", b"contenido-irrelevante"),
+            "logo": SimpleUploadedFile(
+                "logo.png", buffer.read(), content_type="image/png"
+            ),
+        },
+    )
+
+    assert form.is_valid(), form.errors
+
+
+# --- Design D9: bulk delete_selected is removed, not just guarded ----------
+
+
+@pytest.mark.django_db
+def test_delete_selected_is_not_offered_by_definicion_admin(site, rf_admin_request):
+    admin = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+
+    acciones = admin.get_actions(rf_admin_request)
+
+    assert "delete_selected" not in acciones
+
+
+@pytest.mark.django_db
+def test_delete_selected_is_not_offered_by_tipo_admin(site, rf_admin_request):
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+
+    acciones = admin.get_actions(rf_admin_request)
+
+    assert "delete_selected" not in acciones
+
+
+@pytest.mark.django_db
+def test_has_delete_permission_false_for_ever_activated_definicion(
+    site, rf_admin_request, tipo_de_reporte_factory
+):
+    """The object-level guard is still worth keeping for the detail page's
+    delete button/link (design D9's admin layer), even though it alone
+    cannot protect the changelist bulk action."""
+    admin = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+    tipo = tipo_de_reporte_factory()
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("d.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura={"secciones": []},
+        estado=Estado.HISTORICA,
+        version=1,
+        activada_en=timezone.now(),
+    )
+
+    assert admin.has_delete_permission(rf_admin_request, definicion) is False
+
+
+@pytest.mark.django_db
+def test_has_delete_permission_true_for_never_activated_definicion(
+    site, rf_admin_request, tipo_de_reporte_factory
+):
+    admin = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+    tipo = tipo_de_reporte_factory()
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("d.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura={"secciones": []},
+        estado=Estado.BORRADOR,
+    )
+
+    assert admin.has_delete_permission(rf_admin_request, definicion) is True
+
+
+# --- Readonly / derived fields -----------------------------------------------
+
+
+@pytest.mark.django_db
+def test_estado_version_activada_en_are_readonly_on_definicion_admin(site):
+    """`estado`, `version` and `activada_en` change only through
+    `servicios.activar_definicion`/`desactivar_tipo`, never through direct
+    admin editing (design D8)."""
+    admin = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+
+    campos_de_solo_lectura = admin.get_readonly_fields(None)
+
+    assert "estado" in campos_de_solo_lectura
+    assert "version" in campos_de_solo_lectura
+    assert "activada_en" in campos_de_solo_lectura
+
+
+@pytest.mark.django_db
+def test_plantilla_es_editable_en_tipo_sin_definicion_activa(site, tipo_de_reporte_factory):
+    """Code-review fix: `plantilla` must stay editable while a tipo has no
+    active definition — only an ALREADY-activated tipo needs the guard
+    (design D1's "every real change goes through desactivar first")."""
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+    tipo = tipo_de_reporte_factory()
+
+    campos_de_solo_lectura = admin.get_readonly_fields(None, obj=tipo)
+
+    assert "plantilla" not in campos_de_solo_lectura
+
+
+@pytest.mark.django_db
+def test_plantilla_es_readonly_en_tipo_con_definicion_activa(
+    site, tipo_de_reporte_factory, plantilla_xlsx, definicion_valida
+):
+    """Code-review fix: once a tipo has an active definition, changing
+    `plantilla` behind its back would leave that definition pointing at
+    cells that no longer correspond to the new file, with no re-validation
+    or warning. `plantilla` must become readonly until the admin
+    desactivates the tipo first (design D1)."""
+    destino = plantilla_xlsx(nombre_hoja="REPORTE", rangos=("M12:P12",))
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    tipo = tipo_de_reporte_factory(plantilla=SimpleUploadedFile("p.xlsx", contenido))
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("d.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=definicion_valida(),
+        estado=Estado.BORRADOR,
+    )
+    admin_definicion = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+    from django.test import RequestFactory
+
+    rf = RequestFactory()
+    request = rf.get("/admin/")
+    request._messages = CookieStorage(request)
+    admin_definicion.activar(request, DefinicionDeTipo.objects.filter(pk=definicion.pk))
+    tipo.refresh_from_db()
+
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+    campos_de_solo_lectura = admin.get_readonly_fields(None, obj=tipo)
+
+    assert "plantilla" in campos_de_solo_lectura
+
+
+@pytest.mark.django_db
+def test_definicion_activa_is_readonly_on_tipo_admin(site):
+    """`definicion_activa` changes only through the activation service, not
+    by hand-picking a row in the admin (design D1, D8)."""
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+
+    campos_de_solo_lectura = admin.get_readonly_fields(None)
+
+    assert "definicion_activa" in campos_de_solo_lectura
+
+
+# --- The "Activar definición" action wires the service ----------------------
+
+
+@pytest.mark.django_db
+def test_activar_action_is_registered(site):
+    admin = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+
+    assert "activar" in admin.actions
+
+
+@pytest.mark.django_db
+def test_activar_action_reports_one_error_message_per_problem(
+    site, rf_admin_request, tipo_de_reporte_factory, definicion_valida
+):
+    """Design D8: the action reports ONE `messages.ERROR` per problem, each
+    rendered as `{ubicacion}: {mensaje}` — a definition with several
+    defects produces several separately readable lines."""
+    tipo = tipo_de_reporte_factory()
+    estructura = definicion_valida()
+    del estructura["secciones"][0]["campos"][0]["tipo"]
+    del estructura["secciones"][0]["campos"][0]["celda"]
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("d.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+    admin = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+
+    admin.activar(rf_admin_request, DefinicionDeTipo.objects.filter(pk=definicion.pk))
+
+    mensajes = list(rf_admin_request._messages)
+    assert len(mensajes) >= 2
+    definicion.refresh_from_db()
+    assert definicion.estado == Estado.BORRADOR
+
+
+@pytest.mark.django_db
+def test_activar_action_success_reports_one_success_message(
+    site, rf_admin_request, tipo_de_reporte_factory, plantilla_xlsx, definicion_valida
+):
+    destino = plantilla_xlsx(nombre_hoja="REPORTE", rangos=("M12:P12",))
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    tipo = tipo_de_reporte_factory(plantilla=SimpleUploadedFile("p.xlsx", contenido))
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("d.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=definicion_valida(),
+        estado=Estado.BORRADOR,
+    )
+    admin = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+
+    admin.activar(rf_admin_request, DefinicionDeTipo.objects.filter(pk=definicion.pk))
+
+    definicion.refresh_from_db()
+    assert definicion.estado == Estado.ACTIVA
+    assert definicion.version == 1

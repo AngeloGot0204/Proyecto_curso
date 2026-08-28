@@ -9,10 +9,13 @@ later slices and are not exercised here.
 
 from datetime import timedelta
 
+import threading
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from tipos_reporte.models import DefinicionDeTipo, Estado, TipoDeReporte
@@ -172,6 +175,27 @@ def test_queryset_update_bypassing_immutability_on_activa_row_raises(
 
 
 @pytest.mark.django_db
+def test_primera_activacion_asigna_version_sin_disparar_inmutabilidad(
+    tipo_de_reporte_factory,
+):
+    """Regression (found while building Slice 4's activation service): the
+    borrador -> activa transition itself assigns `version` for the first
+    time, which must NOT trip the immutability guard — only a row that was
+    ALREADY non-borrador before this save is frozen (design D3)."""
+    tipo = tipo_de_reporte_factory()
+    definicion = _crear_definicion(tipo, estado=Estado.BORRADOR)
+
+    definicion.version = 1
+    definicion.activada_en = timezone.now()
+    definicion.estado = Estado.ACTIVA
+    definicion.save()
+    definicion.refresh_from_db()
+
+    assert definicion.estado == Estado.ACTIVA
+    assert definicion.version == 1
+
+
+@pytest.mark.django_db
 def test_queryset_update_on_borrador_row_is_allowed(tipo_de_reporte_factory):
     """The `update()` guard must only block non-draft rows — a borrador stays
     editable through `update()` too."""
@@ -184,6 +208,105 @@ def test_queryset_update_on_borrador_row_is_allowed(tipo_de_reporte_factory):
     definicion.refresh_from_db()
 
     assert definicion.estructura == {"secciones": [{"id": "editado"}]}
+
+
+# --- Code-review fix: the immutability guard's read is lockeada -----------
+
+
+@pytest.mark.django_db
+def test_save_lockea_la_fila_anterior_con_select_for_update(tipo_de_reporte_factory):
+    """Code-review fix: the immutability guard's `anterior = ...get(pk=...)`
+    read must use `select_for_update()` — otherwise two concurrent processes
+    could both pass the guard (both read the row as `activa`, both see no
+    frozen-field changes from each other) before either writes, letting the
+    second overwrite fields that should be immutable (design D3). Proven by
+    asserting the SQL Django emits during `save()` on an existing row
+    includes a row lock (`FOR UPDATE`)."""
+    tipo = tipo_de_reporte_factory()
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("d.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura={"secciones": []},
+        estado=Estado.ACTIVA,
+        version=1,
+        activada_en=timezone.now(),
+    )
+
+    with CaptureQueriesContext(connection) as contexto:
+        definicion.activada_en = timezone.now()
+        definicion.save()
+
+    consultas_con_lock = [
+        q["sql"] for q in contexto.captured_queries if "FOR UPDATE" in q["sql"].upper()
+    ]
+    assert consultas_con_lock, (
+        "save() debe lockear la fila anterior (select_for_update) al leerla "
+        "para el guard de inmutabilidad"
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_save_espera_el_lock_mantenido_por_otra_transaccion(tipo_de_reporte_factory):
+    """Functional proof of the same fix: while another transaction holds the
+    row's lock open (an in-flight, uncommitted save), a concurrent `save()`
+    on that SAME row must block instead of racing ahead to read a
+    pre-write snapshot of `anterior`."""
+    tipo = tipo_de_reporte_factory()
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("d.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura={"secciones": []},
+        estado=Estado.ACTIVA,
+        version=1,
+        activada_en=timezone.now(),
+    )
+
+    lock_adquirido = threading.Event()
+    liberar_lock = threading.Event()
+    orden = []
+
+    def _mantener_lock_externo():
+        from django.db import transaction as tx
+
+        try:
+            with tx.atomic():
+                DefinicionDeTipo.objects.select_for_update().get(pk=definicion.pk)
+                orden.append("lock-externo-adquirido")
+                lock_adquirido.set()
+                liberar_lock.wait(timeout=5)
+            orden.append("lock-externo-liberado")
+        finally:
+            connection.close()
+
+    def _guardar_en_hilo():
+        try:
+            fila = DefinicionDeTipo.objects.get(pk=definicion.pk)
+            fila.activada_en = timezone.now()
+            fila.save()
+            orden.append("guardado-completado")
+        finally:
+            connection.close()
+
+    hilo_lock = threading.Thread(target=_mantener_lock_externo)
+    hilo_lock.start()
+    assert lock_adquirido.wait(timeout=5)
+
+    hilo_guardado = threading.Thread(target=_guardar_en_hilo)
+    hilo_guardado.start()
+    hilo_guardado.join(timeout=1)
+    assert hilo_guardado.is_alive(), (
+        "save() no debería completar mientras otra transacción mantiene "
+        "el lock de la misma fila"
+    )
+
+    liberar_lock.set()
+    hilo_lock.join(timeout=5)
+    hilo_guardado.join(timeout=5)
+
+    assert not hilo_guardado.is_alive()
+    assert orden.index("lock-externo-liberado") < orden.index("guardado-completado")
 
 
 # --- Design D9: deletion blocked once ever activated -----------------------
