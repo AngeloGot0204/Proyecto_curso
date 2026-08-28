@@ -62,7 +62,12 @@ class DefinicionDeTipoForm(forms.ModelForm):
             )
 
         archivo.seek(0)
-        texto = archivo.read().decode("utf-8")
+        try:
+            texto = archivo.read().decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValidationError(
+                {"archivo_yaml": f"El archivo no es texto UTF-8 válido: {error}"}
+            )
         archivo.seek(0)
 
         try:
@@ -133,6 +138,17 @@ class TipoDeReporteAdmin(admin.ModelAdmin):
     list_display = ("nombre", "codigo", "activo", "definicion_activa")
     readonly_fields = TIPO_CAMPOS_DE_SOLO_LECTURA
     actions = ("desactivar",)
+
+    def get_readonly_fields(self, request, obj=None):
+        # Code-review fix: once `obj` has an active definition, `plantilla`
+        # must become readonly too — changing it behind an active
+        # definition's back would leave that definition pointing at cells
+        # that no longer correspond to the new file, with no re-validation
+        # or warning (design D1: real changes go through desactivar first).
+        campos = super().get_readonly_fields(request, obj)
+        if obj is not None and obj.definicion_activa_id is not None:
+            return (*campos, "plantilla")
+        return campos
 
     def get_actions(self, request):
         acciones = super().get_actions(request)

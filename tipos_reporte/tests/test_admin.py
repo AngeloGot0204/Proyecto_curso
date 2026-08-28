@@ -69,6 +69,26 @@ def test_form_es_valido_con_yaml_valido_subido(tipo_de_reporte_factory):
 
 
 @pytest.mark.django_db
+def test_form_rechaza_archivo_no_decodificable_como_utf8(tipo_de_reporte_factory):
+    """Code-review fix: a file with bytes that are not valid UTF-8 (e.g.
+    exported from Excel/Notepad on Windows with a different encoding) must
+    become a `ValidationError` like every other `clean()` failure — not an
+    uncaught `UnicodeDecodeError` that would propagate as a 500."""
+    tipo = tipo_de_reporte_factory()
+    archivo = SimpleUploadedFile(
+        "d.yaml", b"\xff\xfe\x00\x01no-es-utf8", content_type="application/x-yaml"
+    )
+
+    form = DefinicionDeTipoForm(
+        data={"tipo": tipo.pk, "estado": Estado.BORRADOR},
+        files={"archivo_yaml": archivo},
+    )
+
+    assert not form.is_valid()
+    assert "archivo_yaml" in form.errors
+
+
+@pytest.mark.django_db
 def test_form_sigue_rechazando_yaml_inseguro(tipo_de_reporte_factory):
     """Companion negative test: fixing the required-fields bug must not
     reopen the Threat Matrix's unsafe-deserialization gap (`analizar_yaml_
@@ -223,6 +243,54 @@ def test_estado_version_activada_en_are_readonly_on_definicion_admin(site):
     assert "estado" in campos_de_solo_lectura
     assert "version" in campos_de_solo_lectura
     assert "activada_en" in campos_de_solo_lectura
+
+
+@pytest.mark.django_db
+def test_plantilla_es_editable_en_tipo_sin_definicion_activa(site, tipo_de_reporte_factory):
+    """Code-review fix: `plantilla` must stay editable while a tipo has no
+    active definition — only an ALREADY-activated tipo needs the guard
+    (design D1's "every real change goes through desactivar first")."""
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+    tipo = tipo_de_reporte_factory()
+
+    campos_de_solo_lectura = admin.get_readonly_fields(None, obj=tipo)
+
+    assert "plantilla" not in campos_de_solo_lectura
+
+
+@pytest.mark.django_db
+def test_plantilla_es_readonly_en_tipo_con_definicion_activa(
+    site, tipo_de_reporte_factory, plantilla_xlsx, definicion_valida
+):
+    """Code-review fix: once a tipo has an active definition, changing
+    `plantilla` behind its back would leave that definition pointing at
+    cells that no longer correspond to the new file, with no re-validation
+    or warning. `plantilla` must become readonly until the admin
+    desactivates the tipo first (design D1)."""
+    destino = plantilla_xlsx(nombre_hoja="REPORTE", rangos=("M12:P12",))
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    tipo = tipo_de_reporte_factory(plantilla=SimpleUploadedFile("p.xlsx", contenido))
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("d.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=definicion_valida(),
+        estado=Estado.BORRADOR,
+    )
+    admin_definicion = DefinicionDeTipoAdmin(DefinicionDeTipo, site)
+    from django.test import RequestFactory
+
+    rf = RequestFactory()
+    request = rf.get("/admin/")
+    request._messages = CookieStorage(request)
+    admin_definicion.activar(request, DefinicionDeTipo.objects.filter(pk=definicion.pk))
+    tipo.refresh_from_db()
+
+    admin = TipoDeReporteAdmin(TipoDeReporte, site)
+    campos_de_solo_lectura = admin.get_readonly_fields(None, obj=tipo)
+
+    assert "plantilla" in campos_de_solo_lectura
 
 
 @pytest.mark.django_db
