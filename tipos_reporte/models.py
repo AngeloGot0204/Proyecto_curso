@@ -10,7 +10,7 @@ raw SQL writes (D3).
 """
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import CheckConstraint, Q, UniqueConstraint
 
 
@@ -208,21 +208,32 @@ class DefinicionDeTipo(models.Model):
         # itself legitimately assigns `version` for the first time (design
         # D2), so it must not trip this guard. Immutability only applies
         # once the row has ALREADY left borrador (design D3).
+        #
+        # Code-review fix: the read of `anterior` is locked with
+        # `select_for_update()` inside an explicit transaction — without it,
+        # two concurrent processes could both read the row BEFORE either
+        # writes, both pass the guard (neither sees the other's pending
+        # change), and the second overwrite fields that should be immutable.
+        # The lock is held for the read+check+write, serializing concurrent
+        # saves of the SAME row.
         if self.pk:
-            anterior = type(self).objects.get(pk=self.pk)
-            if anterior.estado != Estado.BORRADOR:
-                cambiados = [
-                    campo
-                    for campo in CONGELADOS
-                    if getattr(anterior, campo) != getattr(self, campo)
-                ]
-                if cambiados:
-                    raise ValidationError(
-                        f"Una definición {anterior.estado} es inmutable; "
-                        f"campos modificados: {', '.join(cambiados)}. "
-                        "Desactivá el tipo y subí una definición nueva."
-                    )
-        super().save(*args, **kwargs)
+            with transaction.atomic():
+                anterior = type(self).objects.select_for_update().get(pk=self.pk)
+                if anterior.estado != Estado.BORRADOR:
+                    cambiados = [
+                        campo
+                        for campo in CONGELADOS
+                        if getattr(anterior, campo) != getattr(self, campo)
+                    ]
+                    if cambiados:
+                        raise ValidationError(
+                            f"Una definición {anterior.estado} es inmutable; "
+                            f"campos modificados: {', '.join(cambiados)}. "
+                            "Desactivá el tipo y subí una definición nueva."
+                        )
+                super().save(*args, **kwargs)
+        else:
+            super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         if self.activada_en is not None:
