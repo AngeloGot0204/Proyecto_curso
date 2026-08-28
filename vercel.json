@@ -1,4 +1,4 @@
 {
-  "buildCommand": "python manage.py collectstatic --noinput",
-  "outputDirectory": "staticfiles"
+  "buildCommand": "python manage.py collectstatic --noinput && mkdir -p vercel_static/static && cp -r staticfiles/* vercel_static/static/",
+  "outputDirectory": "vercel_static"
 }
