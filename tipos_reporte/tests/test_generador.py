@@ -8,9 +8,9 @@ implement) before the corresponding implementation lands in
 for the acceptance criteria these tests encode, and `design.md` for the
 architecture decisions (D1-D5) they exercise.
 
-This file covers Phase 1 (exceptions) and Phase 2 (template loading +
-completeness validation) only — cell writing, sheet export and logo swap
-land in later PRs (Phase 3/4 of `tasks.md`).
+This file covers Phase 1 (exceptions), Phase 2 (template loading +
+completeness validation), Phase 3 (cell writing + sheet-only export) and
+Phase 4 (logo swap) of the change's `tasks.md`.
 """
 
 import os
@@ -19,6 +19,7 @@ from io import BytesIO
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from openpyxl import load_workbook
+from PIL import Image
 
 from tipos_reporte.models import DefinicionDeTipo, Estado
 
@@ -500,3 +501,112 @@ def test_generacion_exitosa_devuelve_bytes_legibles(
     assert resultado.tell() == 0
     libro = load_workbook(resultado)
     assert libro.sheetnames == ["REPORTE"]
+
+
+@pytest.mark.django_db
+def test_logo_presente_reemplaza_la_imagen_de_la_plantilla_en_el_mismo_anclaje(
+    tipo_de_reporte_factory, plantilla_xlsx, imagen_png, definicion_valida, valores_completos
+):
+    """Task 4.1 RED — spec scenario "Logo is present on the tipo": a
+    template with a 10x10 original image and a tipo whose `logo` is a
+    distinct 20x20 PNG must export the tipo's logo — not the template's
+    original image — at the original anchor (design D4: reuse the loaded
+    `anchor` object, so position survives even though pixel size changes)."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    ruta_imagen_plantilla = imagen_png(nombre="original.png", tamano=(10, 10))
+    destino = plantilla_xlsx(nombre_hoja=estructura["hoja"], imagen=ruta_imagen_plantilla)
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    ruta_logo = imagen_png(nombre="logo.png", tamano=(20, 20), color=(0, 255, 0))
+    tipo = tipo_de_reporte_factory(
+        plantilla=SimpleUploadedFile("plantilla.xlsx", contenido),
+        logo=SimpleUploadedFile("logo.png", ruta_logo.read_bytes()),
+    )
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("definicion.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+
+    resultado = generar_reporte(definicion, valores_completos())
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    assert len(hoja._images) == 1
+    imagen_exportada = Image.open(hoja._images[0].ref)
+    assert imagen_exportada.size == (20, 20)
+
+
+@pytest.mark.django_db
+def test_logo_ausente_deja_la_imagen_original_de_la_plantilla_intacta(
+    tipo_de_reporte_factory, plantilla_xlsx, imagen_png, definicion_valida, valores_completos
+):
+    """Task 4.2 RED — spec scenario "Logo is absent on the tipo": with
+    `tipo.logo` unset, the template's original 10x10 image must remain
+    untouched — same size and same anchor position — after generation."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    ruta_imagen_plantilla = imagen_png(nombre="original.png", tamano=(10, 10))
+    destino = plantilla_xlsx(nombre_hoja=estructura["hoja"], imagen=ruta_imagen_plantilla)
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    tipo = tipo_de_reporte_factory(plantilla=SimpleUploadedFile("plantilla.xlsx", contenido))
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("definicion.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+    libro_plantilla = load_workbook(destino)
+    ancla_original = libro_plantilla[estructura["hoja"]]._images[0].anchor
+
+    resultado = generar_reporte(definicion, valores_completos())
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    assert len(hoja._images) == 1
+    imagen_exportada = Image.open(hoja._images[0].ref)
+    assert imagen_exportada.size == (10, 10)
+    ancla_exportada = hoja._images[0].anchor
+    assert ancla_exportada._from.col == ancla_original._from.col
+    assert ancla_exportada._from.row == ancla_original._from.row
+
+
+@pytest.mark.django_db
+def test_plantilla_sin_imagen_con_logo_definido_no_inserta_ninguna_imagen(
+    tipo_de_reporte_factory, plantilla_xlsx, imagen_png, definicion_valida, valores_completos
+):
+    """Task 4.3 RED — "template has no image, logo is set": with no
+    original image to anchor to, the logo must NOT be inserted at a
+    hardcoded cell (design D4's rejected alternative) — `hoja._images`
+    stays empty."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    destino = plantilla_xlsx(nombre_hoja=estructura["hoja"])
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    ruta_logo = imagen_png(nombre="logo.png", tamano=(20, 20), color=(0, 255, 0))
+    tipo = tipo_de_reporte_factory(
+        plantilla=SimpleUploadedFile("plantilla.xlsx", contenido),
+        logo=SimpleUploadedFile("logo.png", ruta_logo.read_bytes()),
+    )
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("definicion.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+
+    resultado = generar_reporte(definicion, valores_completos())
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    assert hoja._images == []
