@@ -1,6 +1,11 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ seccion.titulo }} — Reporte #{{ reporte.id }}{% endblock %}
+
+{% block extra_head %}
+<script src="{% static 'reportes/paso.js' %}" defer></script>
+{% endblock %}
 
 {% block content %}
 <h1>{{ seccion.titulo }}</h1>
@@ -19,7 +24,7 @@
 <form method="post">
     {% csrf_token %}
     {% for campo in form %}
-    <p>
+    <p data-campo="{{ campo.name }}">
         <label for="{{ campo.id_for_label }}">
             {{ campo.label }}{% if campo.field.widget.attrs.required %} *{% endif %}
         </label>
@@ -31,6 +36,6 @@
 
 <nav>
     {% if url_anterior %}<a href="{{ url_anterior }}">Anterior</a>{% endif %}
-    {% if url_siguiente %}<a href="{{ url_siguiente }}">Siguiente</a>{% endif %}
+    {% if url_siguiente %}<a href="{{ url_siguiente }}" data-siguiente>Siguiente</a>{% endif %}
 </nav>
 {% endblock %}
