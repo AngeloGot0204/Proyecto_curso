@@ -17,7 +17,7 @@ import pytest
 from django import forms
 
 from reportes.models import ValorDeReporte
-from reportes.valores import a_texto, desde_texto, guardar_valor
+from reportes.valores import a_texto, desde_texto, guardar_valor, valores_de_reporte
 
 
 # --- a_texto: serialize cleaned form value to canonical string -------------
@@ -174,3 +174,43 @@ def test_guardar_valor_booleano_false_persiste_fila_con_texto_false(reporte_fact
         reporte=reporte, identificador_de_campo="verificado"
     )
     assert fila.valor == "false"
+
+
+# --- valores_de_reporte: shared dict-builder (design D5) -------------------
+
+
+@pytest.mark.django_db
+def test_valores_de_reporte_construye_dict_desde_filas(reporte_factory):
+    """Design D5: `valores_de_reporte` builds the same
+    `{identificador_de_campo: valor}` dict that `validar_reporte` and
+    `paso` each built inline before the refactor."""
+    reporte = reporte_factory()
+    usuario = reporte.creador
+    ValorDeReporte.objects.create(
+        reporte=reporte, identificador_de_campo="turno", valor="Día", autor=usuario
+    )
+    ValorDeReporte.objects.create(
+        reporte=reporte,
+        identificador_de_campo="observaciones-generales",
+        valor="Todo en orden.",
+        autor=usuario,
+    )
+
+    resultado = valores_de_reporte(reporte)
+
+    assert resultado == {
+        "turno": "Día",
+        "observaciones-generales": "Todo en orden.",
+    }
+
+
+@pytest.mark.django_db
+def test_valores_de_reporte_reporte_vacio_retorna_dict_vacio(reporte_factory):
+    """A `Reporte` with no persisted `ValorDeReporte` rows produces `{}` —
+    the empty result must come from a real, empty queryset, not a hardcoded
+    stub (proven by the non-empty companion test above)."""
+    reporte = reporte_factory()
+
+    resultado = valores_de_reporte(reporte)
+
+    assert resultado == {}

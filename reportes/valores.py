@@ -55,6 +55,18 @@ def desde_texto(campo, texto):
     return campo.to_python(texto)
 
 
+def valores_de_reporte(reporte) -> dict[str, str]:
+    """Build the `{identificador_de_campo: valor}` dict for `reporte` from
+    its persisted `ValorDeReporte` rows (design D5) — the ONE shared
+    construction both `validacion.py::validar_reporte` and
+    `views.py::paso`/`generar` use, replacing what used to be a duplicated
+    inline comprehension in each call site."""
+    return {
+        valor.identificador_de_campo: valor.valor
+        for valor in reporte.valores.all()
+    }
+
+
 def guardar_valor(reporte, identificador_de_campo, valor, autor):
     """Upsert or delete one `ValorDeReporte` row for `identificador_de_campo`
     on `reporte` (design D3). Equality against `None`/`""` — never

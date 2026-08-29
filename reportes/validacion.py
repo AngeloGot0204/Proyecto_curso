@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from django import forms
 
-from reportes.valores import desde_texto
+from reportes.valores import desde_texto, valores_de_reporte
 from tipos_reporte.generador import ValoresIncompletos, _validar_completitud
 from tipos_reporte.models import TipoDeDato
 from tipos_reporte.validacion import _iterar_nodos
@@ -178,10 +178,7 @@ def validar_reporte(reporte) -> ResultadoDeRevision:
     rule `_validar_completitud` and `guardar_valor` already use, since
     `guardar_valor` deletes empties rather than persisting them)."""
     estructura = reporte.definicion.estructura
-    valores = {
-        valor.identificador_de_campo: valor.valor
-        for valor in reporte.valores.all()
-    }
+    valores = valores_de_reporte(reporte)
     indice = _indice_de_campos(estructura)
 
     errores = _errores_por_obligatorios_faltantes(estructura, valores, indice)
