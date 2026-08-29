@@ -79,6 +79,64 @@ def definicion_valida():
 
 
 @pytest.fixture
+def estructura_con_validaciones():
+    """An `estructura` dict exercising every rule `reportes.validacion`
+    checks (backlog `validacion-datos-formulario`, spec scenarios 1-6): one
+    `obligatorio` `texto` campo, one `obligatorio` `seleccion` campo whose
+    `opciones` include `"No cumple"`, and one `obligatorio`
+    `rango-hora-inicio-fin` item — deep-copied per call, mirroring
+    `definicion_valida`."""
+
+    def _crear():
+        return copy.deepcopy(
+            {
+                "tipo": "instalacion-resinas",
+                "plantilla": "JME.PC-0001.F1.xlsx",
+                "hoja": "REPORTE",
+                "secciones": [
+                    {
+                        "id": "datos-generales",
+                        "titulo": "Datos generales",
+                        "campos": [
+                            {
+                                "id": "observaciones-generales",
+                                "etiqueta": "Observaciones generales",
+                                "tipo": "texto",
+                                "obligatorio": True,
+                                "celda": "M10",
+                            },
+                            {
+                                "id": "estado-general",
+                                "etiqueta": "Estado general",
+                                "tipo": "seleccion",
+                                "opciones": ["Cumple", "No cumple"],
+                                "obligatorio": True,
+                                "celda": "M12",
+                            },
+                        ],
+                    },
+                    {
+                        "id": "proceso-instalacion",
+                        "titulo": "Proceso de instalación",
+                        "items": [
+                            {
+                                "id": "p-01",
+                                "texto": "Se verifica ángulo de perforación.",
+                                "tipo": "rango-hora-inicio-fin",
+                                "obligatorio": True,
+                                "celda_inicio": "M25",
+                                "celda_fin": "P25",
+                            }
+                        ],
+                    },
+                ],
+            }
+        )
+
+    return _crear
+
+
+@pytest.fixture
 def tipo_con_definicion_activa_factory(db, definicion_valida):
     """Create a `TipoDeReporte` with an already-activated `DefinicionDeTipo`
     (design D11): the row is built directly in activated shape
