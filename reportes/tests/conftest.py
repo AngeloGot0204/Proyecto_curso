@@ -279,6 +279,22 @@ def reporte_listo_para_cerrar(
 
 
 @pytest.fixture
+def participacion_factory(db, usuario_factory):
+    """Create a `Usuario` AND its `ParticipacionEnReporte` row on `reporte`
+    (backlog #8, design's Fixture strategy), returning the invited user.
+    `username` is explicit per call, following the existing convention that
+    avoids `"usuario_test"` collisions with `cliente_autenticado`."""
+    from reportes.models import ParticipacionEnReporte
+
+    def _crear(reporte, username="invitado"):
+        usuario = usuario_factory(username=username)
+        ParticipacionEnReporte.objects.create(reporte=reporte, usuario=usuario)
+        return usuario
+
+    return _crear
+
+
+@pytest.fixture
 def cliente_autenticado(client, usuario_factory):
     """A Django test client already logged in as a fresh Usuario
     (`client.force_login` — authentication itself is #2's tested concern,
