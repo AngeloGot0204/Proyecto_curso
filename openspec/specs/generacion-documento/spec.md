@@ -45,15 +45,27 @@ The system MUST reject `generar` requests for a `Reporte` that has no `VistoBuen
 - WHEN an authenticated user POSTs to `generar`
 - THEN no `.xlsx` is streamed, no `Generacion` row is created, and the response redirects to `revision`
 
-### Requirement: Any Authenticated User May Generate
+### Requirement: Creator or Invited Participant May Generate
 
-The system MUST expose `generar` as a POST-only, `@login_required` view with no creator restriction: any authenticated user may generate a document for a closed report.
+The system MUST expose `generar` as a POST-only, `@login_required` view restricted to the `Reporte`'s creator or a user with a `ParticipacionEnReporte` row for that report. Any other authenticated user MUST receive a 404 instead of generating a document.
 
-#### Scenario: Non-creator generates successfully
+#### Scenario: Creator generates successfully
 
 - GIVEN a `Reporte` created by user A, closed (has `VistoBueno`), `puede_generar` True
-- WHEN user B (authenticated, not the creator) POSTs to `generar`
+- WHEN user A POSTs to `generar`
+- THEN generation succeeds, a `Generacion` row is created with `usuario=A`, and the `.xlsx` is streamed to A
+
+#### Scenario: Invited participant generates successfully
+
+- GIVEN a `Reporte` created by user A, closed (has `VistoBueno`), `puede_generar` True, with user B invited via `ParticipacionEnReporte`
+- WHEN user B POSTs to `generar`
 - THEN generation succeeds, a `Generacion` row is created with `usuario=B`, and the `.xlsx` is streamed to B
+
+#### Scenario: Non-participant authenticated user is denied
+
+- GIVEN a `Reporte` created by user A, closed (has `VistoBueno`), `puede_generar` True, with no invitation for user C
+- WHEN user C (authenticated, not creator, not invited) POSTs to `generar`
+- THEN the response is 404, no `.xlsx` is streamed, and no `Generacion` row is created
 
 ### Requirement: Server-Side Eligibility Re-Check on Generation
 

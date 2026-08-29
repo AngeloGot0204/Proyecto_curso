@@ -102,9 +102,35 @@ For fields marked `obligatorio` in the structure, the system MUST render the HTM
 - WHEN this change's hora-range and "No cumple" server-side checks are added to the `paso` POST handler
 - THEN that test MUST continue to pass unmodified in intent: a step POST missing an obligatorio value MUST NOT be blocked, regardless of what `validar_reporte` would later report for the same `Reporte`
 
+### Requirement: Participant Access Required
+
+The system MUST allow access to any wizard `paso` view only to the `Reporte`'s creator or a user with a `ParticipacionEnReporte` row for that report. Any other authenticated user MUST receive a 404, matching the existing creator-only 404 pattern (no information disclosure via a 403 or redirect).
+
+#### Scenario: Invited participant accesses a step
+
+- GIVEN a `Reporte` created by user A with user B invited via `ParticipacionEnReporte`
+- WHEN user B requests any `paso` URL for that report
+- THEN the response is 200 and the step renders normally
+
+#### Scenario: Non-invited authenticated user is denied
+
+- GIVEN a `Reporte` created by user A with no invitation for user C
+- WHEN user C (authenticated, not creator, not invited) requests any `paso` URL for that report, including via a direct URL
+- THEN the response is 404
+
+### Requirement: Value Writes Recorded to CambioDeValor
+
+Every actual value write performed by `paso`'s POST handler through `guardar_valor` MUST create a `CambioDeValor` row per the `colaboracion-reporte` capability's FIFO-30 requirement, attributing `autor` to the submitting user (creator or invited participant).
+
+#### Scenario: Participant edit is attributed correctly
+
+- GIVEN an invited participant B editing a field on a `Reporte` created by A
+- WHEN B submits a new value that differs from the stored one
+- THEN the resulting `CambioDeValor` row has `autor=B` and `valor_anterior` equal to the value that was stored before this write
+
 ### Requirement: Authentication required
 
-The system MUST block unauthenticated access to any wizard step, consistent with the existing `@login_required` convention.
+The system MUST block unauthenticated access to any wizard step, consistent with the existing `@login_required` convention. In addition to authentication, access is scoped to the `Reporte`'s creator or an invited participant, per the "Participant Access Required" requirement above.
 
 #### Scenario: Unauthenticated request is redirected
 
