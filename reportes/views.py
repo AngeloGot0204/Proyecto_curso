@@ -44,6 +44,7 @@ from reportes.models import (
     Generacion,
     ParticipacionEnReporte,
     Reporte,
+    ValorDeReporte,
     VistoBueno,
 )
 from reportes.permisos import tiene_acceso
@@ -54,6 +55,21 @@ from tipos_reporte.generador import ProblemaDeGeneracion
 from tipos_reporte.models import TipoDeReporte
 
 logger = logging.getLogger(__name__)
+
+
+def service_worker(request):
+    """`GET /sw.js` (change `capa-offline`; spec `capa-offline` — "Root-
+    Scoped Service Worker Route"; design's Decision "sw.js served as a
+    Django template"). Public, unauthenticated route served at the domain
+    root (outside WhiteNoise's `/static/` prefix) so the SW can register
+    with root scope via `Service-Worker-Allowed: /`. Rendered from
+    `reportes/templates/reportes/sw.js`, a Django template (not a static
+    file), so `{% static %}` URLs inside it stay authoritative in every
+    environment."""
+    respuesta = render(request, "reportes/sw.js", content_type="application/javascript")
+    respuesta["Service-Worker-Allowed"] = "/"
+    respuesta["Cache-Control"] = "no-cache"
+    return respuesta
 
 
 def _seccion_por_id(estructura, seccion_id):
@@ -154,6 +170,8 @@ def paso(request, reporte_id, seccion_id):
     if posicion_actual < len(ids_de_secciones) - 1:
         url_siguiente = _url_paso(reporte.id, ids_de_secciones[posicion_actual + 1])
 
+    servidor_actualizado = _servidor_actualizado(reporte, seccion)
+
     contexto = {
         "reporte": reporte,
         "seccion": seccion,
@@ -162,8 +180,36 @@ def paso(request, reporte_id, seccion_id):
         "url_anterior": url_anterior,
         "url_siguiente": url_siguiente,
         "posicion": f"Paso {posicion_actual + 1} de {len(ids_de_secciones)}",
+        "servidor_actualizado": servidor_actualizado,
     }
     return render(request, "reportes/paso.html", contexto)
+
+
+def _servidor_actualizado(reporte, seccion):
+    """`max(ValorDeReporte.fecha)` across every campo/item declared in this
+    `seccion`, or `""` if none has been saved yet (change `capa-offline`;
+    design's Technical Approach — the sole signal `paso-offline.js` uses to
+    decide whether a local IndexedDB draft is newer than what the server
+    already has). Scoped to the section's own field identifiers, not the
+    whole `Reporte`, so an update in another section never marks this one as
+    server-newer."""
+    identificadores = [campo["id"] for campo in seccion.get("campos", [])]
+    for item in seccion.get("items", []):
+        if item.get("tipo") == "rango-hora-inicio-fin":
+            identificadores.append(f"{item['id']}_inicio")
+            identificadores.append(f"{item['id']}_fin")
+        else:
+            identificadores.append(item["id"])
+
+    ultimo = (
+        ValorDeReporte.objects.filter(
+            reporte=reporte, identificador_de_campo__in=identificadores
+        )
+        .order_by("-fecha")
+        .values_list("fecha", flat=True)
+        .first()
+    )
+    return ultimo.isoformat() if ultimo is not None else ""
 
 
 def _url_paso(reporte_id, seccion_id):

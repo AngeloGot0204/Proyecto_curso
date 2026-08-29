@@ -4,7 +4,21 @@
 {% block title %}{{ seccion.titulo }} — Reporte #{{ reporte.id }}{% endblock %}
 
 {% block extra_head %}
+<script src="https://unpkg.com/dexie@3/dist/dexie.js" crossorigin="anonymous"></script>
 <script src="{% static 'reportes/paso.js' %}" defer></script>
+<script src="{% static 'reportes/paso-offline.js' %}" defer></script>
+<script>
+    if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+            navigator.serviceWorker.register("/sw.js").catch(function () {
+                // Registration failure must never block the page — offline
+                // support degrades silently to online-only behavior
+                // (change `capa-offline`; draft persistence still works via
+                // Dexie regardless of SW registration outcome).
+            });
+        });
+    }
+</script>
 {% endblock %}
 
 {% block content %}
@@ -21,7 +35,7 @@
     </ol>
 </nav>
 
-<form method="post">
+<form method="post" data-reporte-id="{{ reporte.id }}" data-seccion-id="{{ seccion.id }}" data-servidor-actualizado="{{ servidor_actualizado }}">
     {% csrf_token %}
     {% for campo in form %}
     <p data-campo="{{ campo.name }}">

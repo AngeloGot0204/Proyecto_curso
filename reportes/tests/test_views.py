@@ -1008,3 +1008,106 @@ def test_participantes_no_participante_devuelve_404(
     )
 
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# service_worker (change `capa-offline`; spec `capa-offline` — "Root-Scoped
+# Service Worker Route"; design's Decision "sw.js served as a Django
+# template"). TDD-covered per tasks.md Phase 1 — the only client-adjacent
+# surface with automated coverage in this change.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_sw_js_headers_correctos(client):
+    """Spec: "/sw.js is served with correct headers" — 200, correct
+    Content-Type, and the `Service-Worker-Allowed: /` header that grants
+    root scope from outside WhiteNoise's `/static/` prefix."""
+    response = client.get("/sw.js")
+
+    assert response.status_code == 200
+    assert response["Content-Type"] in (
+        "application/javascript",
+        "text/javascript",
+    )
+    assert response["Service-Worker-Allowed"] == "/"
+
+
+@pytest.mark.django_db
+def test_sw_js_anonimo_no_redirige_a_login(client):
+    """Spec: "/sw.js is reachable without authentication" — registration
+    happens before any session context is guaranteed, so this route must
+    never redirect to login nor 401/403 for an anonymous client."""
+    response = client.get("/sw.js")
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_sw_js_body_referencia_paso_js(client):
+    """Design's Decision "sw.js served as a Django template": the body must
+    be rendered via `{% static %}`, not read from a static file — this
+    proves the template actually renders rather than being served as a raw
+    file, by asserting the resolved `paso.js` static URL appears in body."""
+    response = client.get("/sw.js")
+    contenido = response.content.decode()
+
+    assert "/static/reportes/paso.js" in contenido
+
+
+# ---------------------------------------------------------------------------
+# paso — servidor_actualizado context (change `capa-offline`; spec
+# `capa-offline` — client relies on this to decide whether a local draft is
+# newer than what the server already has). TDD-covered per tasks.md Phase 2.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_get_paso_incluye_servidor_actualizado(sesion_de_creador):
+    """`GET paso` must render `data-servidor-actualizado` on the form,
+    derived from `max(ValorDeReporte.fecha)` for that `(reporte_id,
+    seccion_id)` — the sole signal `paso-offline.js` uses to decide whether
+    a local IndexedDB draft is newer than server-rendered data."""
+    client, reporte = sesion_de_creador
+    valor = ValorDeReporte.objects.create(
+        reporte=reporte,
+        identificador_de_campo="turno",
+        valor="Día",
+        autor=reporte.creador,
+    )
+
+    response = client.get(reverse("reportes_paso", args=[reporte.id, "datos-generales"]))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "data-servidor-actualizado=" in contenido
+    esperado = valor.fecha.isoformat()
+    assert esperado in contenido
+
+
+@pytest.mark.django_db
+def test_post_paso_actualiza_servidor_actualizado_en_siguiente_get(sesion_de_creador):
+    """After a successful POST to `paso`, the subsequent GET of the SAME
+    section must show `data-servidor-actualizado` updated to the new
+    `max(ValorDeReporte.fecha)` — proves the value is recomputed per
+    request, not cached/stale."""
+    client, reporte = sesion_de_creador
+
+    response_antes = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    assert 'data-servidor-actualizado=""' in response_antes.content.decode()
+
+    client.post(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"]),
+        data={"turno": "Noche"},
+    )
+
+    response_despues = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    contenido_despues = response_despues.content.decode()
+    valor = ValorDeReporte.objects.get(reporte=reporte, identificador_de_campo="turno")
+
+    assert response_despues.status_code == 200
+    assert valor.fecha.isoformat() in contenido_despues
