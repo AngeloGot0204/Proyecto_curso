@@ -14,4 +14,9 @@ urlpatterns = [
         views.revision,
         name="reportes_revision",
     ),
+    path(
+        "<int:reporte_id>/cerrar/",
+        views.cerrar_reporte,
+        name="reportes_cerrar",
+    ),
 ]
