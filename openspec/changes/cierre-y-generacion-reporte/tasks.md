@@ -60,29 +60,29 @@ Chain strategy: pending
 
 ## Phase 5: `generar` View (Core Implementation)
 
-- [ ] 5.1 RED: `reportes/tests/test_views.py` — `test_generar_sin_visto_bueno_redirige_con_error` (no `.xlsx` streamed, no `Generacion` row, redirect to `revision`, flash error present).
-- [ ] 5.2 RED: `reportes/tests/test_views.py` — `test_generar_rechazado_si_no_puede_generar_pese_a_visto_bueno` (VistoBueno exists but `puede_generar` now False → rejected).
-- [ ] 5.3 RED: `reportes/tests/test_views.py` — `test_generar_no_creador_tambien_puede_generar` (user B, not creator, generation succeeds, `Generacion.usuario == B`).
-- [ ] 5.4 RED: `reportes/tests/test_views.py` — `test_generar_captura_problema_de_generacion_y_redirige` (mock `generador.generar_reporte` to raise `PlantillaIlegible`/`ValoresIncompletos` → redirect to `revision`, flash error via `get_messages`, status != 500).
-- [ ] 5.5 RED: `reportes/tests/test_views.py` — `test_generar_exitoso_streamea_xlsx_con_headers_correctos` (asserts `Content-Type`, `Content-Disposition: attachment; filename="..."`, `load_workbook(BytesIO(response.content))` round-trip, cell values at `M10`/`M25`).
-- [ ] 5.6 RED: `reportes/tests/test_views.py` — `test_generar_repetido_crea_multiples_filas_generacion` (two successful POSTs → two `Generacion` rows, no error).
-- [ ] 5.7 GREEN: `reportes/urls.py` — add `path("<int:reporte_id>/generar/", views.generar, name="reportes_generar")`.
-- [ ] 5.8 GREEN: `reportes/views.py` — implement `generar` per design (`@login_required @require_POST`, non-creator-scoped `get_object_or_404`, `VistoBueno`-exists check + `messages.error` + redirect, `validar_reporte(reporte).puede_generar` re-check + `messages.error` + redirect, `try: generador.generar_reporte(reporte.definicion, valores_de_reporte(reporte)) except ProblemaDeGeneracion: logger.exception(...); messages.error(...); return redirect(...)`, on success `Generacion.objects.create(reporte=reporte, definicion=reporte.definicion, usuario=request.user)` + build filename `f"{reporte.tipo.codigo}-{reporte.id}-{timezone.localdate():%Y%m%d}.xlsx"` + `HttpResponse(buffer.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")` + `Content-Disposition` header).
-- [ ] 5.9 Run `pytest reportes/tests/test_views.py -k generar -q` — confirm all `generar` tests pass.
+- [x] 5.1 RED: `reportes/tests/test_views.py` — `test_generar_sin_visto_bueno_redirige_con_error` (no `.xlsx` streamed, no `Generacion` row, redirect to `revision`, flash error present).
+- [x] 5.2 RED: `reportes/tests/test_views.py` — `test_generar_rechazado_si_no_puede_generar_pese_a_visto_bueno` (VistoBueno exists but `puede_generar` now False → rejected).
+- [x] 5.3 RED: `reportes/tests/test_views.py` — `test_generar_no_creador_tambien_puede_generar` (user B, not creator, generation succeeds, `Generacion.usuario == B`).
+- [x] 5.4 RED: `reportes/tests/test_views.py` — `test_generar_captura_problema_de_generacion_y_redirige` (mock `generador.generar_reporte` to raise `PlantillaIlegible`/`ValoresIncompletos` → redirect to `revision`, flash error via `get_messages`, status != 500).
+- [x] 5.5 RED: `reportes/tests/test_views.py` — `test_generar_exitoso_streamea_xlsx_con_headers_correctos` (asserts `Content-Type`, `Content-Disposition: attachment; filename="..."`, `load_workbook(BytesIO(response.content))` round-trip, cell values at `M10`/`M25`).
+- [x] 5.6 RED: `reportes/tests/test_views.py` — `test_generar_repetido_crea_multiples_filas_generacion` (two successful POSTs → two `Generacion` rows, no error).
+- [x] 5.7 GREEN: `reportes/urls.py` — add `path("<int:reporte_id>/generar/", views.generar, name="reportes_generar")`.
+- [x] 5.8 GREEN: `reportes/views.py` — implement `generar` per design (`@login_required @require_POST`, non-creator-scoped `get_object_or_404`, `VistoBueno`-exists check + `messages.error` + redirect, `validar_reporte(reporte).puede_generar` re-check + `messages.error` + redirect, `try: generador.generar_reporte(reporte.definicion, valores_de_reporte(reporte)) except ProblemaDeGeneracion: logger.exception(...); messages.error(...); return redirect(...)`, on success `Generacion.objects.create(reporte=reporte, definicion=reporte.definicion, usuario=request.user)` + build filename `f"{reporte.tipo.codigo}-{reporte.id}-{timezone.localdate():%Y%m%d}.xlsx"` + `HttpResponse(buffer.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")` + `Content-Disposition` header).
+- [x] 5.9 Run `pytest reportes/tests/test_views.py -k generar -q` — confirm all `generar` tests pass.
 
 ## Phase 6: Template & Messages Wiring (Integration)
 
-- [ ] 6.1 `templates/base.html` — add `{% if messages %}` block rendering each message with its `.tags`/level (Bootstrap-alert style consistent with existing markup).
-- [ ] 6.2 RED: `reportes/tests/test_views.py` — extend/add `test_get_revision_sin_errores_habilita_generar` assertions if needed to confirm no bare `"disabled"` substring appears when `puede_generar` is true and no `VistoBueno` exists yet (per design D4).
-- [ ] 6.3 RED: `reportes/tests/test_views.py` — `test_get_revision_con_visto_bueno_muestra_form_generar` (Generar form rendered as real POST with `{% csrf_token %}` once `VistoBueno` exists).
-- [ ] 6.4 RED: `reportes/tests/test_views.py` — `test_get_revision_no_creador_no_ve_boton_cerrar` (Cerrar reporte button absent for non-creator).
-- [ ] 6.5 GREEN: `reportes/views.py::revision` — add `tiene_visto_bueno` to the template context (`hasattr(reporte, "visto_bueno")` or `VistoBueno.objects.filter(reporte=reporte).exists()`).
-- [ ] 6.6 GREEN: `reportes/templates/reportes/revision.html` — render the Generar form only when `tiene_visto_bueno` (real POST to `reportes_generar` with `{% csrf_token %}`); render a creator-only Cerrar reporte form (POST to `reportes_cerrar`, `{% csrf_token %}`) with `{% if not resultado.puede_generar %}disabled{% endif %}` per design D4.
-- [ ] 6.7 Run `pytest reportes/tests/test_views.py -k revision -q` — confirm `test_get_revision_sin_errores_habilita_generar` and `test_get_revision_con_errores_deshabilita_generar` still pass unchanged, plus new template tests.
+- [x] 6.1 `templates/base.html` — add `{% if messages %}` block rendering each message with its `.tags`/level (Bootstrap-alert style consistent with existing markup).
+- [x] 6.2 RED: `reportes/tests/test_views.py` — extend/add `test_get_revision_sin_errores_habilita_generar` assertions if needed to confirm no bare `"disabled"` substring appears when `puede_generar` is true and no `VistoBueno` exists yet (per design D4).
+- [x] 6.3 RED: `reportes/tests/test_views.py` — `test_get_revision_con_visto_bueno_muestra_form_generar` (Generar form rendered as real POST with `{% csrf_token %}` once `VistoBueno` exists).
+- [x] 6.4 RED: `reportes/tests/test_views.py` — `test_get_revision_no_creador_no_ve_boton_cerrar` (Cerrar reporte button absent for non-creator).
+- [x] 6.5 GREEN: `reportes/views.py::revision` — add `tiene_visto_bueno` to the template context (`hasattr(reporte, "visto_bueno")` or `VistoBueno.objects.filter(reporte=reporte).exists()`).
+- [x] 6.6 GREEN: `reportes/templates/reportes/revision.html` — render the Generar form only when `tiene_visto_bueno` (real POST to `reportes_generar` with `{% csrf_token %}`); render a creator-only Cerrar reporte form (POST to `reportes_cerrar`, `{% csrf_token %}`) with `{% if not resultado.puede_generar %}disabled{% endif %}` per design D4.
+- [x] 6.7 Run `pytest reportes/tests/test_views.py -k revision -q` — confirm `test_get_revision_sin_errores_habilita_generar` and `test_get_revision_con_errores_deshabilita_generar` still pass unchanged, plus new template tests.
 
 ## Phase 7: Full Regression & Cleanup
 
-- [ ] 7.1 Run the full suite `pytest reportes/ -q` — confirm zero regressions across models, valores, validacion, views, templates.
-- [ ] 7.2 RED+GREEN: `reportes/tests/test_views.py` — `test_edicion_post_cierre_sigue_funcionando` (creator submits `paso` after `estado=TERMINADO` → `ValorDeReporte` update succeeds, no closure-related restriction).
-- [ ] 7.3 Confirm `ProblemaDeGeneracion` logging path (`logger.exception`) is exercised by test 5.4 and does not raise; no Sentry wiring added (out of scope, D6).
-- [ ] 7.4 Review diff size per work unit against the 400-line budget before opening each PR; split further if any unit exceeds it.
+- [x] 7.1 Run the full suite `pytest reportes/ -q` — confirm zero regressions across models, valores, validacion, views, templates.
+- [x] 7.2 RED+GREEN: `reportes/tests/test_views.py` — `test_edicion_post_cierre_sigue_funcionando` (creator submits `paso` after `estado=TERMINADO` → `ValorDeReporte` update succeeds, no closure-related restriction).
+- [x] 7.3 Confirm `ProblemaDeGeneracion` logging path (`logger.exception`) is exercised by test 5.4 and does not raise; no Sentry wiring added (out of scope, D6).
+- [x] 7.4 Review diff size per work unit against the 400-line budget before opening each PR; split further if any unit exceeds it.

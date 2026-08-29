@@ -19,4 +19,9 @@ urlpatterns = [
         views.cerrar_reporte,
         name="reportes_cerrar",
     ),
+    path(
+        "<int:reporte_id>/generar/",
+        views.generar,
+        name="reportes_generar",
+    ),
 ]

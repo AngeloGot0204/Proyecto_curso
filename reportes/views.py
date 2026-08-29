@@ -25,15 +25,18 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from reportes.formularios import construir_formulario_seccion
-from reportes.models import EstadoDeReporte, Reporte, VistoBueno
+from reportes.models import EstadoDeReporte, Generacion, Reporte, VistoBueno
 from reportes.valores import desde_texto, guardar_valor, valores_de_reporte
 from reportes.validacion import validar_reporte
+from tipos_reporte import generador
+from tipos_reporte.generador import ProblemaDeGeneracion
 from tipos_reporte.models import TipoDeReporte
 
 logger = logging.getLogger(__name__)
@@ -150,6 +153,7 @@ def revision(request, reporte_id):
     contexto = {
         "reporte": reporte,
         "resultado": resultado,
+        "tiene_visto_bueno": VistoBueno.objects.filter(reporte=reporte).exists(),
     }
     return render(request, "reportes/revision.html", contexto)
 
@@ -184,3 +188,64 @@ def cerrar_reporte(request, reporte_id):
 
     messages.success(request, "Reporte cerrado. Ya puede generarse el documento.")
     return redirect("reportes_revision", reporte_id=reporte.id)
+
+
+@login_required
+@require_POST
+def generar(request, reporte_id):
+    """`POST /reportes/<reporte_id>/generar/` (backlog #7, spec
+    `generacion-documento`; design D3, D6). NOT creator-scoped —
+    `get_object_or_404` has no `creador` filter, so any authenticated user
+    may generate a document for a closed report (design's "Non-creator
+    caveat"). Requires an existing `VistoBueno` (checked independently of
+    `puede_generar`), then re-validates `puede_generar` server-side
+    (defense in depth, mirrors `cerrar_reporte`'s own re-check). Catches
+    `ProblemaDeGeneracion` and degrades to a flash message + redirect —
+    never a raw 500 (design D6: logged via stdlib `logger.exception`,
+    Sentry-ready but not wired). On success, records a `Generacion` audit
+    row and streams the `.xlsx` as an attachment with a server-derived
+    filename (never user-supplied)."""
+    reporte = get_object_or_404(Reporte, pk=reporte_id)
+
+    if not VistoBueno.objects.filter(reporte=reporte).exists():
+        messages.error(
+            request,
+            "El reporte todavía no fue cerrado (visto bueno pendiente).",
+        )
+        return redirect("reportes_revision", reporte_id=reporte.id)
+
+    if not validar_reporte(reporte).puede_generar:
+        messages.error(
+            request,
+            "El reporte todavía tiene errores pendientes; no puede generarse.",
+        )
+        return redirect("reportes_revision", reporte_id=reporte.id)
+
+    valores = valores_de_reporte(reporte)
+    try:
+        buffer = generador.generar_reporte(reporte.definicion, valores)
+    except ProblemaDeGeneracion:
+        logger.exception(
+            "Fallo al generar el documento del reporte #%s", reporte.id
+        )
+        messages.error(
+            request, "No se pudo generar el documento. Intentá nuevamente."
+        )
+        return redirect("reportes_revision", reporte_id=reporte.id)
+
+    Generacion.objects.create(
+        reporte=reporte, definicion=reporte.definicion, usuario=request.user
+    )
+
+    nombre = (
+        f"{reporte.tipo.codigo}-{reporte.id}-{timezone.localdate():%Y%m%d}.xlsx"
+    )
+    respuesta = HttpResponse(
+        buffer.getvalue(),
+        content_type=(
+            "application/vnd.openxmlformats-officedocument"
+            ".spreadsheetml.sheet"
+        ),
+    )
+    respuesta["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return respuesta
