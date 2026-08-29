@@ -18,7 +18,15 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from openpyxl import load_workbook
 
-from reportes.models import EstadoDeReporte, Generacion, Reporte, ValorDeReporte, VistoBueno
+from reportes.models import (
+    CambioDeValor,
+    EstadoDeReporte,
+    Generacion,
+    ParticipacionEnReporte,
+    Reporte,
+    ValorDeReporte,
+    VistoBueno,
+)
 from reportes.validacion import validar_reporte
 from tipos_reporte.generador import PlantillaIlegible
 
@@ -829,3 +837,174 @@ def test_edicion_post_cierre_sigue_funcionando(reporte_listo_para_cerrar):
         reporte=reporte, identificador_de_campo="observaciones-generales"
     )
     assert valor.valor == "Actualizado tras cierre."
+
+
+# ---------------------------------------------------------------------------
+# invitar (backlog #8, task 4; spec `colaboracion-reporte`; design's
+# "Invite view shape")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_invitar_exitoso(sesion_de_creador, usuario_factory):
+    """Spec `colaboracion-reporte` — "Successful invite": the creator
+    invites an existing, not-yet-invited user by exact username; a
+    `ParticipacionEnReporte` row is created and a success flash message is
+    shown (tasks.md 4.1)."""
+    client, reporte = sesion_de_creador
+    invitado = usuario_factory(username="invitado-exitoso")
+
+    response = client.post(
+        reverse("reportes_invitar", args=[reporte.id]),
+        data={"username": invitado.username},
+    )
+
+    assert response.status_code == 302
+    assert ParticipacionEnReporte.objects.filter(
+        reporte=reporte, usuario=invitado
+    ).exists()
+    mensajes = list(get_messages(response.wsgi_request))
+    assert any(mensaje.level_tag == "success" for mensaje in mensajes)
+
+
+@pytest.mark.django_db
+def test_invitar_idempotente(sesion_de_creador, participacion_factory):
+    """Spec `colaboracion-reporte` — "Inviting an already-invited user is
+    idempotent": no error, exactly one row exists after the repeat invite
+    (tasks.md 4.2)."""
+    client, reporte = sesion_de_creador
+    invitado = participacion_factory(reporte, username="ya-invitado")
+
+    response = client.post(
+        reverse("reportes_invitar", args=[reporte.id]),
+        data={"username": invitado.username},
+    )
+
+    assert response.status_code == 302
+    assert (
+        ParticipacionEnReporte.objects.filter(
+            reporte=reporte, usuario=invitado
+        ).count()
+        == 1
+    )
+
+
+@pytest.mark.django_db
+def test_invitar_usuario_inexistente(sesion_de_creador):
+    """Spec `colaboracion-reporte` — "Inviting a nonexistent username": no
+    row is created and an error flash message is shown (tasks.md 4.3)."""
+    client, reporte = sesion_de_creador
+
+    response = client.post(
+        reverse("reportes_invitar", args=[reporte.id]),
+        data={"username": "nadie"},
+    )
+
+    assert response.status_code == 302
+    assert not ParticipacionEnReporte.objects.filter(reporte=reporte).exists()
+    mensajes = list(get_messages(response.wsgi_request))
+    assert any(mensaje.level_tag == "error" for mensaje in mensajes)
+
+
+@pytest.mark.django_db
+def test_invitar_no_creador_devuelve_404(
+    cliente_autenticado, reporte_factory, usuario_factory
+):
+    """Spec `colaboracion-reporte` — "Non-creator cannot invite": a
+    non-creator, non-participant authenticated user gets 404 and no row is
+    created (tasks.md 4.4)."""
+    otro_creador = usuario_factory(username="creador-invitacion-rechazada")
+    reporte = reporte_factory(creador=otro_creador)
+    objetivo = usuario_factory(username="objetivo-invitacion-rechazada")
+
+    response = cliente_autenticado.post(
+        reverse("reportes_invitar", args=[reporte.id]),
+        data={"username": objetivo.username},
+    )
+
+    assert response.status_code == 404
+    assert not ParticipacionEnReporte.objects.filter(reporte=reporte).exists()
+
+
+@pytest.mark.django_db
+def test_invitar_a_si_mismo_rechazado(sesion_de_creador):
+    """Design's self-invite rejection: protects "creator has no
+    participation row" — no row is created for the creator, error flash
+    message shown (tasks.md 4.5)."""
+    client, reporte = sesion_de_creador
+
+    response = client.post(
+        reverse("reportes_invitar", args=[reporte.id]),
+        data={"username": reporte.creador.username},
+    )
+
+    assert response.status_code == 302
+    assert not ParticipacionEnReporte.objects.filter(
+        reporte=reporte, usuario=reporte.creador
+    ).exists()
+    mensajes = list(get_messages(response.wsgi_request))
+    assert any(mensaje.level_tag == "error" for mensaje in mensajes)
+
+
+# ---------------------------------------------------------------------------
+# participantes (backlog #8, task 4; spec `colaboracion-reporte` —
+# "Participants and History View")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_participantes_lista_invitados_y_creador(
+    client, reporte_con_participantes_factory
+):
+    """Spec `colaboracion-reporte` — "View lists participants and creator
+    label": the invited user's username is listed, the creator is shown
+    labeled as creator (tasks.md 4.6)."""
+    reporte, invitados = reporte_con_participantes_factory(n=1)
+    client.force_login(reporte.creador)
+
+    response = client.get(reverse("reportes_participantes", args=[reporte.id]))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert invitados[0].username in contenido
+    assert reporte.creador.username in contenido
+
+
+@pytest.mark.django_db
+def test_participantes_historial_mas_reciente_primero(sesion_de_creador):
+    """Spec `colaboracion-reporte` — "History renders most-recent-first"
+    (tasks.md 4.7)."""
+    client, reporte = sesion_de_creador
+    primero = CambioDeValor.objects.create(
+        reporte=reporte,
+        identificador_de_campo="campo-1",
+        valor_anterior=None,
+        autor=reporte.creador,
+    )
+    segundo = CambioDeValor.objects.create(
+        reporte=reporte,
+        identificador_de_campo="campo-2",
+        valor_anterior=None,
+        autor=reporte.creador,
+    )
+
+    response = client.get(reverse("reportes_participantes", args=[reporte.id]))
+
+    cambios = list(response.context["cambios"])
+    assert cambios == [segundo, primero]
+
+
+@pytest.mark.django_db
+def test_participantes_no_participante_devuelve_404(
+    cliente_autenticado, reporte_factory, usuario_factory
+):
+    """Non-creator, non-participant user gets 404 on the participantes view
+    (tasks.md 4.8)."""
+    otro_creador = usuario_factory(username="creador-participantes-rechazado")
+    reporte = reporte_factory(creador=otro_creador)
+
+    response = cliente_autenticado.get(
+        reverse("reportes_participantes", args=[reporte.id])
+    )
+
+    assert response.status_code == 404

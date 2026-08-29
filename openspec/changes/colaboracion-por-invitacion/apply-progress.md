@@ -1,14 +1,11 @@
 # Apply Progress: Colaboración por invitación y edición abierta
 
-## Scope of this batch (cumulative — PR 1 + PR 2 + PR 3)
+## Scope of this batch (cumulative — PR 1 + PR 2 + PR 3 + PR 4, FINAL)
 
 - PR 1 (per orchestrator instruction: already merged to main): Phase 1 — Foundation (models + migration 0004 + `permisos.py`).
 - PR 2 (per orchestrator instruction: already merged to main; `tasks.md` Phase 2 checkboxes were already `[x]` on entry to this batch): Phase 2 — `guardar_valor` refactor (audit trail + FIFO-30).
-- **PR 3 (this batch)**: Phase 3 — widen `paso`/`revision` access, narrow `generar`
-  access, via `views.py::_reporte_accesible` shim using `permisos.tiene_acceso`.
-  `cerrar_reporte` stays creator-only, unchanged.
-- Phase 4 (invite/participantes views) is explicitly NOT implemented in this batch —
-  reserved for PR 4.
+- PR 3 (per orchestrator instruction: already merged to main; `tasks.md` Phase 3 checkboxes were already `[x]` on entry to this batch): Phase 3 — widen `paso`/`revision` access, narrow `generar` access, via `views.py::_reporte_accesible` shim using `permisos.tiene_acceso`. `cerrar_reporte` stays creator-only, unchanged.
+- **PR 4 (this batch, FINAL)**: Phase 4 — `invitar` + `participantes` views/template/urls, and Phase 5 — full-suite verification. This closes out the entire `colaboracion-por-invitacion` change.
 
 ## Mode
 
@@ -49,6 +46,31 @@ Strict TDD (RED → GREEN → REFACTOR), enforced per `openspec/config.yaml` (`s
 - [x] 3.16 `sesion_de_invitado` fixture added, local to `test_views.py`, mirrors `sesion_de_creador`
 - [x] 3.17 Ran all Phase 3 tests plus full `reportes/` suite and full project suite — all pass (see Work Unit Evidence)
 
+## Completed Tasks (Phase 4 — this batch, PR 4)
+
+- [x] 4.1 (RED) `test_invitar_exitoso` — creator A POSTs invite with B's username → row created, success flash
+- [x] 4.2 (RED) `test_invitar_idempotente` — repeat invite → exactly one row
+- [x] 4.3 (RED) `test_invitar_usuario_inexistente` — unknown username → no row, error flash
+- [x] 4.4 (RED) `test_invitar_no_creador_devuelve_404` — non-creator, non-participant POST → 404, no row
+- [x] 4.5 (RED) `test_invitar_a_si_mismo_rechazado` — self-invite → error flash, no row for creator
+- [x] 4.6 (RED) `test_participantes_lista_invitados_y_creador` — lists invited username + creator label
+- [x] 4.7 (RED) `test_participantes_historial_mas_reciente_primero` — history ordered `-fecha, -id`
+- [x] 4.8 (RED) `test_participantes_no_participante_devuelve_404` — non-creator, non-participant → 404
+- [x] 4.9 (GREEN) `invitar` view added to `reportes/views.py` per design's exact shown shape
+- [x] 4.10 (GREEN) `participantes` view added to `reportes/views.py`, uses `_reporte_accesible`
+- [x] 4.11 (GREEN) `reportes_invitar` + `reportes_participantes` URL routes added to `reportes/urls.py`
+- [x] 4.12 (GREEN) `reportes/templates/reportes/participantes.html` created (creator label, invited list, invite form, history table)
+- [x] 4.13 (GREEN) Plain `<a>` link to participantes added to `reportes/templates/reportes/revision.html` (no `disabled` substring)
+- [x] 4.14 `reporte_con_participantes_factory` fixture added to `conftest.py`
+- [x] 4.15 Ran all Phase 4 tests — 8/8 pass
+- [x] 4.16 (REFACTOR) Confirmed `test_get_revision_sin_errores_habilita_generar` still passes unchanged (full `test_views.py` run: 48/48 pass)
+
+## Completed Tasks (Phase 5 — this batch, PR 4, FINAL)
+
+- [x] 5.1 Full `pytest reportes/` — 109/109 pass, no regressions
+- [x] 5.2 `makemigrations --check --dry-run` — "No changes detected" (clean)
+- [x] 5.3 Threat matrix N/A confirmed (design states no routing/shell/subprocess/VCS surface beyond Django URLconf; authorization surface covered by access-control tests)
+
 ## Files Changed
 
 | File | Action | What Was Done |
@@ -57,9 +79,12 @@ Strict TDD (RED → GREEN → REFACTOR), enforced per `openspec/config.yaml` (`s
 | `reportes/migrations/0004_participacion_cambiodevalor.py` | Created | `makemigrations reportes --skip-checks`, then renamed from Django's default alphabetical name to match design's file name; content unchanged (2× `CreateModel`, constraint declared inline via model `Meta.constraints`) |
 | `reportes/permisos.py` | Created | `tiene_acceso(reporte, usuario) -> bool` — pure predicate, mirrors `valores.py`/`validacion.py` |
 | `reportes/tests/test_permisos.py` | Created | 4 tests: creator, invited participant, stranger, anonymous |
-| `reportes/tests/conftest.py` | Modified | Added `participacion_factory` fixture |
-| `reportes/views.py` | Modified (PR 3) | Added `_reporte_accesible(reporte_id, usuario)` shim; switched `paso`, `revision`, `generar` to it; updated module + view docstrings (D9 → creator-or-participant); `cerrar_reporte` left untouched |
-| `reportes/tests/test_views.py` | Modified (PR 3) | Added `sesion_de_invitado` fixture; added `test_paso_participante_invitado_accede`, `test_paso_no_invitado_autenticado_da_404`, `test_get_revision_participante_invitado_accede`, `test_get_revision_no_invitado_da_404`, `test_cerrar_reporte_participante_invitado_devuelve_404`; replaced `test_generar_no_creador_tambien_puede_generar` with `test_generar_participante_invitado_es_exitoso` + `test_generar_no_participante_devuelve_404` |
+| `reportes/tests/conftest.py` | Modified (PR 1 + PR 4) | Added `participacion_factory` fixture (PR 1); added `reporte_con_participantes_factory` fixture (PR 4) |
+| `reportes/views.py` | Modified (PR 3 + PR 4) | Added `_reporte_accesible(reporte_id, usuario)` shim; switched `paso`, `revision`, `generar` to it; updated module + view docstrings (D9 → creator-or-participant) (PR 3); added `invitar` (strict creator-only, self-invite rejection, `get_or_create` idempotency) and `participantes` (uses `_reporte_accesible`) views (PR 4); `cerrar_reporte` left untouched throughout |
+| `reportes/urls.py` | Modified (PR 4) | Added `reportes_invitar` and `reportes_participantes` URL routes |
+| `reportes/templates/reportes/participantes.html` | Created (PR 4) | New S-10 template per design D6 — creator label, invited-users list, creator-only invite form, `CambioDeValor` history table ordered most-recent-first |
+| `reportes/templates/reportes/revision.html` | Modified (PR 4) | Added plain `<a href="{% url 'reportes_participantes' … %}">` link — no `disabled` substring added, preserving `test_get_revision_sin_errores_habilita_generar` |
+| `reportes/tests/test_views.py` | Modified (PR 3 + PR 4) | Added `sesion_de_invitado` fixture; added `test_paso_participante_invitado_accede`, `test_paso_no_invitado_autenticado_da_404`, `test_get_revision_participante_invitado_accede`, `test_get_revision_no_invitado_da_404`, `test_cerrar_reporte_participante_invitado_devuelve_404`; replaced `test_generar_no_creador_tambien_puede_generar` with `test_generar_participante_invitado_es_exitoso` + `test_generar_no_participante_devuelve_404` (PR 3); added imports for `CambioDeValor`/`ParticipacionEnReporte` and 8 new tests: `test_invitar_exitoso`, `test_invitar_idempotente`, `test_invitar_usuario_inexistente`, `test_invitar_no_creador_devuelve_404`, `test_invitar_a_si_mismo_rechazado`, `test_participantes_lista_invitados_y_creador`, `test_participantes_historial_mas_reciente_primero`, `test_participantes_no_participante_devuelve_404` (PR 4) |
 
 ## TDD Cycle Evidence
 
@@ -68,13 +93,26 @@ Strict TDD (RED → GREEN → REFACTOR), enforced per `openspec/config.yaml` (`s
 | 1.1–1.8 | `reportes/tests/test_permisos.py` | Unit (Django ORM) | ✅ 8/8 (`test_models.py` baseline, pre-change) | ✅ Written — failed with `ModuleNotFoundError: No module named 'reportes.permisos'` (right reason: production code absent) | ✅ Passed — 4/4 after `permisos.py` + `participacion_factory` created | ✅ 4 cases (creator no-row, invited participant, stranger, anonymous) covering all spec scenarios for this task | ✅ Clean — no HTTP import leak, predicate stays pure |
 | 3.1–3.4, 3.9 | `reportes/tests/test_views.py` | Integration (Django test client + Postgres) | ✅ 34/34 (`test_views.py` full-file baseline, pre-change) | ✅ Written — ran with `-k "invitado or no_participante or participante"` before implementing the shim: `test_paso_participante_invitado_accede` and `test_get_revision_participante_invitado_accede` failed `404 == 200` (right reason: `paso`/`revision` still creator-only); `test_paso_no_invitado_autenticado_da_404`, `test_get_revision_no_invitado_da_404`, and `test_cerrar_reporte_participante_invitado_devuelve_404` passed trivially against the unmodified creator-only views (a non-invited/invited-but-non-creator user was already 404'd by the old `creador=request.user` filter — correct behavior pre-existed for those three scenarios, so only the widen-side (200-for-participant) assertions were true RED) | ✅ Passed — same filtered run after `_reporte_accesible` added and `paso`/`revision` switched: both previously-red assertions now pass, the three trivial-pass assertions remain passing (regression-proof for `cerrar_reporte`'s non-widening and the stranger-404 cases) | ✅ Multiple scenarios per requirement: creator-or-participant success case AND non-invited-user 404 case for both `paso` and `revision`, plus the `cerrar_reporte` non-widening case | ➖ None needed — shim is a 4-line pure fetch-check-404 function, no duplication to remove |
 | 3.5–3.7 | `reportes/tests/test_views.py` | Integration | ✅ (same baseline) | ✅ Written — `test_generar_no_participante_devuelve_404` failed `200 == 404` (right reason: `generar` had no access restriction yet); `test_generar_participante_invitado_es_exitoso` passed trivially pre-change (any authenticated user could already generate) — confirms the split test correctly isolates the ADDED restriction from the PRESERVED non-creator-can-generate behavior | ✅ Passed — both green after `generar` switched to `_reporte_accesible` | ✅ 2 cases: invited-participant-succeeds vs. non-participant-denied, replacing the single reversed test per design's explicit instruction | ➖ None needed |
+| 4.1–4.8 | `reportes/tests/test_views.py` | Integration (Django test client + Postgres) | ✅ 48/48 (`test_views.py` full-file baseline after PR 3, pre-Phase-4-change) | ✅ Written — ran `pytest reportes/tests/test_views.py -q -k "invitar or participantes"` before implementing `invitar`/`participantes`: all 8 new tests failed with `django.urls.exceptions.NoReverseMatch: Reverse for 'reportes_invitar'/'reportes_participantes' not found` (right reason: views/URLs did not exist yet). Two tests (`test_invitar_no_creador_devuelve_404`, `test_participantes_no_participante_devuelve_404`) initially also hit an unrelated `IntegrityError` from `reporte_factory()`'s default `creador=usuario_factory()` colliding with `cliente_autenticado`'s default `"usuario_test"` username in the same test transaction (documented project gotcha, Key Learning #5 from PR 3) — fixed by passing an explicit `creador` before re-confirming RED | ✅ Passed — same filtered run after `invitar`, `participantes` views, URL routes, and `participantes.html` added: 8/8 pass | ✅ Multiple scenarios per requirement: success/idempotent/unknown-user/non-creator/self-invite for `invitar` (5 cases); list-contents/history-order/access-denial for `participantes` (3 cases) — covers every scenario in spec `colaboracion-reporte`'s "Creator-Only Invite Action" and "Participants and History View" requirements | ✅ Clean — `invitar` follows the exact shape from design's "Invite view shape" code block verbatim; `participantes` reuses `_reporte_accesible` with no duplicated access-check logic |
 
 ### Test Summary
-- **Total tests written**: 4 (`test_permisos.py`, PR 1) + 8 (`test_views.py`, PR 3: `test_paso_participante_invitado_accede`, `test_paso_no_invitado_autenticado_da_404`, `test_get_revision_participante_invitado_accede`, `test_get_revision_no_invitado_da_404`, `test_generar_participante_invitado_es_exitoso`, `test_generar_no_participante_devuelve_404`, `test_cerrar_reporte_participante_invitado_devuelve_404`, plus the `sesion_de_invitado` fixture) = 12 new tests total across both batches
-- **Total tests passing**: 4/4 `test_permisos.py`; 40/40 `test_views.py` (34 pre-existing + 6 new, one net test removed via the 3.5/3.6 split of the reversed test); 101/101 full `reportes/` app suite; 242/242 full project suite (see Work Unit Evidence)
-- **Layers used**: Unit (4, `test_permisos.py`), Integration (36, `test_views.py` — Django test client + real Postgres via `--reuse-db`)
-- **Approval tests** (refactoring): None — no refactoring tasks in this batch
-- **Pure functions created**: 2 total (`tiene_acceso` in PR 1; `_reporte_accesible` in PR 3 — HTTP-adjacent, not pure, but a thin single-purpose fetch/check shim matching the existing `_seccion_por_id`/`_url_paso` pattern)
+- **Total tests written**: 4 (`test_permisos.py`, PR 1) + 8 (`test_views.py`, PR 3) + 8 (`test_views.py`, PR 4: `test_invitar_exitoso`, `test_invitar_idempotente`, `test_invitar_usuario_inexistente`, `test_invitar_no_creador_devuelve_404`, `test_invitar_a_si_mismo_rechazado`, `test_participantes_lista_invitados_y_creador`, `test_participantes_historial_mas_reciente_primero`, `test_participantes_no_participante_devuelve_404`) = 20 new tests total across all batches
+- **Total tests passing**: 4/4 `test_permisos.py`; 48/48 `test_views.py` (40 after PR 3 + 8 new PR 4 tests); 109/109 full `reportes/` app suite; 250/250 full project suite (see Work Unit Evidence)
+- **Layers used**: Unit (4, `test_permisos.py`), Integration (44, `test_views.py` — Django test client + real Postgres via `--reuse-db`)
+- **Approval tests** (refactoring): None — no refactoring tasks in this change
+- **Pure functions created**: 2 total (`tiene_acceso` in PR 1; `_reporte_accesible` in PR 3, reused unchanged by `participantes` in PR 4 — HTTP-adjacent, not pure, but a thin single-purpose fetch/check shim matching the existing `_seccion_por_id`/`_url_paso` pattern); `invitar` intentionally strict creator-only and does NOT reuse `_reporte_accesible` (design D1 explicit carve-out)
+
+## Work Unit Evidence (PR 4 — this batch, FINAL)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `pytest reportes/tests/test_views.py -q -k "invitar or participantes"` → 8 passed in 37.21s |
+| Runtime harness command/scenario and exact result | Full click-through, invite → 200 access → history render, exercised via `pytest reportes/tests/test_views.py -q` → 48 passed in 222.07s; `pytest reportes/ -q` (full app suite, isolated single process) → 109 passed in 398.85s; `pytest -q` (full project suite, all apps) → 250 passed in 520.81s |
+| Rollback boundary | Revert `reportes/views.py`'s `invitar`/`participantes` additions and the `get_user_model`/`CambioDeValor`/`ParticipacionEnReporte` import additions; revert `reportes/urls.py`'s two new `path()` entries; delete `reportes/templates/reportes/participantes.html`; revert the one-line `<a>` link hunk in `reportes/templates/reportes/revision.html`; revert `reportes/tests/conftest.py`'s `reporte_con_participantes_factory` fixture; revert the 8 new test functions and the `CambioDeValor`/`ParticipacionEnReporte` import hunk in `reportes/tests/test_views.py`. PR 1/PR 2/PR 3 work (`models.py`, `permisos.py`, `valores.py`, and the `_reporte_accesible`/`paso`/`revision`/`generar` access-check hunks) stays fully functional standalone — this revert only removes the invite/participantes surface. |
+
+### Note on a transient full-suite deadlock (not a code defect)
+
+An earlier full-`reportes/` run (`pytest reportes/ -q`) reported `1 failed, 108 passed` with `django.db.utils.OperationalError: deadlock detected` on `test_paso_no_invitado_autenticado_da_404`, caused by an orphaned background `pytest` process from an earlier command still running concurrently against the same shared Neon Postgres test database (`test_reportes_dev`), producing a `ShareLock` deadlock on the `tipos_reporte_tipodereporte_codigo_key` unique index — two independent test runs racing the same remote DB, not a code or test-isolation bug. Confirmed by: (1) re-running the single flagged test in isolation — passed; (2) re-running the full `reportes/` suite as the sole process — 109/109 passed cleanly (see Work Unit Evidence above). No test or production code needed a fix for this.
 
 ## Work Unit Evidence (PR 3 — this batch)
 
@@ -109,17 +147,18 @@ Strict TDD (RED → GREEN → REFACTOR), enforced per `openspec/config.yaml` (`s
 
 None.
 
-## Remaining Tasks (Phase 4–5 — NOT this batch)
+## Remaining Tasks
 
-- [ ] Phase 4: Invite action and participantes view (tasks 4.1–4.16)
-- [ ] Phase 5: Full suite verification + `makemigrations --check` (tasks 5.1–5.3) — 5.1 already confirmed in this batch (242/242 full project suite passing) as a byproduct; 5.2 was already confirmed clean in PR 1; 5.3 (threat-matrix N/A confirmation) belongs to the final PR sign-off
+None. All tasks across Phase 1–5 (`tasks.md`) are complete. The
+`colaboracion-por-invitacion` change is fully implemented and ready for
+`sdd-verify`.
 
 ## Workload / PR Boundary
 
-- Mode: chained PR slice (stacked-to-main per orchestrator instruction)
-- Current work unit: Unit 3 — "Widen `paso`/`revision`, narrow `generar` via `_reporte_accesible`" (per tasks.md Suggested Work Units table)
-- Boundary: starts from the state after PR 1 + PR 2 (models, `permisos.py`, `guardar_valor` audit/FIFO all in place) and ends at task 3.17 — no touch to `models.py`, `permisos.py`, `valores.py`, `urls.py`, or templates; PR 4 (invite/participantes) is untouched
-- Estimated review budget impact: 2 files changed (`reportes/views.py`, `reportes/tests/test_views.py`), well under the 400-line budget — `git diff --stat` shows 68 lines changed in `views.py` and 114 in `test_views.py` (source diff only; `tasks.md` checkbox updates are process bookkeeping, not reviewed code)
+- Mode: chained PR slice (stacked-to-main per orchestrator instruction) — FINAL slice of the chain
+- Current work unit: Unit 4 — "Invite + participantes view/template/urls" (per tasks.md Suggested Work Units table), plus Phase 5 full-suite sign-off
+- Boundary: starts from the state after PR 1 + PR 2 + PR 3 (models, `permisos.py`, `guardar_valor` audit/FIFO, and widened `paso`/`revision`/narrowed `generar` access all in place) and ends at task 5.3 — the entire change's task list is now complete
+- Estimated review budget impact: 5 files changed in this batch (`reportes/views.py`, `reportes/urls.py`, `reportes/templates/reportes/participantes.html`, `reportes/templates/reportes/revision.html`, `reportes/tests/conftest.py`, `reportes/tests/test_views.py`) — matches the Suggested Work Units table's PR 4 estimate (invite/participantes view/template/urls), well within the per-PR slice sizing that motivated the 4-way chain split
 
 ## Key Learnings
 

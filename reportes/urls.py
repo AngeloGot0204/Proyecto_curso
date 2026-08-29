@@ -24,4 +24,14 @@ urlpatterns = [
         views.generar,
         name="reportes_generar",
     ),
+    path(
+        "<int:reporte_id>/invitar/",
+        views.invitar,
+        name="reportes_invitar",
+    ),
+    path(
+        "<int:reporte_id>/participantes/",
+        views.participantes,
+        name="reportes_participantes",
+    ),
 ]

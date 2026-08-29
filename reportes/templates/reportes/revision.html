@@ -48,4 +48,6 @@
     <button type="submit" {% if not resultado.puede_generar %}disabled{% endif %}>Cerrar reporte</button>
 </form>
 {% endif %}
+
+<a href="{% url 'reportes_participantes' reporte.id %}">Participantes</a>
 {% endblock %}

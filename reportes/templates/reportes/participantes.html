@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Participantes — Reporte #{{ reporte.id }}{% endblock %}
+
+{% block content %}
+<h1>Participantes del reporte</h1>
+
+<p>Creador: {{ reporte.creador.username }}</p>
+
+<section>
+    <h2>Invitados</h2>
+    <ul>
+        {% for participacion in participaciones %}
+        <li>{{ participacion.usuario.username }}</li>
+        {% empty %}
+        <li>Todavía no hay usuarios invitados.</li>
+        {% endfor %}
+    </ul>
+</section>
+
+{% if reporte.creador_id == request.user.id %}
+<section>
+    <h2>Compartir con...</h2>
+    <form method="post" action="{% url 'reportes_invitar' reporte.id %}">
+        {% csrf_token %}
+        <label for="username">Nombre de usuario</label>
+        <input type="text" id="username" name="username" required>
+        <button type="submit">Invitar</button>
+    </form>
+</section>
+{% endif %}
+
+<section>
+    <h2>Historial de cambios</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Campo</th>
+                <th>Valor anterior</th>
+                <th>Autor</th>
+                <th>Fecha</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cambio in cambios %}
+            <tr>
+                <td>{{ cambio.identificador_de_campo }}</td>
+                <td>{{ cambio.valor_anterior|default:"—" }}</td>
+                <td>{{ cambio.autor.username }}</td>
+                <td>{{ cambio.fecha }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4">Todavía no hay cambios registrados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

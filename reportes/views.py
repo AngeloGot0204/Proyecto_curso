@@ -28,6 +28,7 @@ buckets.
 import logging
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import Http404, HttpResponse
@@ -37,7 +38,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from reportes.formularios import construir_formulario_seccion
-from reportes.models import EstadoDeReporte, Generacion, Reporte, VistoBueno
+from reportes.models import (
+    CambioDeValor,
+    EstadoDeReporte,
+    Generacion,
+    ParticipacionEnReporte,
+    Reporte,
+    VistoBueno,
+)
 from reportes.permisos import tiene_acceso
 from reportes.valores import desde_texto, guardar_valor, valores_de_reporte
 from reportes.validacion import validar_reporte
@@ -275,3 +283,53 @@ def generar(request, reporte_id):
     )
     respuesta["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return respuesta
+
+
+@login_required
+@require_POST
+def invitar(request, reporte_id):
+    """`POST /reportes/<reporte_id>/invitar/` (backlog #8; spec
+    `colaboracion-reporte` — "Creator-Only Invite Action"; design's "Invite
+    view shape"). Strictly creator-scoped, like `cerrar_reporte` — does NOT
+    use `_reporte_accesible`, since only the creator may invite. Resolves
+    `Usuario.username` by exact match; unknown username or self-invite (to
+    protect "creator has no participation row", ADR-0006) sets an error
+    flash message with no row created; a valid, not-yet-invited username is
+    granted access idempotently via `get_or_create`, mirroring
+    `cerrar_reporte`'s idempotency pattern."""
+    reporte = get_object_or_404(Reporte, pk=reporte_id, creador=request.user)
+    username = (request.POST.get("username") or "").strip()
+    invitado = get_user_model().objects.filter(username=username).first()
+    if invitado is None:
+        messages.error(request, f"No existe un usuario con el nombre «{username}».")
+    elif invitado.id == reporte.creador_id:
+        messages.error(request, "El creador ya tiene acceso al reporte.")
+    else:
+        ParticipacionEnReporte.objects.get_or_create(reporte=reporte, usuario=invitado)
+        messages.success(request, f"{username} ya puede trabajar en este reporte.")
+    return redirect("reportes_participantes", reporte_id=reporte.id)
+
+
+@login_required
+def participantes(request, reporte_id):
+    """`GET /reportes/<reporte_id>/participantes/` (backlog #8; spec
+    `colaboracion-reporte` — "Participants and History View"; design D6).
+    Creator-or-invited-participant scoped via `_reporte_accesible`, like
+    `paso`/`revision`/`generar`. Lists invited users plus the creator (shown
+    as a label, not a queried `ParticipacionEnReporte` row), the
+    creator-only invite form, and the `Reporte`'s `CambioDeValor` history
+    ordered most-recent-first (`-fecha, -id`, matching
+    `valores._recortar_historial`'s tiebreaker)."""
+    reporte = _reporte_accesible(reporte_id, request.user)
+    participaciones = ParticipacionEnReporte.objects.filter(
+        reporte=reporte
+    ).select_related("usuario")
+    cambios = CambioDeValor.objects.filter(reporte=reporte).select_related(
+        "autor"
+    ).order_by("-fecha", "-id")
+    contexto = {
+        "reporte": reporte,
+        "participaciones": participaciones,
+        "cambios": cambios,
+    }
+    return render(request, "reportes/participantes.html", contexto)

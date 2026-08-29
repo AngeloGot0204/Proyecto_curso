@@ -295,6 +295,25 @@ def participacion_factory(db, usuario_factory):
 
 
 @pytest.fixture
+def reporte_con_participantes_factory(reporte_factory, participacion_factory):
+    """Create a `Reporte` plus `n` invited `Usuario` rows via
+    `participacion_factory` (backlog #8, design's Fixture strategy;
+    tasks.md 4.14). Usernames are `invitado_0..N-1`. Returns
+    `(reporte, [invitados])` — no client login, callers force-login as
+    needed (creator or any invited user)."""
+
+    def _crear(n=1, **kwargs):
+        reporte = reporte_factory(**kwargs)
+        invitados = [
+            participacion_factory(reporte, username=f"invitado_{i}")
+            for i in range(n)
+        ]
+        return reporte, invitados
+
+    return _crear
+
+
+@pytest.fixture
 def cliente_autenticado(client, usuario_factory):
     """A Django test client already logged in as a fresh Usuario
     (`client.force_login` — authentication itself is #2's tested concern,
