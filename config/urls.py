@@ -19,7 +19,14 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from reportes.views import service_worker
+
 urlpatterns = [
+    # Root-level, outside WhiteNoise's `/static/` prefix (change
+    # `capa-offline`; design's "Root-Scoped Service Worker Route") — must
+    # stay listed before the `reportes/` include so `/sw.js` never falls
+    # through to it.
+    path('sw.js', service_worker, name='service_worker'),
     path('admin/', admin.site.urls),
     path('', include('usuarios.urls')),
     path('reportes/', include('reportes.urls')),
