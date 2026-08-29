@@ -2,9 +2,10 @@
 
 ## Scope of this run
 
-PR 1 of 4 — Phase 1 only (`tipos_reporte/generador.py` extraction). PR 2-4
-(reportes app, models, formularios/valores codec, views/urls/templates) are
-NOT started.
+PR 2 of 4 — Phase 2 only (`reportes` app scaffold, `Reporte`/`ValorDeReporte`
+models, migration, `reportes/tests/conftest.py` fixtures). PR 1 (Phase 1,
+`claves_de_valor` extraction) is already merged to main. PR 3-4 (formularios/
+valores codec, views/urls/templates) are NOT started.
 
 ## Completed Tasks (Phase 1 / PR 1)
 
@@ -49,15 +50,78 @@ NOT started.
 None — implementation matches design D5 exactly: `claves_de_valor(nodo)` is
 public, extracted from `_destinos`, and `_destinos` calls it internally.
 
-## Remaining Tasks (PR 2, PR 3, PR 4 — NOT started this run)
+## Completed Tasks (Phase 2 / PR 2)
 
-### Phase 2: reportes app + models (PR 2)
-- [ ] 2.1 Scaffold `reportes/` app
-- [ ] 2.2 RED: `reportes/tests/test_models.py`
-- [ ] 2.3 GREEN: `reportes/models.py`
-- [ ] 2.4 Generate `reportes/migrations/0001_initial.py`
-- [ ] 2.5 `reportes/tests/conftest.py` fixtures
-- [ ] 2.6 Register `reportes` in `config/settings.py`
+- [x] 2.1 Scaffolded `reportes/` app: `apps.py` (`ReportesConfig`),
+      `__init__.py`, `migrations/__init__.py`, `tests/__init__.py`.
+- [x] 2.2 RED: `reportes/tests/test_models.py` — 4 tests: `Reporte` creation
+      with `tipo`/`definicion`/`creador`/`fecha_creacion`/`estado` (spec
+      scenario "First wizard step creates the Reporte"); subsequent-step
+      reuse via `Reporte.objects.get(pk=...)` (spec scenario "Subsequent
+      steps reference the existing Reporte"); `ValorDeReporte` row creation
+      with `identificador_de_campo`/`valor`/`autor`/`fecha`; `ValorDeReporte`
+      unique constraint per `reporte`+`identificador_de_campo`.
+- [x] 2.3 GREEN: `reportes/models.py` — `EstadoDeReporte` (`TextChoices`,
+      single `EN_PROGRESO` member per design D6), `Reporte` (FKs to
+      `TipoDeReporte`/`DefinicionDeTipo`/`AUTH_USER_MODEL`, all `PROTECT`,
+      `fecha_creacion` auto_now_add, `estado` default `EN_PROGRESO`),
+      `ValorDeReporte` (FK `Reporte` `CASCADE`, `identificador_de_campo`
+      CharField, `valor` TextField(blank=True) per design D1, `autor` FK
+      `PROTECT`, `fecha` auto_now, `UniqueConstraint` on
+      `reporte`+`identificador_de_campo` named
+      `valor_unico_por_reporte_y_campo`).
+- [x] 2.4 Generated `reportes/migrations/0001_initial.py` via
+      `manage.py makemigrations reportes` — creates both tables.
+- [x] 2.5 `reportes/tests/conftest.py` — `usuario_factory` (via
+      `Usuario.objects.create_user`, so passwords hash, per design's Testing
+      Strategy), `definicion_valida` (deep-copy factory, mirrored from
+      `tipos_reporte/tests/conftest.py`), `tipo_con_definicion_activa_factory`
+      (builds `TipoDeReporte` + an already-activated `DefinicionDeTipo` row
+      directly — `estado=ACTIVA`, `version=1`, `activada_en=now` — and
+      points `definicion_activa` at it, satisfying
+      `definicion_estado_implica_version` directly per design D11),
+      `reporte_factory`, `cliente_autenticado` (`client.force_login`).
+- [x] 2.6 Registered `reportes` in `config/settings.py` `INSTALLED_APPS`
+      (after `tipos_reporte`).
+
+## TDD Cycle Evidence (Phase 2)
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 2.2/2.3 `Reporte` creation | `reportes/tests/test_models.py` | Integration (DB) | N/A (new app) | ✅ `ModuleNotFoundError: No module named 'reportes.models'` (correct — models.py did not exist yet) | ✅ 4/4 passed after `reportes/models.py` + migration | ✅ 2 scenarios (create + reuse-by-pk) | ➖ None needed — model is a thin Django declaration |
+| 2.2/2.3 `ValorDeReporte` per value + unique constraint | `reportes/tests/test_models.py` | Integration (DB) | N/A (new app) | Same RED run as above | Same GREEN run as above | ✅ 2 cases (plain creation + IntegrityError on duplicate key) | ➖ None needed |
+
+## Work Unit Evidence (Phase 2)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `pytest reportes/tests/test_models.py -v` → 4 passed |
+| Runtime harness command/scenario and exact result | `pytest reportes tipos_reporte usuarios -v` (full project suite) → 125 passed in 134.61s, 0 failures, 0 regressions (121 pre-existing + 4 new) |
+| Rollback boundary | `python manage.py migrate reportes zero`, then delete the `reportes/` app directory and remove `'reportes'` from `config/settings.py` `INSTALLED_APPS`. No other file outside `reportes/` and that one settings line was touched. |
+
+## Files Changed (Phase 2)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `reportes/__init__.py`, `reportes/migrations/__init__.py`, `reportes/tests/__init__.py` | Created | App/package scaffolding |
+| `reportes/apps.py` | Created | `ReportesConfig` |
+| `reportes/models.py` | Created | `EstadoDeReporte`, `Reporte`, `ValorDeReporte` per design Interfaces/Contracts |
+| `reportes/migrations/0001_initial.py` | Created | Generated migration creating both tables |
+| `reportes/tests/test_models.py` | Created | 4 RED→GREEN tests covering both spec requirements |
+| `reportes/tests/conftest.py` | Created | `usuario_factory`, `definicion_valida`, `tipo_con_definicion_activa_factory` (D11), `reporte_factory`, `cliente_autenticado` |
+| `config/settings.py` | Modified | Added `'reportes'` to `INSTALLED_APPS` |
+| `openspec/changes/wizard-captura-server-rendered/tasks.md` | Modified | Marked tasks 2.1-2.6 as `[x]` |
+
+## Deviations from Design (Phase 2)
+
+None — implementation matches design D1, D6, D11, and the Interfaces/
+Contracts section exactly. One naming note (not a deviation): `usuario_factory`
+in `reportes/tests/conftest.py` intentionally differs from `tipos_reporte`'s
+plaintext-password fixture by using `create_user` (hashed password) — this is
+explicit in design's Testing Strategy paragraph and needed for
+`cliente_autenticado`'s `force_login` + a future real-login path.
+
+## Remaining Tasks (PR 3, PR 4 — NOT started this run)
 
 ### Phase 3: form builder + codec (PR 3)
 - [ ] 3.1 RED: `reportes/tests/test_formularios.py`
@@ -77,15 +141,15 @@ public, extracted from `_destinos`, and `_destinos` calls it internally.
 - [ ] 4.8 RED+GREEN: empty-campos section test
 - [ ] 4.9 Full suite run: `pytest reportes tipos_reporte`
 
-## Workload / PR Boundary
+## Workload / PR Boundary (Phase 2 / PR 2)
 
-- Mode: chained/stacked PR slice (`stacked-to-main`)
-- Current work unit: Unit 1 — "Extract `claves_de_valor(nodo)` from `_destinos`, no behavior change"
-- Boundary: this batch starts and ends entirely within `tipos_reporte/generador.py` and its test file; zero new dependents introduced (the `reportes` app does not exist yet, so nothing imports `claves_de_valor` outside this PR)
-- Estimated review budget impact: well under the 400-line budget — this PR's diff is a small, mechanical, internal extraction (~30 lines changed)
+- Mode: chained/stacked PR slice (`stacked-to-main`), targeting the PR 1 branch per Chain strategy
+- Current work unit: Unit 2 — "`reportes` app scaffold + models + migration + fixtures"
+- Boundary: this batch starts and ends entirely within the new `reportes/` app directory plus one added line in `config/settings.py` `INSTALLED_APPS`; zero views/urls/templates/formularios/valores code introduced (that is PR 3/PR 4's scope)
+- Estimated review budget impact: well under the 400-line budget — models + migration + fixtures + tests total well under 400 changed lines
 
 ## Status
 
-3/32 total tasks complete (Phase 1 fully done). Ready for PR 1 review /
-`sdd-verify`. PR 2 (Phase 2: reportes app scaffold + models) is the next
-apply batch.
+9/32 total tasks complete (Phase 1 + Phase 2 fully done). Ready for PR 2
+review / `sdd-verify`. PR 3 (Phase 3: form builder `formularios.py` + codec
+`valores.py`) is the next apply batch.

@@ -33,12 +33,12 @@ Chain strategy: pending
 
 ## Phase 2: reportes app + models (PR 2)
 
-- [ ] 2.1 Scaffold `reportes/` app (`apps.py`, `__init__.py`, `migrations/__init__.py`, `tests/__init__.py`).
-- [ ] 2.2 RED: `reportes/tests/test_models.py` — `Reporte` creation (Requirement: Reporte creation, both scenarios); `ValorDeReporte` unique constraint per `reporte`+`identificador_de_campo`.
-- [ ] 2.3 GREEN: `reportes/models.py` — `EstadoDeReporte`, `Reporte`, `ValorDeReporte` per design Interfaces/Contracts.
-- [ ] 2.4 Generate `reportes/migrations/0001_initial.py`.
-- [ ] 2.5 `reportes/tests/conftest.py` — `usuario_factory`, `definicion_valida`, `tipo_con_definicion_activa_factory` (satisfies `definicion_estado_implica_version` CheckConstraint directly, D11), `reporte_factory`, `cliente_autenticado`.
-- [ ] 2.6 Register `reportes` in `config/settings.py` `INSTALLED_APPS`.
+- [x] 2.1 Scaffold `reportes/` app (`apps.py`, `__init__.py`, `migrations/__init__.py`, `tests/__init__.py`).
+- [x] 2.2 RED: `reportes/tests/test_models.py` — `Reporte` creation (Requirement: Reporte creation, both scenarios); `ValorDeReporte` unique constraint per `reporte`+`identificador_de_campo`.
+- [x] 2.3 GREEN: `reportes/models.py` — `EstadoDeReporte`, `Reporte`, `ValorDeReporte` per design Interfaces/Contracts.
+- [x] 2.4 Generate `reportes/migrations/0001_initial.py`.
+- [x] 2.5 `reportes/tests/conftest.py` — `usuario_factory`, `definicion_valida`, `tipo_con_definicion_activa_factory` (satisfies `definicion_estado_implica_version` CheckConstraint directly, D11), `reporte_factory`, `cliente_autenticado`.
+- [x] 2.6 Register `reportes` in `config/settings.py` `INSTALLED_APPS`.
 
 ## Phase 3: form builder + codec (PR 3)
 
