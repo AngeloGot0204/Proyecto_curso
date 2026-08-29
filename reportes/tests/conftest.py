@@ -7,6 +7,7 @@ established project convention — `tipos_reporte` already duplicates
 
 import copy
 
+import openpyxl
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
@@ -196,6 +197,31 @@ def reporte_factory(db, usuario_factory, tipo_con_definicion_activa_factory):
         if "creador" not in kwargs:
             kwargs["creador"] = usuario_factory()
         return Reporte.objects.create(**kwargs)
+
+    return _crear
+
+
+@pytest.fixture
+def plantilla_xlsx(tmp_path):
+    """A real `.xlsx` workbook built with openpyxl, not committed to the
+    repository (design's Testing Strategy — mirrors
+    `tipos_reporte/tests/conftest.py`'s fixture of the same name; app-local
+    duplication is this repo's stated convention). By default declares one
+    sheet named "REPORTE" with one merged range `M12:P12`. Generation tests
+    (backlog #7) need `rangos=("M10:P10", "M12:P12", "M25:P25")`, since
+    `tipo_con_definicion_activa_factory`'s default `plantilla` upload
+    (`b"contenido-irrelevante-para-este-nivel"`) cannot be parsed by
+    `load_workbook`. Returns a factory so each test can vary the sheet name
+    and merged ranges."""
+
+    def _crear(nombre_hoja="REPORTE", rangos=("M12:P12",)):
+        wb = openpyxl.Workbook()
+        wb.active.title = nombre_hoja
+        for rango in rangos:
+            wb.active.merge_cells(rango)
+        destino = tmp_path / "plantilla.xlsx"
+        wb.save(destino)
+        return destino
 
     return _crear
 

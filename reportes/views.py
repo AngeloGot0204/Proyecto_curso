@@ -27,8 +27,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from reportes.formularios import construir_formulario_seccion
-from reportes.models import Reporte, ValorDeReporte
-from reportes.valores import desde_texto, guardar_valor
+from reportes.models import Reporte
+from reportes.valores import desde_texto, guardar_valor, valores_de_reporte
 from reportes.validacion import validar_reporte
 from tipos_reporte.models import TipoDeReporte
 
@@ -93,10 +93,7 @@ def paso(request, reporte_id, seccion_id):
         )
         return redirect("reportes_paso", reporte_id=reporte.id, seccion_id=siguiente_id)
 
-    valores_guardados = {
-        valor.identificador_de_campo: valor.valor
-        for valor in ValorDeReporte.objects.filter(reporte=reporte)
-    }
+    valores_guardados = valores_de_reporte(reporte)
     initial = {}
     for nombre_campo, campo in FormularioDeSeccion.base_fields.items():
         texto = valores_guardados.get(nombre_campo)

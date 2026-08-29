@@ -16,12 +16,14 @@ from django.db.models import UniqueConstraint
 
 
 class EstadoDeReporte(models.TextChoices):
-    """A `Reporte`'s lifecycle state (design D6). Only `EN_PROGRESO` is
-    declared for now — every state past it belongs to later backlog items
-    (#7 visto bueno, #9 offline, #10 sync); `TextChoices` + `CharField`
-    makes adding members purely additive (no column change)."""
+    """A `Reporte`'s lifecycle state (design D6). `TERMINADO` (backlog #7,
+    spec `cierre-reporte`) is additive to `EN_PROGRESO` — `TextChoices` +
+    `CharField` makes adding it purely a `choices`-metadata change, no
+    column change. Every state past it (#9 offline, #10 sync) is still
+    future work."""
 
     EN_PROGRESO = "en_progreso", "En progreso"
+    TERMINADO = "terminado", "Terminado"
 
 
 class Reporte(models.Model):
@@ -90,3 +92,60 @@ class ValorDeReporte(models.Model):
 
     def __str__(self):
         return f"{self.identificador_de_campo} = {self.valor!r}"
+
+
+class VistoBueno(models.Model):
+    """The creator's manual approval closing a `Reporte` (backlog #7, spec
+    `cierre-reporte`, design D1). `OneToOneField` — not `ForeignKey` — so
+    the database itself enforces at most one closure per `Reporte`;
+    revocation/re-approval is out of scope (design D1's rationale), and
+    widening to a `ForeignKey` later is an additive migration, not a data
+    loss."""
+
+    reporte = models.OneToOneField(
+        Reporte, on_delete=models.CASCADE, related_name="visto_bueno"
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="vistos_buenos",
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Visto bueno"
+        verbose_name_plural = "Vistos buenos"
+
+    def __str__(self):
+        return f"Visto bueno de Reporte #{self.reporte_id}"
+
+
+class Generacion(models.Model):
+    """One audit row per successful `.xlsx` generation (backlog #7, spec
+    `generacion-documento`, design D3). Unbounded — any authenticated user,
+    unlimited repeats — so no uniqueness constraint is declared; `definicion`
+    is recorded alongside `usuario`/`fecha` so the audit trail says which
+    template version produced the file, independent of `Reporte.definicion`
+    ever being re-pointed."""
+
+    reporte = models.ForeignKey(
+        Reporte, on_delete=models.CASCADE, related_name="generaciones"
+    )
+    definicion = models.ForeignKey(
+        "tipos_reporte.DefinicionDeTipo",
+        on_delete=models.PROTECT,
+        related_name="generaciones",
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="generaciones",
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Generación"
+        verbose_name_plural = "Generaciones"
+
+    def __str__(self):
+        return f"Generación de Reporte #{self.reporte_id} ({self.fecha})"

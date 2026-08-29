@@ -10,7 +10,13 @@ Covers spec `reportes-modelo`:
 import pytest
 from django.db import IntegrityError, transaction
 
-from reportes.models import EstadoDeReporte, Reporte, ValorDeReporte
+from reportes.models import (
+    EstadoDeReporte,
+    Generacion,
+    Reporte,
+    ValorDeReporte,
+    VistoBueno,
+)
 
 
 # --- Requirement: Reporte creation -----------------------------------------
@@ -82,6 +88,16 @@ def test_valor_de_reporte_is_created_with_identificador_valor_autor_fecha(
     assert valor.fecha is not None
 
 
+# --- Requirement: EstadoDeReporte.TERMINADO Member ------------------------
+
+
+def test_estado_de_reporte_admite_terminado():
+    """Spec `cierre-reporte`: `TERMINADO` is additive to `EN_PROGRESO`, with
+    the exact stable value `"terminado"` used by `cerrar_reporte`."""
+    assert EstadoDeReporte.TERMINADO == "terminado"
+    assert EstadoDeReporte.TERMINADO in EstadoDeReporte.values
+
+
 @pytest.mark.django_db
 def test_valor_de_reporte_unique_constraint_per_reporte_y_campo(
     usuario_factory, tipo_con_definicion_activa_factory
@@ -106,3 +122,58 @@ def test_valor_de_reporte_unique_constraint_per_reporte_y_campo(
                 valor="Noche",
                 autor=usuario,
             )
+
+
+# --- Requirement: VistoBueno Model -----------------------------------------
+
+
+@pytest.mark.django_db
+def test_visto_bueno_defaults_y_auto_now_add(reporte_factory, usuario_factory):
+    """Spec `cierre-reporte` scenario: VistoBueno created on closure — the
+    model itself stores `reporte`, `usuario`, and an auto-populated
+    `fecha`."""
+    reporte = reporte_factory()
+    usuario = usuario_factory(username="aprobador")
+
+    visto_bueno = VistoBueno.objects.create(reporte=reporte, usuario=usuario)
+
+    assert visto_bueno.reporte_id == reporte.id
+    assert visto_bueno.usuario_id == usuario.id
+    assert visto_bueno.fecha is not None
+
+
+@pytest.mark.django_db
+def test_segundo_visto_bueno_lanza_integrity_error(reporte_factory, usuario_factory):
+    """Design D1: `VistoBueno` is a `OneToOneField(Reporte)` — DB-enforced
+    single closure per `Reporte`."""
+    reporte = reporte_factory()
+    usuario = usuario_factory(username="aprobador")
+    VistoBueno.objects.create(reporte=reporte, usuario=usuario)
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            VistoBueno.objects.create(reporte=reporte, usuario=usuario)
+
+
+# --- Requirement: Generacion Model ------------------------------------------
+
+
+@pytest.mark.django_db
+def test_generacion_permite_multiples_filas(reporte_factory, usuario_factory):
+    """Spec `generacion-documento` scenario: Repeated generation creates
+    multiple rows — `Generacion` is an unbounded audit log, no uniqueness
+    constraint (design D3)."""
+    reporte = reporte_factory()
+    usuario = usuario_factory(username="generador")
+
+    primera = Generacion.objects.create(
+        reporte=reporte, definicion=reporte.definicion, usuario=usuario
+    )
+    segunda = Generacion.objects.create(
+        reporte=reporte, definicion=reporte.definicion, usuario=usuario
+    )
+
+    assert Generacion.objects.filter(reporte=reporte).count() == 2
+    assert primera.id != segunda.id
+    assert segunda.definicion_id == reporte.definicion_id
+    assert segunda.fecha is not None
