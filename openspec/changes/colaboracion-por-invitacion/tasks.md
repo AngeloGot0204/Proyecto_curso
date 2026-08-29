@@ -74,28 +74,28 @@ Chain strategy: pending
 
 ## Phase 4: Invite Action and Participantes View
 
-- [ ] 4.1 (RED) Add `test_invitar_exitoso`: creator A POSTs invite with B's exact username → `ParticipacionEnReporte` row created, success flash message (spec "Successful invite").
-- [ ] 4.2 (RED) Add `test_invitar_idempotente`: creator A invites already-invited B again → no error, exactly one `ParticipacionEnReporte` row exists (spec "Inviting an already-invited user is idempotent").
-- [ ] 4.3 (RED) Add `test_invitar_usuario_inexistente`: creator A POSTs username "nadie" → no row created, "user not found" flash error (spec "Inviting a nonexistent username").
-- [ ] 4.4 (RED) Add `test_invitar_no_creador_devuelve_404`: non-creator, non-participant B POSTs invite → 404, no row created (spec "Non-creator cannot invite").
-- [ ] 4.5 (RED) Add `test_invitar_a_si_mismo_rechazado`: creator A invites their own username → error flash message, no `ParticipacionEnReporte` row for A created (design's self-invite rejection, protects "creator has no participation row").
-- [ ] 4.6 (RED) Add `test_participantes_lista_invitados_y_creador`: creator A or invited B requests participantes view → response lists B as invited, shows A labeled as creator (spec "View lists participants and creator label").
-- [ ] 4.7 (RED) Add `test_participantes_historial_mas_reciente_primero`: report with multiple `CambioDeValor` rows across different `fecha` → rendered history ordered descending (spec "History renders most-recent-first").
-- [ ] 4.8 (RED) Add `test_participantes_no_participante_devuelve_404`: non-creator, non-participant user → 404 on participantes view.
-- [ ] 4.9 (GREEN) Add `invitar` view to `reportes/views.py` per design's shown shape: `@login_required`, `@require_POST`, creator-only fetch, exact `username` lookup, self-invite rejection, `get_or_create` idempotency, `messages` framework, redirect to `reportes_participantes`.
-- [ ] 4.10 (GREEN) Add `participantes` view to `reportes/views.py`: uses `_reporte_accesible`, `select_related` `ParticipacionEnReporte.usuario` and `CambioDeValor.autor` ordered `-fecha, -id`.
-- [ ] 4.11 (GREEN) Add `reportes_invitar` and `reportes_participantes` URL routes to `reportes/urls.py`.
-- [ ] 4.12 (GREEN) Create `reportes/templates/reportes/participantes.html`: creator label, invited-users list, creator-only invite form, `CambioDeValor` history table — new template per design D6 (not an extension of `revision.html`).
-- [ ] 4.13 (GREEN) Add plain `<a href="{% url 'reportes_participantes' … %}">` link to `reportes/templates/reportes/revision.html` (no `disabled` substring — preserves `test_get_revision_sin_errores_habilita_generar`).
-- [ ] 4.14 Add `reporte_con_participantes_factory` fixture to `conftest.py` (reporte + N invited users, usernames `invitado_0..N-1`).
-- [ ] 4.15 Run all Phase 4 tests, confirm all pass.
-- [ ] 4.16 (REFACTOR) Confirm `test_get_revision_sin_errores_habilita_generar` still passes unchanged after the `revision.html` link addition.
+- [x] 4.1 (RED) Add `test_invitar_exitoso`: creator A POSTs invite with B's exact username → `ParticipacionEnReporte` row created, success flash message (spec "Successful invite").
+- [x] 4.2 (RED) Add `test_invitar_idempotente`: creator A invites already-invited B again → no error, exactly one `ParticipacionEnReporte` row exists (spec "Inviting an already-invited user is idempotent").
+- [x] 4.3 (RED) Add `test_invitar_usuario_inexistente`: creator A POSTs username "nadie" → no row created, "user not found" flash error (spec "Inviting a nonexistent username").
+- [x] 4.4 (RED) Add `test_invitar_no_creador_devuelve_404`: non-creator, non-participant B POSTs invite → 404, no row created (spec "Non-creator cannot invite").
+- [x] 4.5 (RED) Add `test_invitar_a_si_mismo_rechazado`: creator A invites their own username → error flash message, no `ParticipacionEnReporte` row for A created (design's self-invite rejection, protects "creator has no participation row").
+- [x] 4.6 (RED) Add `test_participantes_lista_invitados_y_creador`: creator A or invited B requests participantes view → response lists B as invited, shows A labeled as creator (spec "View lists participants and creator label").
+- [x] 4.7 (RED) Add `test_participantes_historial_mas_reciente_primero`: report with multiple `CambioDeValor` rows across different `fecha` → rendered history ordered descending (spec "History renders most-recent-first").
+- [x] 4.8 (RED) Add `test_participantes_no_participante_devuelve_404`: non-creator, non-participant user → 404 on participantes view.
+- [x] 4.9 (GREEN) Add `invitar` view to `reportes/views.py` per design's shown shape: `@login_required`, `@require_POST`, creator-only fetch, exact `username` lookup, self-invite rejection, `get_or_create` idempotency, `messages` framework, redirect to `reportes_participantes`.
+- [x] 4.10 (GREEN) Add `participantes` view to `reportes/views.py`: uses `_reporte_accesible`, `select_related` `ParticipacionEnReporte.usuario` and `CambioDeValor.autor` ordered `-fecha, -id`.
+- [x] 4.11 (GREEN) Add `reportes_invitar` and `reportes_participantes` URL routes to `reportes/urls.py`.
+- [x] 4.12 (GREEN) Create `reportes/templates/reportes/participantes.html`: creator label, invited-users list, creator-only invite form, `CambioDeValor` history table — new template per design D6 (not an extension of `revision.html`).
+- [x] 4.13 (GREEN) Add plain `<a href="{% url 'reportes_participantes' … %}">` link to `reportes/templates/reportes/revision.html` (no `disabled` substring — preserves `test_get_revision_sin_errores_habilita_generar`).
+- [x] 4.14 Add `reporte_con_participantes_factory` fixture to `conftest.py` (reporte + N invited users, usernames `invitado_0..N-1`).
+- [x] 4.15 Run all Phase 4 tests, confirm all pass.
+- [x] 4.16 (REFACTOR) Confirm `test_get_revision_sin_errores_habilita_generar` still passes unchanged after the `revision.html` link addition.
 
 ## Phase 5: Full Suite Verification
 
-- [ ] 5.1 Run full `pytest reportes/` and confirm no regressions across `test_models.py`, `test_valores.py`, `test_views.py`, `test_permisos.py`.
-- [ ] 5.2 Confirm `makemigrations --check` is clean (no missing migration for `0004`).
-- [ ] 5.3 Confirm no threat-matrix items apply (design states N/A — no routing/shell/subprocess/VCS surface); no additional RED tests owed here.
+- [x] 5.1 Run full `pytest reportes/` and confirm no regressions across `test_models.py`, `test_valores.py`, `test_views.py`, `test_permisos.py`.
+- [x] 5.2 Confirm `makemigrations --check` is clean (no missing migration for `0004`).
+- [x] 5.3 Confirm no threat-matrix items apply (design states N/A — no routing/shell/subprocess/VCS surface); no additional RED tests owed here.
 
 ## Key Learnings
 
