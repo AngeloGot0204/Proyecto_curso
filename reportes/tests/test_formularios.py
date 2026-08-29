@@ -156,6 +156,77 @@ def test_seccion_sin_campos_ni_items_produce_formulario_sin_campos():
     assert Formulario.base_fields == {}
 
 
+# --- Requirement: Client-side hora range feedback (JS data-attr contract) ---
+
+
+def test_rango_hora_inicio_fin_agrega_atributos_data_rango():
+    seccion = _seccion_con(
+        items=[
+            {
+                "id": "p-01",
+                "texto": "Se verifica ángulo de perforación.",
+                "tipo": "rango-hora-inicio-fin",
+            }
+        ]
+    )
+
+    Formulario = construir_formulario_seccion(seccion)
+
+    inicio = Formulario.base_fields["p-01_inicio"]
+    fin = Formulario.base_fields["p-01_fin"]
+    assert inicio.widget.attrs.get("data-rango") == "p-01"
+    assert inicio.widget.attrs.get("data-rango-extremo") == "inicio"
+    assert fin.widget.attrs.get("data-rango") == "p-01"
+    assert fin.widget.attrs.get("data-rango-extremo") == "fin"
+
+
+# --- Requirement: "No cumple" observación toggling (JS data-attr contract) --
+
+
+def test_seleccion_con_no_cumple_agrega_campo_observacion_companero():
+    seccion = _seccion_con(
+        campos=[
+            {
+                "id": "turno",
+                "etiqueta": "Turno",
+                "tipo": "seleccion",
+                "opciones": ["Cumple", "No cumple"],
+            }
+        ]
+    )
+
+    Formulario = construir_formulario_seccion(seccion)
+
+    assert "turno_observacion" in Formulario.base_fields
+    observacion = Formulario.base_fields["turno_observacion"]
+    assert isinstance(observacion, forms.CharField)
+    assert observacion.required is False
+    assert observacion.label == "Turno — Observación"
+    assert observacion.widget.attrs.get("data-observacion-de") == "turno"
+
+    turno = Formulario.base_fields["turno"]
+    assert turno.widget.attrs.get("data-requiere-observacion") == "turno_observacion"
+
+
+def test_seleccion_sin_no_cumple_no_agrega_campo_observacion_companero():
+    seccion = _seccion_con(
+        campos=[
+            {
+                "id": "turno",
+                "etiqueta": "Turno",
+                "tipo": "seleccion",
+                "opciones": ["Día", "Noche"],
+            }
+        ]
+    )
+
+    Formulario = construir_formulario_seccion(seccion)
+
+    assert "turno_observacion" not in Formulario.base_fields
+    turno = Formulario.base_fields["turno"]
+    assert "data-requiere-observacion" not in turno.widget.attrs
+
+
 # --- Requirement: Non-blocking obligatorio marker ---------------------------
 
 

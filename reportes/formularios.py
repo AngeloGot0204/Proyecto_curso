@@ -19,6 +19,7 @@ own visual marker in the template — never server-side validation here.
 
 from django import forms
 
+from reportes.validacion import _VALOR_NO_CUMPLE
 from tipos_reporte.generador import claves_de_valor
 from tipos_reporte.models import TipoDeDato
 from tipos_reporte.validacion import _iterar_nodos
@@ -70,10 +71,13 @@ def _marcar_obligatorio(campo, obligatorio):
     return campo
 
 
-def _campos_de_rango(clave_inicio, clave_fin, etiqueta, obligatorio):
+def _campos_de_rango(nodo_id, clave_inicio, clave_fin, etiqueta, obligatorio):
     """`rango-hora-inicio-fin` → two independent `TimeField`s (design's Type
     mapping table), labeled `"{etiqueta} — Inicio"` / `"— Fin"` so the
-    template can iterate the form without special-casing ranges."""
+    template can iterate the form without special-casing ranges. Each
+    widget also carries `data-rango`/`data-rango-extremo` (design's JS
+    contract) so `paso.js` can group both halves without guessing at the
+    field-name suffix."""
     inicio = forms.TimeField(
         required=False, label=f"{etiqueta} — Inicio", widget=_widget_hora()
     )
@@ -82,6 +86,10 @@ def _campos_de_rango(clave_inicio, clave_fin, etiqueta, obligatorio):
     )
     _marcar_obligatorio(inicio, obligatorio)
     _marcar_obligatorio(fin, obligatorio)
+    inicio.widget.attrs["data-rango"] = nodo_id
+    inicio.widget.attrs["data-rango-extremo"] = "inicio"
+    fin.widget.attrs["data-rango"] = nodo_id
+    fin.widget.attrs["data-rango-extremo"] = "fin"
     return {clave_inicio: inicio, clave_fin: fin}
 
 
@@ -101,13 +109,25 @@ def construir_formulario_seccion(seccion: dict) -> type[forms.Form]:
         if tipo == TipoDeDato.RANGO_HORA_INICIO_FIN:
             clave_inicio, clave_fin = claves_de_valor(nodo)
             campos.update(
-                _campos_de_rango(clave_inicio, clave_fin, etiqueta, obligatorio)
+                _campos_de_rango(
+                    nodo["id"], clave_inicio, clave_fin, etiqueta, obligatorio
+                )
             )
             continue
 
         (clave,) = claves_de_valor(nodo)
-        campo = _campo_escalar(tipo, nodo.get("opciones"))
+        opciones = nodo.get("opciones")
+        campo = _campo_escalar(tipo, opciones)
         campo.label = etiqueta
         campos[clave] = _marcar_obligatorio(campo, obligatorio)
+
+        if tipo == TipoDeDato.SELECCION and _VALOR_NO_CUMPLE in (opciones or []):
+            clave_observacion = f"{clave}_observacion"
+            campo.widget.attrs["data-requiere-observacion"] = clave_observacion
+            campos[clave_observacion] = forms.CharField(
+                required=False,
+                label=f"{etiqueta} — Observación",
+                widget=forms.TextInput(attrs={"data-observacion-de": clave}),
+            )
 
     return type("FormularioDeSeccion", (forms.Form,), campos)

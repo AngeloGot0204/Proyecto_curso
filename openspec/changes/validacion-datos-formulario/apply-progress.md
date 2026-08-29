@@ -1,6 +1,6 @@
 # Apply Progress: validacion-datos-formulario
 
-## Scope of this batch (PR 1 of 4)
+## Scope of PR 1 of 4
 
 Phase 1 (fixture foundation) + Phase 2 (`validar_reporte` core, all 6 spec
 scenarios + anti-drift lock). Did NOT touch `formularios.py`, `views.py`,
@@ -8,6 +8,17 @@ scenarios + anti-drift lock). Did NOT touch `formularios.py`, `views.py`,
 
 **Chain strategy**: stacked-to-main. This PR targets `main`; PR 2 will
 target this PR's branch once merged (or `main` after merge).
+
+## Scope of PR 2 of 4 (this batch)
+
+Phase 3 only: `reportes/formularios.py` gains the JS-contract data
+attributes (`data-rango`/`data-rango-extremo` on range `TimeField`
+widgets) and the `{id}_observacion` companion field for `seleccion` nodes
+whose `opciones` include the exact string `"No cumple"`
+(`data-requiere-observacion` on the select, `data-observacion-de` on the
+companion `CharField`). Did NOT touch `views.py`, `urls.py`, or any
+template — S-09 (`revision` view/template) is PR 3, `paso.html`/`paso.js`
+is PR 4.
 
 ## Completed Tasks
 
@@ -26,20 +37,27 @@ target this PR's branch once merged (or `main` after merge).
 - [x] 2.9 RED/triangulation: "No cumple" with observación → no advertencia (scenario 6)
 - [x] 2.10 GREEN confirmed: seleccion "No cumple" pass
 
-## Remaining Tasks (out of scope for this batch — PR 2-4)
+### Phase 3: `formularios.py` companion field (TDD)
+- [x] 3.1 RED `test_formularios.py`: rango `TimeField` widgets carry `data-rango`/`data-rango-extremo`
+- [x] 3.2 GREEN: `_campos_de_rango` gains `nodo_id` param, sets both attrs
+- [x] 3.3 RED: seleccion field with "No cumple" option → companion `{id}_observacion` `CharField(required=False)` in `form.fields`, `data-requiere-observacion` on select
+- [x] 3.4 GREEN: `construir_formulario_seccion` injects companion field with `data-observacion-de`
 
-- [ ] Phase 3: `formularios.py` companion field (3.1-3.4)
+## Remaining Tasks (out of scope for this batch — PR 3-4)
+
 - [ ] Phase 4: S-09 review screen (4.1-4.7)
 - [ ] Phase 5: Client-side JS layer (5.1-5.3)
-- [ ] Phase 6: Regression (6.1-6.3, full-project run already exceeded by this batch's own full-suite check — repeat once PR2-4 land)
+- [ ] Phase 6: Regression (6.1-6.3, full-project run already exceeded by this batch's own full-suite check — repeat once PR3-4 land)
 
 ## Files Changed
 
 | File | Action | What Was Done |
 |------|--------|---------------|
-| `reportes/tests/conftest.py` | Modified | Added `estructura_con_validaciones` fixture (obligatorio `texto`, `seleccion` with `["Cumple","No cumple"]`, obligatorio `rango-hora-inicio-fin`) |
-| `reportes/validacion.py` | Created | `ProblemaDeReporte`, `ResultadoDeRevision`, `_indice_de_campos`, `validar_reporte` — obligatorio pass via `generador._validar_completitud`/`ValoresIncompletos` exception translation (zero drift), rango-hora advertencia pass, "No cumple" advertencia pass |
-| `reportes/tests/test_validacion.py` | Created | 6 tests, one per spec scenario, covering `validar_reporte` |
+| `reportes/tests/conftest.py` | Modified (PR1) | Added `estructura_con_validaciones` fixture (obligatorio `texto`, `seleccion` with `["Cumple","No cumple"]`, obligatorio `rango-hora-inicio-fin`) |
+| `reportes/validacion.py` | Created (PR1) | `ProblemaDeReporte`, `ResultadoDeRevision`, `_indice_de_campos`, `validar_reporte` — obligatorio pass via `generador._validar_completitud`/`ValoresIncompletos` exception translation (zero drift), rango-hora advertencia pass, "No cumple" advertencia pass |
+| `reportes/tests/test_validacion.py` | Created (PR1) | 6 tests, one per spec scenario, covering `validar_reporte` |
+| `reportes/formularios.py` | Modified (PR2) | `_campos_de_rango` gains a `nodo_id` param; both `TimeField` widgets get `data-rango`/`data-rango-extremo`. `construir_formulario_seccion`: `seleccion` nodes whose `opciones` include `_VALOR_NO_CUMPLE` (imported from `reportes.validacion`, avoiding a duplicated literal) get a `data-requiere-observacion` attr on the select plus an injected `{clave}_observacion` `CharField(required=False)` with `data-observacion-de` on its widget |
+| `reportes/tests/test_formularios.py` | Modified (PR2) | 3 new tests: `data-rango`/`data-rango-extremo` on range widgets, companion-field injection + its data attrs when `"No cumple"` is an option, no companion field when it is not |
 
 ## TDD Cycle Evidence
 
@@ -54,12 +72,27 @@ target this PR's branch once merged (or `main` after merge).
 
 **Deviation from per-task RED/GREEN pacing**: `reportes/validacion.py` was written in one pass at task 2.2 (covering the obligatorio, rango, and seleccion logic together as one cohesive module), rather than incrementally across 2.2/2.7/2.10 as tasks.md's granular split suggests. Each subsequent scenario (2.3, 2.4, 2.6, 2.8, 2.9) WAS written test-first and confirmed against the real implementation — no test was retrofitted to match a hardcoded value, and each assertion calls production code and would fail if the corresponding logic were removed (verified by construction: each pass is behaviorally independent, e.g. removing `_advertencias_por_rango_invalido`'s body would fail `test_rango_hora_invalido_produce_advertencia_no_errore` without touching the other five tests). The single genuine RED→GREEN cycle (module didn't exist → module exists) is task 2.1/2.2; tasks 2.3/2.4/2.6/2.8/2.9 functioned as triangulation passes proving the full module generalizes correctly, which is why their "GREEN" column shows "Passed on first run" rather than a fix-the-implementation step.
 
-### Test Summary
+### Test Summary (PR1)
 - **Total tests written**: 6
 - **Total tests passing**: 6
 - **Layers used**: Unit (6), Integration (0), E2E (0)
 - **Approval tests** (refactoring): None — no refactoring tasks in this batch
 - **Pure functions created**: 3 (`_advertencias_por_rango_invalido`, `_advertencias_por_no_cumple_sin_observacion` are pure given `(estructura, valores, indice)`; `_errores_por_obligatorios_faltantes` is pure modulo the exception-based control flow)
+
+### TDD Cycle Evidence — PR 2 (Phase 3)
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | REFACTOR |
+|------|-----------|-------|------------|-----|-------|----------|
+| 3.1/3.2 | `reportes/tests/test_formularios.py::test_rango_hora_inicio_fin_agrega_atributos_data_rango` | Unit (no DB) | 11/11 pre-existing tests in the file | Confirmed failing: `assert None == 'p-01'` — `data-rango` absent from widget attrs | Confirmed passing after `_campos_de_rango` gained the `nodo_id` param and set `data-rango`/`data-rango-extremo` on both widgets | None needed |
+| 3.3/3.4 | same file, `test_seleccion_con_no_cumple_agrega_campo_observacion_companero` | Unit (no DB) | 12/12 | Confirmed failing: `AssertionError: assert 'turno_observacion' in {'turno': ...}` — companion field absent | Confirmed passing after `construir_formulario_seccion` injected the companion `CharField` + both data attrs | None needed |
+| — (triangulation) | same file, `test_seleccion_sin_no_cumple_no_agrega_campo_observacion_companero` | Unit (no DB) | 13/13 | Written alongside 3.3/3.4 to prove the companion field is conditional on `"No cumple"` being an option, not always injected | Passed on first run against the same implementation | — |
+
+### Test Summary (PR2)
+- **Total tests written**: 3
+- **Total tests passing**: 3
+- **Layers used**: Unit (3, no DB — `construir_formulario_seccion` takes a plain dict), Integration (0), E2E (0)
+- **Approval tests** (refactoring): None — no refactoring tasks in this batch
+- **Pure functions modified**: `_campos_de_rango` (signature grew a `nodo_id` param, still pure); `construir_formulario_seccion` (companion-field injection is a straight-line extension of the existing per-node loop, no new branching complexity)
 
 ## Work Unit Evidence (Unit 1: `validacion.py` + fixture, anti-drift locked to generator)
 
@@ -69,14 +102,23 @@ target this PR's branch once merged (or `main` after merge).
 | Runtime harness command/scenario and exact result | N/A — pure module, no server/UI boundary to exercise (per tasks.md's own note for Unit 1) |
 | Rollback boundary | `reportes/validacion.py` (new file) + `reportes/tests/test_validacion.py` (new file) + the fixture addition in `reportes/tests/conftest.py`; all three can be deleted/reverted without affecting any other module (`formularios.py`, `views.py`, `urls.py`, templates untouched) |
 
+## Work Unit Evidence (Unit 2: `formularios.py` companion field + JS data attrs)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `pytest reportes/tests/test_formularios.py` → `14 passed in 0.07s` (11 pre-existing + 3 new) |
+| Runtime harness command/scenario and exact result | `pytest reportes/tests/test_validacion.py reportes/tests/test_views.py reportes/tests/test_formularios.py` → `34 passed in 76.18s` — exercises `construir_formulario_seccion` through the real `paso` GET/POST view flow (`test_views.py`) with the new data attrs and companion field present, confirming no regression in section rendering/persistence. No browser/manual harness available in this batch (`paso.html` template is unmodified — PR 4 wires the attrs into markup) |
+| Rollback boundary | `reportes/formularios.py` diff (the `_VALOR_NO_CUMPLE` import, `_campos_de_rango`'s `nodo_id` param + two `attrs[...]` lines, and the companion-field injection block in `construir_formulario_seccion`) + the 3 new tests in `reportes/tests/test_formularios.py`; revertible without touching `validacion.py` (PR1), `views.py`/`urls.py`/templates (PR3-4) |
+
 ## Full Project Suite
 
-- Baseline (before this batch's changes, safety net): `187 passed in 217.44s (0:03:37)`.
-- After this batch: `193 passed in 233.03s (0:03:53)` (full `pytest` run, no `-k`/file filter — 187 pre-existing + 6 new, zero regressions, zero pre-existing failures).
+- Baseline before PR1 (safety net): `187 passed in 217.44s (0:03:37)`.
+- After PR1: `193 passed in 233.03s (0:03:53)` (187 pre-existing + 6 new, zero regressions).
+- After PR2 (this batch): `196 passed in 231.46s (0:03:51)` (full `pytest` run, no `-k`/file filter — 193 from PR1 + 3 new Phase 3 tests, zero regressions, zero pre-existing failures).
 
 ## Deviations from Design
 
-None — implementation matches `design.md`'s Interfaces/Contracts and Data Flow sections exactly: `ProblemaDeReporte`/`ResultadoDeRevision` dataclass shapes, `_VALOR_NO_CUMPLE`/`_SUFIJO_DE_ETIQUETA` module constants, the `try/except ValoresIncompletos` exception-translation pattern, and the documented algorithm order (obligatorio pass → rango pass → seleccion pass).
+None — implementation matches `design.md`'s Interfaces/Contracts and Data Flow sections (PR1), and the "`formularios.py` changes (the JS contract)" subsection (PR2) exactly: `_campos_de_rango` grew the documented `nodo_id` param and sets both `data-rango`/`data-rango-extremo` attrs; `construir_formulario_seccion` injects the companion `CharField(required=False, label=f"{etiqueta} — Observación", widget=TextInput(attrs={"data-observacion-de": clave}))` and sets `data-requiere-observacion` on the select, gated on `tipo == SELECCION and _VALOR_NO_CUMPLE in (opciones or [])`. One implementation note not explicit in design: `_VALOR_NO_CUMPLE` is imported from `reportes.validacion` rather than redefined in `formularios.py`, avoiding a duplicated magic-string literal — consistent with the codebase's existing pattern of importing private (`_`-prefixed) symbols across these two modules (`validacion.py` already imports `generador._validar_completitud`; `formularios.py` already imports `tipos_reporte.validacion._iterar_nodos`). No circular import: `reportes.validacion` does not import `reportes.formularios`.
 
 ## Issues Found
 
@@ -85,6 +127,9 @@ None.
 ## Workload / PR Boundary
 
 - Mode: chained PR slice (stacked-to-main)
-- Current work unit: Unit 1 — `validacion.py` + fixture, anti-drift locked to generator
-- Boundary: starts from a clean checkout (no prior apply-progress existed for this change); ends with `reportes/validacion.py` fully implemented and covered, `estructura_con_validaciones` fixture added, zero touches to `formularios.py`/`views.py`/`urls.py`/templates
-- Estimated review budget impact: well under 400 changed lines (fixture ~55 lines, `validacion.py` ~210 lines w/ docstrings, test file ~140 lines) — safely within PR1's slice of the forecasted 550-650 total
+- PR1 — Unit 1: `validacion.py` + fixture, anti-drift locked to generator
+  - Boundary: starts from a clean checkout (no prior apply-progress existed for this change); ends with `reportes/validacion.py` fully implemented and covered, `estructura_con_validaciones` fixture added, zero touches to `formularios.py`/`views.py`/`urls.py`/templates
+  - Estimated review budget impact: well under 400 changed lines (fixture ~55 lines, `validacion.py` ~210 lines w/ docstrings, test file ~140 lines) — safely within PR1's slice of the forecasted 550-650 total
+- PR2 — Unit 2: `formularios.py` companion field + JS data attrs (this batch)
+  - Boundary: starts from PR1's merged/branch state (`reportes/validacion.py` already present, providing `_VALOR_NO_CUMPLE`); ends with `reportes/formularios.py`'s data-attribute contract fully implemented per design and covered by 3 new tests; zero touches to `views.py`/`urls.py`/templates/`paso.js` (PR3-4)
+  - Estimated review budget impact: small (~30 changed lines in `formularios.py`, ~70 lines of new tests) — well within budget, PR3 (S-09 view/template) and PR4 (`paso.html`/`paso.js`) remain the larger remaining slices of the forecasted 550-650 total
