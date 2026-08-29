@@ -187,6 +187,36 @@ def test_destinos_de_un_rango_devuelve_dos_pares_inicio_fin():
     ]
 
 
+def test_claves_de_valor_de_un_campo_escalar_coincide_con_destinos():
+    """PR 1 task 1.1 RED — design D5: `claves_de_valor(nodo)` is the public
+    extraction of `_destinos`' key derivation. For a scalar node it must
+    return exactly the same key `_destinos` currently pairs with a
+    coordinate — one-element list, no coordinate."""
+    from tipos_reporte.generador import _destinos, claves_de_valor
+
+    nodo = {"id": "turno", "tipo": "texto", "celda": "B2"}
+
+    assert claves_de_valor(nodo) == [clave for clave, _coordenada in _destinos(nodo)]
+    assert claves_de_valor(nodo) == ["turno"]
+
+
+def test_claves_de_valor_de_un_rango_coincide_con_destinos():
+    """PR 1 task 1.1 RED — design D5, range case: `claves_de_valor` must
+    derive the same two `_inicio`/`_fin` keys `_destinos` currently
+    derives for a `rango-hora-inicio-fin` node."""
+    from tipos_reporte.generador import _destinos, claves_de_valor
+
+    nodo = {
+        "id": "descanso",
+        "tipo": "rango-hora-inicio-fin",
+        "celda_inicio": "C3",
+        "celda_fin": "C4",
+    }
+
+    assert claves_de_valor(nodo) == [clave for clave, _coordenada in _destinos(nodo)]
+    assert claves_de_valor(nodo) == ["descanso_inicio", "descanso_fin"]
+
+
 @pytest.mark.django_db
 def test_plantilla_faltante_en_storage_lanza_plantilla_ilegible(
     tipo_de_reporte_factory, plantilla_xlsx, definicion_valida, valores_completos
