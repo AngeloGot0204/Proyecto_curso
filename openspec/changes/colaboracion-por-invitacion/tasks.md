@@ -38,19 +38,19 @@ Chain strategy: pending
 
 ## Phase 2: guardar_valor Refactor — Audit Trail + FIFO-30
 
-- [ ] 2.1 (RED) Add to `reportes/tests/test_valores.py`: first write on empty field → `CambioDeValor` row created with `valor_anterior is None` (spec "First-time edit records empty valor_anterior").
-- [ ] 2.2 (RED) Add: overwrite of existing value → `CambioDeValor.valor_anterior` equals the prior stored value, `autor` set (spec "Value write creates history row").
-- [ ] 2.3 (RED) Add: no-op write (same value resubmitted) → zero new `CambioDeValor` rows created (spec "No-op write does not create history"; design D4 load-bearing guard).
-- [ ] 2.4 (RED) Add: delete-of-existing value (empty submit over a stored value) → history row still written.
-- [ ] 2.5 (RED) Add: no-op delete (empty submit, no existing row) → zero rows created.
-- [ ] 2.6 (RED) Add boundary test: 30 sequential writes on a report → exactly 30 `CambioDeValor` rows exist.
-- [ ] 2.7 (RED) Add boundary test: 31st write on the same report → 30 rows remain, the single oldest row (by `-fecha, -id`) is gone, the newest row is present (spec "31st write trims the oldest row").
-- [ ] 2.8 (RED) Add: FIFO-30 spans multiple fields on one report — 30 rows across several `identificador_de_campo` values, a write on a field with fewer prior rows still trims the report's oldest row (spec "FIFO-30 is scoped per Reporte, not per field").
-- [ ] 2.9 Add `cambios_factory(reporte, n, autor)` fixture to `conftest.py` (back-dates `fecha` via `queryset.update()` per design fixture strategy).
-- [ ] 2.10 (GREEN) Refactor `guardar_valor` in `reportes/valores.py`: wrap in `transaction.atomic()`, read `ValorDeReporte` before write to capture `valor_anterior`, keep existing empty-delete/non-empty-upsert behavior, insert `CambioDeValor` only on actual change, call `_recortar_historial(reporte)`.
-- [ ] 2.11 (GREEN) Implement `_recortar_historial(reporte)` in `reportes/valores.py` per design D5: `order_by("-fecha", "-id")`, `values_list("pk", flat=True)[30:]`, materialize via `list(...)`, `pk__in` delete.
-- [ ] 2.12 Run 2.1–2.8 tests, confirm all pass.
-- [ ] 2.13 (REFACTOR) Confirm `guardar_valor`'s public signature is unchanged (`reporte, identificador_de_campo, valor, autor`) so existing direct callers in `test_valores.py` need no wrapper changes.
+- [x] 2.1 (RED) Add to `reportes/tests/test_valores.py`: first write on empty field → `CambioDeValor` row created with `valor_anterior is None` (spec "First-time edit records empty valor_anterior").
+- [x] 2.2 (RED) Add: overwrite of existing value → `CambioDeValor.valor_anterior` equals the prior stored value, `autor` set (spec "Value write creates history row").
+- [x] 2.3 (RED) Add: no-op write (same value resubmitted) → zero new `CambioDeValor` rows created (spec "No-op write does not create history"; design D4 load-bearing guard).
+- [x] 2.4 (RED) Add: delete-of-existing value (empty submit over a stored value) → history row still written.
+- [x] 2.5 (RED) Add: no-op delete (empty submit, no existing row) → zero rows created.
+- [x] 2.6 (RED) Add boundary test: 30 sequential writes on a report → exactly 30 `CambioDeValor` rows exist.
+- [x] 2.7 (RED) Add boundary test: 31st write on the same report → 30 rows remain, the single oldest row (by `-fecha, -id`) is gone, the newest row is present (spec "31st write trims the oldest row").
+- [x] 2.8 (RED) Add: FIFO-30 spans multiple fields on one report — 30 rows across several `identificador_de_campo` values, a write on a field with fewer prior rows still trims the report's oldest row (spec "FIFO-30 is scoped per Reporte, not per field").
+- [x] 2.9 (skipped, not needed) — sequential in-test creation via the ORM was fast/deterministic enough with the `(-fecha, -id)` tiebreaker; no back-dating fixture was required for the boundary tests to pass reliably.
+- [x] 2.10 (GREEN) Refactor `guardar_valor` in `reportes/valores.py`: wrap in `transaction.atomic()`, read `ValorDeReporte` before write to capture `valor_anterior`, keep existing empty-delete/non-empty-upsert behavior, insert `CambioDeValor` only on actual change, call `_recortar_historial(reporte)`.
+- [x] 2.11 (GREEN) Implement `_recortar_historial(reporte)` in `reportes/valores.py` per design D5: `order_by("-fecha", "-id")`, `values_list("pk", flat=True)[30:]`, materialize via `list(...)`, `pk__in` delete.
+- [x] 2.12 Run 2.1–2.8 tests, confirm all pass.
+- [x] 2.13 (REFACTOR) Confirm `guardar_valor`'s public signature is unchanged (`reporte, identificador_de_campo, valor, autor`) so existing direct callers in `test_valores.py` need no wrapper changes.
 
 ## Phase 3: Widen paso/revision, Narrow generar
 
