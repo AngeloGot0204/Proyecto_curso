@@ -120,13 +120,73 @@ class VistoBueno(models.Model):
         return f"Visto bueno de Reporte #{self.reporte_id}"
 
 
+class ParticipacionEnReporte(models.Model):
+    """One invited user's access grant to a `Reporte` (backlog #8, spec
+    `colaboracion-reporte`, design D1/D2). The creator never gets a row here
+    — "is creator" is checked independently, mirroring `cerrar_reporte`'s
+    creator check (ADR-0006). No role/responsibility field: access is
+    binary, fully open editing among participants."""
+
+    reporte = models.ForeignKey(
+        Reporte, on_delete=models.CASCADE, related_name="participaciones"
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="participaciones",
+    )
+    fecha_invitacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Participación en reporte"
+        verbose_name_plural = "Participaciones en reporte"
+        constraints = [
+            UniqueConstraint(
+                fields=["reporte", "usuario"],
+                name="participacion_unica_por_reporte_y_usuario",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.usuario} participa en Reporte #{self.reporte_id}"
+
+
+class CambioDeValor(models.Model):
+    """One immutable audit row per actual `ValorDeReporte` write (backlog
+    #8, spec `colaboracion-reporte`, design D3-D5). `valor_anterior` is
+    `NULL` for a first-time write on a field with no prior stored value —
+    `""` never collides with that meaning because `guardar_valor` deletes
+    empty values instead of storing them (design D3). FIFO-30 retention per
+    `Reporte`, across all fields combined, is enforced by
+    `reportes.valores._recortar_historial`, not by this model."""
+
+    reporte = models.ForeignKey(
+        Reporte, on_delete=models.CASCADE, related_name="cambios"
+    )
+    identificador_de_campo = models.CharField(max_length=200)
+    valor_anterior = models.TextField(blank=True, null=True)
+    autor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="cambios_de_valor",
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Cambio de valor"
+        verbose_name_plural = "Cambios de valor"
+
+    def __str__(self):
+        return f"Cambio de {self.identificador_de_campo} en Reporte #{self.reporte_id}"
+
+
 class Generacion(models.Model):
     """One audit row per successful `.xlsx` generation (backlog #7, spec
-    `generacion-documento`, design D3). Unbounded — any authenticated user,
-    unlimited repeats — so no uniqueness constraint is declared; `definicion`
-    is recorded alongside `usuario`/`fecha` so the audit trail says which
-    template version produced the file, independent of `Reporte.definicion`
-    ever being re-pointed."""
+    `generacion-documento`, design D3). Unbounded — creator or invited
+    participant, unlimited repeats — so no uniqueness constraint is
+    declared; `definicion` is recorded alongside `usuario`/`fecha` so the
+    audit trail says which template version produced the file, independent
+    of `Reporte.definicion` ever being re-pointed."""
 
     reporte = models.ForeignKey(
         Reporte, on_delete=models.CASCADE, related_name="generaciones"
