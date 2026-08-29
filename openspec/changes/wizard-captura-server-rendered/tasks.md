@@ -42,11 +42,11 @@ Chain strategy: pending
 
 ## Phase 3: form builder + codec (PR 3)
 
-- [ ] 3.1 RED: `reportes/tests/test_formularios.py` — per-type field/widget assertions, `rango-hora-inicio-fin`→2 fields, empty section→0 fields, `obligatorio`→`attrs["required"]` + `required=False` (spec: One URL and dynamic form per section).
-- [ ] 3.2 GREEN: `reportes/formularios.py` — `construir_formulario_seccion(seccion)` using `validacion._iterar_nodos` (D4) and `generador.claves_de_valor` (D5) for field names.
-- [ ] 3.3 RED: `reportes/tests/test_valores.py` — codec round-trip per type; `booleano` always writes `"true"`/`"false"`; empty value deletes row (D2, D3).
-- [ ] 3.4 GREEN: `reportes/valores.py` — `a_texto(campo, valor)` serialize; rehydrate via `campo.to_python(texto)`.
-- [ ] 3.5 Contract test: `identificador_de_campo` keys equal `generador.claves_de_valor` for same node (design Testing Strategy row 5).
+- [x] 3.1 RED: `reportes/tests/test_formularios.py` — per-type field/widget assertions, `rango-hora-inicio-fin`→2 fields, empty section→0 fields, `obligatorio`→`attrs["required"]` + `required=False` (spec: One URL and dynamic form per section).
+- [x] 3.2 GREEN: `reportes/formularios.py` — `construir_formulario_seccion(seccion)` using `validacion._iterar_nodos` (D4) and `generador.claves_de_valor` (D5) for field names.
+- [x] 3.3 RED: `reportes/tests/test_valores.py` — codec round-trip per type; `booleano` always writes `"true"`/`"false"`; empty value deletes row (D2, D3).
+- [x] 3.4 GREEN: `reportes/valores.py` — `a_texto(campo, valor)` serialize; rehydrate via `campo.to_python(texto)`.
+- [x] 3.5 Contract test: `identificador_de_campo` keys equal `generador.claves_de_valor` for same node (design Testing Strategy row 5).
 
 ## Phase 4: views, urls, templates (PR 4)
 
