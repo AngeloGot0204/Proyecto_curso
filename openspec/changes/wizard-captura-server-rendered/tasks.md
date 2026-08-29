@@ -50,15 +50,15 @@ Chain strategy: pending
 
 ## Phase 4: views, urls, templates (PR 4)
 
-- [ ] 4.1 RED: `reportes/tests/test_views.py` — `POST /nuevo/` creates one `Reporte` (D7); GET on `nuevo` is 405; anonymous → 302 login (Requirement: Authentication required).
-- [ ] 4.2 GREEN: `reportes/views.py::iniciar_reporte` (`require_POST`, `login_required`), redirect to first section.
-- [ ] 4.3 RED: extend `test_views.py` — `paso` GET rehydrates from `ValorDeReporte` (Requirement: GET rehydration); POST upserts, no duplicate rows on re-POST (Requirement: Per-step durable persistence); foreign `Reporte` → 404 (D9); missing `obligatorio` value still persists rest (Requirement: Non-blocking obligatorio marker); unknown `seccion_id` → 404.
-- [ ] 4.4 GREEN: `reportes/views.py::paso` (`login_required`), section list from `estructura["secciones"]` order, `update_or_create`/`delete` per D3, PRG redirect (last step → itself).
-- [ ] 4.5 `reportes/urls.py` — flat `path()` list, no namespace.
-- [ ] 4.6 `config/urls.py` — `include("reportes.urls")`.
-- [ ] 4.7 `reportes/templates/reportes/paso.html` — extends `templates/base.html`, iterates form fields, renders `pasos`/`url_anterior`/`url_siguiente`/`posicion` nav.
-- [ ] 4.8 RED+GREEN: `reportes/tests/test_views.py` — section with empty campos renders without error, allows next-step navigation (spec: Section with no campos/items still renders).
-- [ ] 4.9 Full suite run: `pytest reportes tipos_reporte` — confirm no regressions.
+- [x] 4.1 RED: `reportes/tests/test_views.py` — `POST /nuevo/` creates one `Reporte` (D7); GET on `nuevo` is 405; anonymous → 302 login (Requirement: Authentication required).
+- [x] 4.2 GREEN: `reportes/views.py::iniciar_reporte` (`require_POST`, `login_required`), redirect to first section.
+- [x] 4.3 RED: extend `test_views.py` — `paso` GET rehydrates from `ValorDeReporte` (Requirement: GET rehydration); POST upserts, no duplicate rows on re-POST (Requirement: Per-step durable persistence); foreign `Reporte` → 404 (D9); missing `obligatorio` value still persists rest (Requirement: Non-blocking obligatorio marker); unknown `seccion_id` → 404.
+- [x] 4.4 GREEN: `reportes/views.py::paso` (`login_required`), section list from `estructura["secciones"]` order, `update_or_create`/`delete` per D3, PRG redirect (last step → itself).
+- [x] 4.5 `reportes/urls.py` — flat `path()` list, no namespace.
+- [x] 4.6 `config/urls.py` — `include("reportes.urls")`.
+- [x] 4.7 `reportes/templates/reportes/paso.html` — extends `templates/base.html`, iterates form fields, renders `pasos`/`url_anterior`/`url_siguiente`/`posicion` nav.
+- [x] 4.8 RED+GREEN: `reportes/tests/test_views.py` — section with empty campos renders without error, allows next-step navigation (spec: Section with no campos/items still renders).
+- [x] 4.9 Full suite run: `pytest reportes tipos_reporte` — confirm no regressions (149 passed; full project suite also run — see apply-progress.md).
 
 ## Key Learnings
 

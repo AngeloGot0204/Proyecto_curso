@@ -253,8 +253,140 @@ instruction and needed no change.
 - Estimated review budget impact: well under the 400-line budget — two
   small production modules (~95 + ~60 lines) plus their tests
 
+## Completed Tasks (Phase 4 / PR 4)
+
+- [x] 4.1 RED: `reportes/tests/test_views.py` — 13 tests covering
+      `iniciar_reporte` (`POST /nuevo/` creates one `Reporte`, D7; `GET` on
+      `nuevo` is 405; anonymous `POST` → 302 login) and `paso` (GET
+      rehydration from `ValorDeReporte`; anonymous → 302 login; foreign
+      `Reporte` → 404, D9; unknown `seccion_id` → 404; empty-section GET
+      renders with zero fields and exposes `url_siguiente`; POST upserts;
+      re-POST does not duplicate rows; last section POST redirects to
+      itself, PRG; non-last section POST redirects to the next section;
+      missing `obligatorio` value does not block persistence of the rest).
+      Confirmed correct RED failure: `NoReverseMatch` for `reportes_paso`/
+      `reportes_nuevo` (URL names did not exist yet).
+- [x] 4.2 GREEN: `reportes/views.py::iniciar_reporte` — `@login_required`
+      + `@require_POST` (login check outermost, so anonymous `POST` 302s to
+      login before the method check runs); `get_object_or_404(TipoDeReporte,
+      codigo=codigo_tipo)`; 404 if `definicion_activa_id` is `None`;
+      `Reporte.objects.create(tipo=..., definicion=tipo.definicion_activa,
+      creador=request.user)`; redirects to the first section id from
+      `estructura["secciones"]` order (design D7).
+- [x] 4.3 RED: same `test_views.py` batch as 4.1 (written together per
+      strict TDD — all `paso` scenarios were RED before `paso` existed:
+      `AttributeError`/`NoReverseMatch` from the same missing-view/missing-
+      URL failure).
+- [x] 4.4 GREEN: `reportes/views.py::paso` — `@login_required`;
+      `get_object_or_404(Reporte, pk=reporte_id, creador=request.user)`
+      (design D9 — creator-scoped lookup, 404 leaks no existence); 404 if
+      `seccion_id` is not in `estructura["secciones"]`;
+      `construir_formulario_seccion(seccion)` builds the per-request form
+      class; `GET` rehydrates `initial` from existing `ValorDeReporte` rows
+      via `desde_texto(campo, texto)`; `POST` calls `form.is_valid()`
+      (always `True` — every field is `required=False`, D8) then
+      `guardar_valor(reporte, nombre_campo, valor, request.user)` per
+      field (D3's empty-deletes/upsert rule, reused as-is from Phase 3);
+      redirects to the next section id, or back to the same section id on
+      the last one (PRG, per design's Open Question — accepted stop-gap,
+      #7 owns the real finish screen). `GET` context also carries `pasos`
+      (`id`/`titulo`/`es_actual`), `url_anterior`, `url_siguiente`,
+      `posicion` (`"Paso i de n"`) per design's Data Flow section.
+- [x] 4.5 `reportes/urls.py` — flat `path()` list, no namespace (matches
+      `usuarios/urls.py` convention): `<str:codigo_tipo>/nuevo/` →
+      `reportes_nuevo`, `<int:reporte_id>/paso/<str:seccion_id>/` →
+      `reportes_paso`.
+- [x] 4.6 `config/urls.py` — added `path('reportes/', include('reportes.urls'))`.
+- [x] 4.7 `reportes/templates/reportes/paso.html` — extends `templates/base.html`
+      (app-level template dir, design D10, `APP_DIRS=True` already on);
+      renders section title, `posicion`, a `pasos` nav list (marks
+      `es_actual`), the form (label + HTML `required` marker + widget per
+      field, CSRF token), and `url_anterior`/`url_siguiente` links. Plain
+      HTML5, no CSS framework or JS build step (ADR-0001).
+- [x] 4.8 RED+GREEN: folded into the 4.1/4.3 RED batch —
+      `test_get_paso_seccion_vacia_renderiza_sin_error` asserts a 200
+      response, `form.fields` is empty, and `url_siguiente` still points to
+      the next declared section (spec: "Section with no campos/items still
+      renders").
+- [x] 4.9 Full suite run: `pytest reportes tipos_reporte` → 149 passed, 0
+      failures (45 `reportes` + 104 `tipos_reporte`, 0 regressions from the
+      13 new `test_views.py` tests). Also ran the FULL project test suite
+      (`pytest`, no path filter, `--reuse-db` from `pytest.ini`) → **186
+      passed, 0 failures** (149 `reportes`+`tipos_reporte` + 37 `usuarios`).
+
+### Fixture bug fixed during this batch (not a design deviation)
+
+`reportes/tests/conftest.py`'s `reporte_factory` had
+`kwargs.setdefault("creador", usuario_factory())` — Python evaluates
+`usuario_factory()` eagerly as the argument to `setdefault` REGARDLESS of
+whether `"creador"` is already in `kwargs`, so every call to
+`reporte_factory(creador=explicit_user)` still silently created an extra,
+unwanted default-named `Usuario`. This collided (`UniqueViolation` on
+`username`) with `cliente_autenticado`'s own default-named user in
+`test_paso_reporte_de_otro_usuario_da_404`, which needs a user distinct
+from the logged-in client's. Fixed to `if "creador" not in kwargs:
+kwargs["creador"] = usuario_factory()`. Re-ran the full Phase 2/3/4
+`reportes` suite plus `tipos_reporte` after the fix — all 149 still pass,
+confirming no other test relied on the old eager-call behavior.
+
+## TDD Cycle Evidence (Phase 4)
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4.1/4.2 `iniciar_reporte` | `reportes/tests/test_views.py` | Integration (DB + HTTP) | N/A (new file) | ✅ `NoReverseMatch: Reverse for 'reportes_paso' not found` (correct — `reportes/urls.py` and the view did not exist yet; all 13 tests failed for this same root cause) | ✅ 13/13 passed after `reportes/views.py`, `reportes/urls.py`, `config/urls.py` include, `reportes/templates/reportes/paso.html` | ✅ 3 cases: POST creates + redirects, GET is 405, anonymous POST → login | ➖ none needed |
+| 4.3/4.4 `paso` GET rehydration + POST upsert + PRG + D9 + empty section | `reportes/tests/test_views.py` | Integration (DB + HTTP) | N/A (new file) | Same RED run as above | Same GREEN run as above; one intermediate iteration — `reporte_factory`'s eager `usuario_factory()` call in `setdefault` caused a username collision in `test_paso_reporte_de_otro_usuario_da_404`, fixed in `conftest.py` (see note above), re-ran green | ✅ 9 cases: GET rehydrates, anonymous → login, foreign reporte → 404, unknown seccion → 404, empty-section renders, POST persists, re-POST no duplicate, last-section PRG-to-self, non-last redirects-to-next, obligatorio-missing doesn't block | ✅ Extracted `_seccion_por_id`/`_ids_de_secciones`/`_url_paso` helpers in `views.py` to avoid repeating section-list derivation across GET/POST branches; re-ran full file after refactor, stayed green |
+
+### Test Summary (Phase 4)
+- **Total tests written**: 13 (`test_views.py`)
+- **Total tests passing**: 13/13
+- **Layers used**: Integration/DB+HTTP (13)
+- **Fixture fix**: 1 (`reporte_factory`'s eager `usuario_factory()` call, see above) — pre-existing bug from Phase 2, not introduced this batch, exposed by a new D9 test that needed a `creador` distinct from another fixture's default user
+- **Pure functions created**: 3 (`_seccion_por_id`, `_ids_de_secciones`, `_url_paso`); `iniciar_reporte` and `paso` are the two view entry points
+
+## Work Unit Evidence (Phase 4)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `pytest reportes/tests/test_views.py -v` → 13 passed |
+| Runtime harness command/scenario and exact result | `pytest reportes tipos_reporte` → 149 passed, 0 failures, 0 regressions; full project suite `pytest` (no path filter) → 186 passed, 0 failures (this is the change's final regression gate — includes `usuarios`) |
+| Rollback boundary | Remove `reportes/views.py`, `reportes/urls.py`, `reportes/templates/reportes/paso.html`, `reportes/tests/test_views.py`; revert the one added line in `config/urls.py` (`include('reportes.urls')`) and the one-line `setdefault`→`if` fix in `reportes/tests/conftest.py`. No models, migrations, formularios, or valores code touched this batch. |
+
+## Files Changed (Phase 4)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `reportes/views.py` | Created | `iniciar_reporte`, `paso`, and three small helpers (`_seccion_por_id`, `_ids_de_secciones`, `_url_paso`) |
+| `reportes/urls.py` | Created | Flat `path()` list: `reportes_nuevo`, `reportes_paso` |
+| `reportes/templates/reportes/paso.html` | Created | Wizard shell + step form, extends `templates/base.html` |
+| `reportes/tests/test_views.py` | Created | 13 integration tests covering both spec requirement sets (`wizard-captura` + `reportes-modelo`'s D7/D9 view-level slice) |
+| `config/urls.py` | Modified | Added `path('reportes/', include('reportes.urls'))` |
+| `reportes/tests/conftest.py` | Modified | Fixed `reporte_factory`'s eager `usuario_factory()` call in `setdefault` (bug fix, not a design change) |
+| `openspec/changes/wizard-captura-server-rendered/tasks.md` | Modified | Marked tasks 4.1-4.9 as `[x]` |
+
+## Deviations from Design (Phase 4)
+
+None — implementation matches design D7, D8, D9, D10, and the Data Flow /
+Interfaces sections exactly. The `reporte_factory` fixture fix (above) is a
+test-infrastructure bug fix uncovered by a new correctly-written test, not a
+production-code or design deviation.
+
+## Workload / PR Boundary (Phase 4 / PR 4)
+
+- Mode: chained/stacked PR slice (`stacked-to-main`), targeting the PR 3
+  branch per Chain strategy — this is the FINAL PR in the chain (PR 4 of 4)
+- Current work unit: Unit 4 — "Views, urls, templates, settings wiring,
+  integration tests"
+- Boundary: this batch adds `reportes/views.py`, `reportes/urls.py`,
+  `reportes/templates/reportes/paso.html`, `reportes/tests/test_views.py`,
+  one `config/urls.py` include line, and one bug-fix line in
+  `reportes/tests/conftest.py`; zero changes to models, migrations,
+  formularios, or valores code (all from PR 2/PR 3, unchanged)
+- Estimated review budget impact: well under the 400-line budget — two
+  small view functions + three helpers, a flat urlconf, one template, and
+  their integration tests
+
 ## Status
 
-14/23 total tasks complete (Phase 1 + Phase 2 + Phase 3 fully done: 3 + 6 +
-5). Ready for PR 3 review / `sdd-verify`. PR 4 (Phase 4: views, urls,
-templates — 9 tasks) is the next and final apply batch.
+23/23 total tasks complete (Phase 1 + Phase 2 + Phase 3 + Phase 4: 3 + 6 +
+5 + 9). **The wizard-captura-server-rendered change is fully implemented.**
+Full project test suite: 186 passed, 0 failures. Ready for `sdd-verify`.
