@@ -16,8 +16,10 @@ import os
 from pathlib import Path
 
 import dj_database_url
+import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
+from sentry_sdk.integrations.django import DjangoIntegration
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -221,3 +223,21 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "inicio"
 LOGOUT_REDIRECT_URL = "login"
 SESSION_COOKIE_AGE = 604800  # 7 days
+
+
+# Error observability (backlog #14, ADR-0008). `SENTRY_DSN` is deliberately
+# optional (plain `os.environ.get`, not `require_env()`) so local/dev
+# environments without a Sentry project keep working unaffected; production
+# activates capture only once the DSN is configured in Vercel. Relies on the
+# SDK's default `LoggingIntegration` (no custom config) to auto-capture the
+# existing `logger.exception` call in `reportes/views.py::generar` with zero
+# call-site changes, plus `DjangoIntegration` for unhandled exceptions.
+_sentry_dsn = os.environ.get("SENTRY_DSN")
+
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        environment=os.environ.get("VERCEL_ENV", "development"),
+        integrations=[DjangoIntegration()],
+        send_default_pii=False,
+    )
