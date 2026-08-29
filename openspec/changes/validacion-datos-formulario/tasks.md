@@ -44,10 +44,10 @@ Chain strategy: pending
 
 ## Phase 3: `formularios.py` companion field (TDD)
 
-- [ ] 3.1 RED `test_formularios.py`: rango `TimeField` widgets carry `data-rango`/`data-rango-extremo`
-- [ ] 3.2 GREEN: `_campos_de_rango` gains `nodo_id` param, sets both attrs
-- [ ] 3.3 RED: seleccion field with "No cumple" option → companion `{id}_observacion` `CharField(required=False)` in `form.fields`, `data-requiere-observacion` on select
-- [ ] 3.4 GREEN: `construir_formulario_seccion` injects companion field with `data-observacion-de`
+- [x] 3.1 RED `test_formularios.py`: rango `TimeField` widgets carry `data-rango`/`data-rango-extremo`
+- [x] 3.2 GREEN: `_campos_de_rango` gains `nodo_id` param, sets both attrs
+- [x] 3.3 RED: seleccion field with "No cumple" option → companion `{id}_observacion` `CharField(required=False)` in `form.fields`, `data-requiere-observacion` on select
+- [x] 3.4 GREEN: `construir_formulario_seccion` injects companion field with `data-observacion-de`
 
 ## Phase 4: S-09 review screen (TDD)
 
