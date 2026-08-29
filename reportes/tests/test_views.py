@@ -35,6 +35,18 @@ def sesion_de_creador(client, usuario_factory, reporte_factory):
     return client, reporte
 
 
+@pytest.fixture
+def sesion_de_invitado(client, reporte_factory, participacion_factory):
+    """A `(client, reporte)` pair where the logged-in user is an INVITED
+    non-creator participant (backlog #8, tasks.md 3.16) — mirrors
+    `sesion_de_creador`, but the logged-in user has a `ParticipacionEnReporte`
+    row instead of being `Reporte.creador`."""
+    reporte = reporte_factory()
+    invitado = participacion_factory(reporte, username="invitado_de_sesion")
+    client.force_login(invitado)
+    return client, reporte
+
+
 # ---------------------------------------------------------------------------
 # iniciar_reporte
 # ---------------------------------------------------------------------------
@@ -121,6 +133,36 @@ def test_paso_reporte_de_otro_usuario_da_404(
     # (design D9) — `usuario_factory`'s default username collides with
     # `cliente_autenticado`'s own default user otherwise.
     otro_creador = usuario_factory(username="otro_usuario")
+    reporte = reporte_factory(creador=otro_creador)
+
+    response = cliente_autenticado.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_paso_participante_invitado_accede(sesion_de_invitado):
+    """Spec `wizard-captura` — "Invited participant accesses a step": an
+    invited non-creator user gets 200, not 404 (backlog #8, tasks.md 3.1)."""
+    client, reporte = sesion_de_invitado
+
+    response = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_paso_no_invitado_autenticado_da_404(
+    cliente_autenticado, usuario_factory, reporte_factory
+):
+    """Spec `wizard-captura` — "Non-invited authenticated user is denied":
+    a user with no `ParticipacionEnReporte` row and who is not the creator
+    still gets 404 via a direct URL (backlog #8, tasks.md 3.2)."""
+    otro_creador = usuario_factory(username="creador_paso_no_invitado")
     reporte = reporte_factory(creador=otro_creador)
 
     response = cliente_autenticado.get(
@@ -384,6 +426,32 @@ def test_get_revision_reporte_de_otro_usuario_da_404(
 
 
 @pytest.mark.django_db
+def test_get_revision_participante_invitado_accede(sesion_de_invitado):
+    """Spec `cierre-reporte` — "Invited participant views revision": an
+    invited non-creator user gets 200 (backlog #8, tasks.md 3.3)."""
+    client, reporte = sesion_de_invitado
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_get_revision_no_invitado_da_404(
+    cliente_autenticado, usuario_factory, reporte_factory
+):
+    """Spec `cierre-reporte` — "Non-invited user is denied revision access":
+    a user who is neither creator nor participant gets 404 (backlog #8,
+    tasks.md 3.4)."""
+    otro_creador = usuario_factory(username="creador_revision_no_invitado")
+    reporte = reporte_factory(creador=otro_creador)
+
+    response = cliente_autenticado.get(reverse("reportes_revision", args=[reporte.id]))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
 def test_get_revision_anonimo_redirige_a_login(client, reporte_factory):
     reporte = reporte_factory()
 
@@ -505,6 +573,19 @@ def test_cerrar_reporte_no_creador_devuelve_404(
 
 
 @pytest.mark.django_db
+def test_cerrar_reporte_participante_invitado_devuelve_404(sesion_de_invitado):
+    """Spec `cierre-reporte` — "Invited non-creator participant cannot
+    close": `cerrar_reporte` stays creator-only, unaffected by
+    `ParticipacionEnReporte` (backlog #8, tasks.md 3.9)."""
+    client, reporte = sesion_de_invitado
+
+    response = client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    assert response.status_code == 404
+    assert not VistoBueno.objects.filter(reporte=reporte).exists()
+
+
+@pytest.mark.django_db
 def test_cerrar_reporte_rechazado_si_no_puede_generar(
     client, estructura_con_validaciones, reporte_con_validaciones_factory
 ):
@@ -591,15 +672,18 @@ def test_generar_rechazado_si_no_puede_generar_pese_a_visto_bueno(
 
 
 @pytest.mark.django_db
-def test_generar_no_creador_tambien_puede_generar(
-    reporte_listo_para_cerrar, usuario_factory
+def test_generar_participante_invitado_es_exitoso(
+    reporte_listo_para_cerrar, participacion_factory
 ):
-    # Spec: "Any Authenticated User May Generate" — non-creator user B
-    # succeeds once the report is closed.
+    """Spec `generacion-documento` — "Invited participant generates
+    successfully": an invited non-creator user B succeeds once the report
+    is closed (backlog #8, tasks.md 3.5; replaces half of the former
+    `test_generar_no_creador_tambien_puede_generar`, per design's
+    identified reversal of "Any Authenticated User May Generate")."""
     client, reporte = reporte_listo_para_cerrar
     client.post(reverse("reportes_cerrar", args=[reporte.id]))
     client.logout()
-    otro = usuario_factory(username="usuario-no-creador-generar")
+    otro = participacion_factory(reporte, username="participante-generar")
     client.force_login(otro)
 
     response = client.post(reverse("reportes_generar", args=[reporte.id]))
@@ -607,6 +691,26 @@ def test_generar_no_creador_tambien_puede_generar(
     assert response.status_code == 200
     generacion = Generacion.objects.get(reporte=reporte)
     assert generacion.usuario == otro
+
+
+@pytest.mark.django_db
+def test_generar_no_participante_devuelve_404(
+    reporte_listo_para_cerrar, usuario_factory
+):
+    """Spec `generacion-documento` — "Non-participant authenticated user is
+    denied": a non-creator, non-invited user C is now rejected with 404
+    (backlog #8, tasks.md 3.6; captures the reversal from "Any Authenticated
+    User May Generate" to creator-or-invited-participant only)."""
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+    client.logout()
+    otro = usuario_factory(username="usuario-no-participante-generar")
+    client.force_login(otro)
+
+    response = client.post(reverse("reportes_generar", args=[reporte.id]))
+
+    assert response.status_code == 404
+    assert not Generacion.objects.filter(reporte=reporte).exists()
 
 
 @pytest.mark.django_db
