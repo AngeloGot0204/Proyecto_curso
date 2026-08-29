@@ -257,6 +257,136 @@ def test_post_paso_no_ultima_seccion_redirige_a_siguiente(sesion_de_creador):
     )
 
 
+# ---------------------------------------------------------------------------
+# revision (S-09 review screen; spec `validacion-reporte`)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def reporte_con_validaciones_factory(
+    usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Build a `Reporte` whose `estructura` is `estructura_con_validaciones`
+    (spec scenarios 1-6), owned by a fresh creador. Returns `(client,
+    reporte)` with the creador already logged in — mirrors
+    `sesion_de_creador` but lets each `revision` test choose its own
+    persisted `ValorDeReporte` rows."""
+
+    def _crear(client, estructura_con_validaciones):
+        tipo, definicion = tipo_con_definicion_activa_factory(
+            estructura=estructura_con_validaciones()
+        )
+        creador = usuario_factory(username="creador_de_revision")
+        reporte = reporte_factory(tipo=tipo, definicion=definicion, creador=creador)
+        client.force_login(creador)
+        return reporte
+
+    return _crear
+
+
+@pytest.mark.django_db
+def test_get_revision_como_creador_lista_errores_y_advertencias(
+    client, estructura_con_validaciones, reporte_con_validaciones_factory, usuario_factory
+):
+    reporte = reporte_con_validaciones_factory(client, estructura_con_validaciones)
+    autor = usuario_factory(username="autor-de-valores-revision")
+    ValorDeReporte.objects.create(
+        reporte=reporte,
+        identificador_de_campo="observaciones-generales",
+        valor="Todo en orden.",
+        autor=autor,
+    )
+    ValorDeReporte.objects.create(
+        reporte=reporte,
+        identificador_de_campo="estado-general",
+        valor="No cumple",
+        autor=autor,
+    )
+    ValorDeReporte.objects.create(
+        reporte=reporte, identificador_de_campo="p-01_inicio", valor="09:00", autor=autor
+    )
+    ValorDeReporte.objects.create(
+        reporte=reporte, identificador_de_campo="p-01_fin", valor="08:00", autor=autor
+    )
+    # "estado-general" obligatorio filled, but as "No cumple" with no
+    # observación (advertencia) and a stray hora range (advertencia). No
+    # errores expected here since every obligatorio is present.
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+
+    assert response.status_code == 200
+    resultado = response.context["resultado"]
+    assert resultado.errores == ()
+    assert len(resultado.advertencias) == 2
+
+
+@pytest.mark.django_db
+def test_get_revision_reporte_de_otro_usuario_da_404(
+    cliente_autenticado, usuario_factory, reporte_factory
+):
+    otro_creador = usuario_factory(username="otro_usuario_revision")
+    reporte = reporte_factory(creador=otro_creador)
+
+    response = cliente_autenticado.get(reverse("reportes_revision", args=[reporte.id]))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_get_revision_anonimo_redirige_a_login(client, reporte_factory):
+    reporte = reporte_factory()
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+
+    assert response.status_code == 302
+    assert reverse("login") in response.url
+
+
+@pytest.mark.django_db
+def test_get_revision_con_errores_deshabilita_generar(
+    client, estructura_con_validaciones, reporte_con_validaciones_factory
+):
+    # No `ValorDeReporte` rows persisted at all — every obligatorio is
+    # missing, so `errores` is non-empty (spec: "Errores present disables
+    # Generar").
+    reporte = reporte_con_validaciones_factory(client, estructura_con_validaciones)
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+
+    assert response.status_code == 200
+    assert response.context["resultado"].errores != ()
+    assert "disabled" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_get_revision_sin_errores_habilita_generar(
+    client, estructura_con_validaciones, reporte_con_validaciones_factory, usuario_factory
+):
+    reporte = reporte_con_validaciones_factory(client, estructura_con_validaciones)
+    autor = usuario_factory(username="autor-sin-errores")
+    ValorDeReporte.objects.create(
+        reporte=reporte,
+        identificador_de_campo="observaciones-generales",
+        valor="Todo en orden.",
+        autor=autor,
+    )
+    ValorDeReporte.objects.create(
+        reporte=reporte, identificador_de_campo="estado-general", valor="Cumple", autor=autor
+    )
+    ValorDeReporte.objects.create(
+        reporte=reporte, identificador_de_campo="p-01_inicio", valor="08:00", autor=autor
+    )
+    ValorDeReporte.objects.create(
+        reporte=reporte, identificador_de_campo="p-01_fin", valor="09:00", autor=autor
+    )
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+
+    assert response.status_code == 200
+    assert response.context["resultado"].errores == ()
+    assert "disabled" not in response.content.decode()
+
+
 @pytest.mark.django_db
 def test_post_paso_sin_valor_obligatorio_no_bloquea(sesion_de_creador):
     """Non-blocking obligatorio marker: submitting without a value for a

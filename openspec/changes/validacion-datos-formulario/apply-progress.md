@@ -43,11 +43,22 @@ is PR 4.
 - [x] 3.3 RED: seleccion field with "No cumple" option → companion `{id}_observacion` `CharField(required=False)` in `form.fields`, `data-requiere-observacion` on select
 - [x] 3.4 GREEN: `construir_formulario_seccion` injects companion field with `data-observacion-de`
 
-## Remaining Tasks (out of scope for this batch — PR 3-4)
+## Scope of PR 3 of 4 (this batch)
 
-- [ ] Phase 4: S-09 review screen (4.1-4.7)
+Phase 4 only: S-09 review screen — `reportes/views.py::revision` (GET-only,
+`@login_required`, creador-scoped `get_object_or_404`, calls
+`validar_reporte`), the `path("<int:reporte_id>/revision/", ...,
+name="reportes_revision")` route in `reportes/urls.py`, and
+`reportes/templates/reportes/revision.html` (Debes corregir / Advertencias
+lists, each item linked to its `paso` via `seccion_id`; Generar `disabled`
+iff `puede_generar` is false). Did NOT touch `paso.html`/`paso.js`
+(client-side JS layer is PR 4) or run the Phase 6 regression pass (comes
+after PR 4).
+
+## Remaining Tasks (out of scope for this batch — PR 4)
+
 - [ ] Phase 5: Client-side JS layer (5.1-5.3)
-- [ ] Phase 6: Regression (6.1-6.3, full-project run already exceeded by this batch's own full-suite check — repeat once PR3-4 land)
+- [ ] Phase 6: Regression (6.1-6.3)
 
 ## Files Changed
 
@@ -58,6 +69,10 @@ is PR 4.
 | `reportes/tests/test_validacion.py` | Created (PR1) | 6 tests, one per spec scenario, covering `validar_reporte` |
 | `reportes/formularios.py` | Modified (PR2) | `_campos_de_rango` gains a `nodo_id` param; both `TimeField` widgets get `data-rango`/`data-rango-extremo`. `construir_formulario_seccion`: `seleccion` nodes whose `opciones` include `_VALOR_NO_CUMPLE` (imported from `reportes.validacion`, avoiding a duplicated literal) get a `data-requiere-observacion` attr on the select plus an injected `{clave}_observacion` `CharField(required=False)` with `data-observacion-de` on its widget |
 | `reportes/tests/test_formularios.py` | Modified (PR2) | 3 new tests: `data-rango`/`data-rango-extremo` on range widgets, companion-field injection + its data attrs when `"No cumple"` is an option, no companion field when it is not |
+| `reportes/views.py` | Modified (PR3) | Added `revision(request, reporte_id)` — `@login_required`, creador-scoped `get_object_or_404(Reporte, pk=…, creador=request.user)` (D9), calls `validar_reporte`, renders `reportes/revision.html` with `{"reporte", "resultado"}`. `paso`/`iniciar_reporte` untouched |
+| `reportes/urls.py` | Modified (PR3) | Added `path("<int:reporte_id>/revision/", views.revision, name="reportes_revision")` |
+| `reportes/templates/reportes/revision.html` | Created (PR3) | "Debes corregir" (`errores`) and "Advertencias" (`advertencias`) `<ul>`s, each `<li>` linking to `{% url 'reportes_paso' reporte.id problema.seccion_id %}`; `<button type="button" {% if not resultado.puede_generar %}disabled{% endif %}>Generar</button>` |
+| `reportes/tests/test_views.py` | Modified (PR3) | 5 new tests: creador GET 200 + lists both buckets, other-user 404 (D9), anon redirect to login, `disabled` present when `errores` non-empty, `disabled` absent when `errores` empty |
 
 ## TDD Cycle Evidence
 
@@ -94,6 +109,24 @@ is PR 4.
 - **Approval tests** (refactoring): None — no refactoring tasks in this batch
 - **Pure functions modified**: `_campos_de_rango` (signature grew a `nodo_id` param, still pure); `construir_formulario_seccion` (companion-field injection is a straight-line extension of the existing per-node loop, no new branching complexity)
 
+### TDD Cycle Evidence — PR 3 (Phase 4)
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | REFACTOR |
+|------|-----------|-------|------------|-----|-------|----------|
+| 4.1 | `reportes/tests/test_views.py::test_get_revision_como_creador_lista_errores_y_advertencias` | Integration (`@pytest.mark.django_db`, Django test client) | 14/14 pre-existing tests in the file | Confirmed failing: `django.urls.exceptions.NoReverseMatch: Reverse for 'reportes_revision' not found` | Confirmed passing after adding the URL, view, and template together | None needed |
+| 4.2 | same file, `test_get_revision_reporte_de_otro_usuario_da_404` | Integration | 15/15 | Same `NoReverseMatch` failure (no route existed yet) | Passed on first run once the route/view existed — `get_object_or_404(..., creador=request.user)` mirrors `paso`'s already-proven D9 pattern | — |
+| 4.3 | same file, `test_get_revision_anonimo_redirige_a_login` | Integration | 16/16 | Same `NoReverseMatch` failure | Passed on first run — `@login_required` mirrors `paso`'s decorator | — |
+| 4.4 | same file, `test_get_revision_con_errores_deshabilita_generar` + `test_get_revision_sin_errores_habilita_generar` | Integration | 17/17, 18/18 | Same `NoReverseMatch` failure | Passed on first run once the template's `{% if not resultado.puede_generar %}disabled{% endif %}` was written | — |
+
+All 5 new tests were written together (one RED batch — the shared failure mode, `NoReverseMatch`, is identical across all of them since none of the route/view/template pieces existed yet), then GREEN was reached with one implementation pass adding the view, URL, and template together (task 4.5-4.7), matching design's Interfaces/Contracts (`ProblemaDeReporte.seccion_id` → `reverse("reportes_paso", ...)`) exactly. Confirmed the RED failure was the right one (route missing, not a typo or unrelated error) before writing any implementation code.
+
+### Test Summary (PR3)
+- **Total tests written**: 5
+- **Total tests passing**: 5
+- **Layers used**: Unit (0), Integration (5 — Django test client + DB, exercising the full request/response/template-render cycle), E2E (0)
+- **Approval tests** (refactoring): None — no refactoring tasks in this batch
+- **New view**: `revision` (thin — delegates all validation logic to the already-tested `validar_reporte`; the view itself only adds creator-scoping + template selection, both directly asserted by the 5 new tests)
+
 ## Work Unit Evidence (Unit 1: `validacion.py` + fixture, anti-drift locked to generator)
 
 | Evidence | Value |
@@ -110,15 +143,26 @@ is PR 4.
 | Runtime harness command/scenario and exact result | `pytest reportes/tests/test_validacion.py reportes/tests/test_views.py reportes/tests/test_formularios.py` → `34 passed in 76.18s` — exercises `construir_formulario_seccion` through the real `paso` GET/POST view flow (`test_views.py`) with the new data attrs and companion field present, confirming no regression in section rendering/persistence. No browser/manual harness available in this batch (`paso.html` template is unmodified — PR 4 wires the attrs into markup) |
 | Rollback boundary | `reportes/formularios.py` diff (the `_VALOR_NO_CUMPLE` import, `_campos_de_rango`'s `nodo_id` param + two `attrs[...]` lines, and the companion-field injection block in `construir_formulario_seccion`) + the 3 new tests in `reportes/tests/test_formularios.py`; revertible without touching `validacion.py` (PR1), `views.py`/`urls.py`/templates (PR3-4) |
 
+## Work Unit Evidence (Unit 3: S-09 `revision` view + template + urls)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `pytest reportes/tests/test_views.py -k revision` → `5 passed in 24.97s` |
+| Runtime harness command/scenario and exact result | `pytest reportes/tests/test_views.py` (full file, no `-k`) → `19 passed in 78.78s` — exercises `revision` through the real Django test client/URL-resolver/template-render pipeline alongside all pre-existing `paso`/`iniciar_reporte` tests, confirming no regression. No live `manage.py runserver` browser check performed in this non-interactive batch; the integration test client covers the equivalent request/response/template boundary (GET, status codes, rendered HTML content) |
+| Rollback boundary | `reportes/views.py`'s `revision` function + its `from reportes.validacion import validar_reporte` import; `reportes/urls.py`'s one added `path(...)` entry; `reportes/templates/reportes/revision.html` (new file); the 5 new tests in `reportes/tests/test_views.py`. All revertible without touching `paso`/`iniciar_reporte`, `formularios.py` (PR2), `validacion.py` (PR1), or `paso.html`/`paso.js` (PR4) |
+
 ## Full Project Suite
 
 - Baseline before PR1 (safety net): `187 passed in 217.44s (0:03:37)`.
 - After PR1: `193 passed in 233.03s (0:03:53)` (187 pre-existing + 6 new, zero regressions).
-- After PR2 (this batch): `196 passed in 231.46s (0:03:51)` (full `pytest` run, no `-k`/file filter — 193 from PR1 + 3 new Phase 3 tests, zero regressions, zero pre-existing failures).
+- After PR2: `196 passed in 231.46s (0:03:51)` (full `pytest` run, no `-k`/file filter — 193 from PR1 + 3 new Phase 3 tests, zero regressions, zero pre-existing failures).
+- After PR3 (this batch): `201 passed in 246.93s (0:04:06)` (full `pytest` run, no `-k`/file filter — 196 from PR2 + 5 new Phase 4 tests, zero regressions, zero pre-existing failures). Note: a first attempt showed 7 unrelated failures (`IntegrityError: duplicate key ... codigo=instalacion-resinas`) caused by accidentally running two `pytest` invocations against the same test DB concurrently (one foreground, one backgrounded) — not a real regression. Re-ran once, alone, for the authoritative clean result above.
 
 ## Deviations from Design
 
 None — implementation matches `design.md`'s Interfaces/Contracts and Data Flow sections (PR1), and the "`formularios.py` changes (the JS contract)" subsection (PR2) exactly: `_campos_de_rango` grew the documented `nodo_id` param and sets both `data-rango`/`data-rango-extremo` attrs; `construir_formulario_seccion` injects the companion `CharField(required=False, label=f"{etiqueta} — Observación", widget=TextInput(attrs={"data-observacion-de": clave}))` and sets `data-requiere-observacion` on the select, gated on `tipo == SELECCION and _VALOR_NO_CUMPLE in (opciones or [])`. One implementation note not explicit in design: `_VALOR_NO_CUMPLE` is imported from `reportes.validacion` rather than redefined in `formularios.py`, avoiding a duplicated magic-string literal — consistent with the codebase's existing pattern of importing private (`_`-prefixed) symbols across these two modules (`validacion.py` already imports `generador._validar_completitud`; `formularios.py` already imports `tipos_reporte.validacion._iterar_nodos`). No circular import: `reportes.validacion` does not import `reportes.formularios`.
+
+PR3 also matches design's File Changes table exactly: `views.py` gained only the `revision` function (per D9, `paso`/`iniciar_reporte` untouched); `urls.py` gained the one documented `path(...)` entry; `revision.html` uses the two `<ul>`s + `<button type="button" {% if not puede_generar %}disabled{% endif %}>Generar</button>` shape from the design's File Changes row, sourced through `resultado.puede_generar` (the `ResultadoDeRevision` property already built in PR1) rather than re-deriving `not errores` in the template or view — no duplicated logic. Each `<li>` links to `{% url 'reportes_paso' reporte.id problema.seccion_id %}`, satisfying spec's "each item linked to its owning `paso`/`seccion`" wording via the existing `reportes_paso` route (no new URL-reversal helper needed).
 
 ## Issues Found
 
@@ -130,6 +174,9 @@ None.
 - PR1 — Unit 1: `validacion.py` + fixture, anti-drift locked to generator
   - Boundary: starts from a clean checkout (no prior apply-progress existed for this change); ends with `reportes/validacion.py` fully implemented and covered, `estructura_con_validaciones` fixture added, zero touches to `formularios.py`/`views.py`/`urls.py`/templates
   - Estimated review budget impact: well under 400 changed lines (fixture ~55 lines, `validacion.py` ~210 lines w/ docstrings, test file ~140 lines) — safely within PR1's slice of the forecasted 550-650 total
-- PR2 — Unit 2: `formularios.py` companion field + JS data attrs (this batch)
+- PR2 — Unit 2: `formularios.py` companion field + JS data attrs
   - Boundary: starts from PR1's merged/branch state (`reportes/validacion.py` already present, providing `_VALOR_NO_CUMPLE`); ends with `reportes/formularios.py`'s data-attribute contract fully implemented per design and covered by 3 new tests; zero touches to `views.py`/`urls.py`/templates/`paso.js` (PR3-4)
   - Estimated review budget impact: small (~30 changed lines in `formularios.py`, ~70 lines of new tests) — well within budget, PR3 (S-09 view/template) and PR4 (`paso.html`/`paso.js`) remain the larger remaining slices of the forecasted 550-650 total
+- PR3 — Unit 3: S-09 `revision` view + template + urls (this batch)
+  - Boundary: starts from PR2's merged/branch state (`reportes/validacion.py` and `reportes/formularios.py`'s companion field already present, though `revision` does not directly depend on the companion field — only on `validar_reporte`); ends with the full S-09 review screen reachable at `/reportes/<reporte_id>/revision/`, covered by 5 new integration tests; zero touches to `paso.html`/`paso.js` (PR4)
+  - Estimated review budget impact: small (~15 lines in `views.py`, ~10 lines in `urls.py`, ~35 lines in `revision.html`, ~110 lines of new tests) — well within budget; PR4 (`paso.html`/`paso.js` client-side layer) remains the larger remaining slice of the forecasted 550-650 total, followed by the Phase 6 regression pass

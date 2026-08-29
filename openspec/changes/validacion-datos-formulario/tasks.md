@@ -51,13 +51,13 @@ Chain strategy: pending
 
 ## Phase 4: S-09 review screen (TDD)
 
-- [ ] 4.1 RED `test_views.py`: GET `revision` as creador → 200, lists errores/advertencias
-- [ ] 4.2 RED: GET `revision` as another user → 404
-- [ ] 4.3 RED: GET `revision` anon → redirect to login
-- [ ] 4.4 RED: Generar `disabled` present iff `errores` non-empty (two cases)
-- [ ] 4.5 GREEN: add `revision` view to `reportes/views.py` (`@login_required`, creador-scoped `get_object_or_404`, calls `validar_reporte`)
-- [ ] 4.6 GREEN: add `path("<int:reporte_id>/revision/", ...)` to `reportes/urls.py`
-- [ ] 4.7 GREEN: create `reportes/templates/reportes/revision.html` — Debes corregir / Advertencias lists linked via `reportes_paso`, Generar button
+- [x] 4.1 RED `test_views.py`: GET `revision` as creador → 200, lists errores/advertencias
+- [x] 4.2 RED: GET `revision` as another user → 404
+- [x] 4.3 RED: GET `revision` anon → redirect to login
+- [x] 4.4 RED: Generar `disabled` present iff `errores` non-empty (two cases)
+- [x] 4.5 GREEN: add `revision` view to `reportes/views.py` (`@login_required`, creador-scoped `get_object_or_404`, calls `validar_reporte`)
+- [x] 4.6 GREEN: add `path("<int:reporte_id>/revision/", ...)` to `reportes/urls.py`
+- [x] 4.7 GREEN: create `reportes/templates/reportes/revision.html` — Debes corregir / Advertencias lists linked via `reportes_paso`, Generar button
 
 ## Phase 5: Client-side JS layer (TDD)
 

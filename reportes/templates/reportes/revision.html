@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Revisión — Reporte #{{ reporte.id }}{% endblock %}
+
+{% block content %}
+<h1>Revisión del reporte</h1>
+
+{% if resultado.errores %}
+<section>
+    <h2>Debes corregir</h2>
+    <ul>
+        {% for problema in resultado.errores %}
+        <li>
+            <a href="{% url 'reportes_paso' reporte.id problema.seccion_id %}">
+                {{ problema.mensaje }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if resultado.advertencias %}
+<section>
+    <h2>Advertencias</h2>
+    <ul>
+        {% for problema in resultado.advertencias %}
+        <li>
+            <a href="{% url 'reportes_paso' reporte.id problema.seccion_id %}">
+                {{ problema.mensaje }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<button type="button" {% if not resultado.puede_generar %}disabled{% endif %}>Generar</button>
+{% endblock %}
