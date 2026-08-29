@@ -258,6 +258,49 @@ def test_post_paso_no_ultima_seccion_redirige_a_siguiente(sesion_de_creador):
 
 
 # ---------------------------------------------------------------------------
+# paso — client-side JS contract (backlog validacion-datos-formulario, Phase 5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_get_paso_incluye_atributos_data_y_script_paso_js(
+    client, estructura_con_validaciones, reporte_con_validaciones_factory
+):
+    """GET `paso` HTML must carry the JS contract's data attributes plus a
+    deferred `paso.js` script tag (spec: "Client-side hora range feedback",
+    "\"No cumple\" observación toggling"; design's `paso.html`/`paso.js`
+    File Changes rows and "the JS contract" subsection). No JS test runner
+    exists in this project, so this rendered-attribute contract is the only
+    coverage for `paso.js` (design's Testing Strategy, explicitly
+    accepted)."""
+    reporte = reporte_con_validaciones_factory(client, estructura_con_validaciones)
+
+    respuesta_datos = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    contenido_datos = respuesta_datos.content.decode()
+
+    assert respuesta_datos.status_code == 200
+    assert 'data-campo="observaciones-generales"' in contenido_datos
+    assert 'data-campo="estado-general"' in contenido_datos
+    assert 'data-campo="estado-general_observacion"' in contenido_datos
+    assert 'data-requiere-observacion="estado-general_observacion"' in contenido_datos
+    assert "data-siguiente" in contenido_datos
+    assert 'reportes/paso.js"' in contenido_datos
+    assert " defer" in contenido_datos
+
+    respuesta_proceso = client.get(
+        reverse("reportes_paso", args=[reporte.id, "proceso-instalacion"])
+    )
+    contenido_proceso = respuesta_proceso.content.decode()
+
+    assert respuesta_proceso.status_code == 200
+    assert 'data-campo="p-01_inicio"' in contenido_proceso
+    assert 'data-campo="p-01_fin"' in contenido_proceso
+    assert 'data-rango="p-01"' in contenido_proceso
+
+
+# ---------------------------------------------------------------------------
 # revision (S-09 review screen; spec `validacion-reporte`)
 # ---------------------------------------------------------------------------
 
@@ -404,3 +447,30 @@ def test_post_paso_sin_valor_obligatorio_no_bloquea(sesion_de_creador):
     assert not ValorDeReporte.objects.filter(
         reporte=reporte, identificador_de_campo="turno"
     ).exists()
+
+
+@pytest.mark.django_db
+def test_post_paso_con_rango_invalido_no_bloquea(sesion_de_creador):
+    """Server-side non-blocking hora range re-check (spec: "Direct POST
+    with invalid hora range still persists"): a stray `fin <= inicio` POST
+    must still upsert both values and must NOT be blocked server-side —
+    the design decision routes the actual check through `validar_reporte`
+    at the S-09 gate, not through `paso`'s POST handler, so this test
+    proves the existing non-blocking POST contract already covers it
+    without any new server-side branch."""
+    client, reporte = sesion_de_creador
+
+    response = client.post(
+        reverse("reportes_paso", args=[reporte.id, "proceso-instalacion"]),
+        data={"p-01_inicio": "10:00", "p-01_fin": "08:00"},
+    )
+
+    assert response.status_code == 302
+    inicio = ValorDeReporte.objects.get(
+        reporte=reporte, identificador_de_campo="p-01_inicio"
+    )
+    fin = ValorDeReporte.objects.get(
+        reporte=reporte, identificador_de_campo="p-01_fin"
+    )
+    assert inicio.valor == "10:00"
+    assert fin.valor == "08:00"

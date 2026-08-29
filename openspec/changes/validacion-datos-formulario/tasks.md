@@ -61,12 +61,12 @@ Chain strategy: pending
 
 ## Phase 5: Client-side JS layer (TDD)
 
-- [ ] 5.1 RED `test_views.py`: `paso` GET HTML contains `data-campo`, `data-rango`, `data-requiere-observacion`, `data-siguiente`, `<script src=".../paso.js">`
-- [ ] 5.2 GREEN: modify `reportes/templates/reportes/paso.html` — wrap fields in `<p data-campo>`, add `{% load static %}` + deferred script, `data-siguiente` on nav anchor
-- [ ] 5.3 GREEN: create `reportes/static/reportes/paso.js` — hora-range lexicographic compare disables Siguiente/submit; No-cumple toggle sets/strips `required` on hidden observación input
+- [x] 5.1 RED `test_views.py`: `paso` GET HTML contains `data-campo`, `data-rango`, `data-requiere-observacion`, `data-siguiente`, `<script src=".../paso.js">`
+- [x] 5.2 GREEN: modify `reportes/templates/reportes/paso.html` — wrap fields in `<p data-campo>`, add `{% load static %}` + deferred script, `data-siguiente` on nav anchor
+- [x] 5.3 GREEN: create `reportes/static/reportes/paso.js` — hora-range lexicographic compare disables Siguiente/submit; No-cumple toggle sets/strips `required` on hidden observación input
 
 ## Phase 6: Regression
 
-- [ ] 6.1 Run `test_post_paso_sin_valor_obligatorio_no_bloquea` unmodified — confirm still passes (`paso` POST untouched, design decision 2)
-- [ ] 6.2 Add `test_post_paso_con_rango_invalido_no_bloquea` — 302 + both values persisted, no server-side block in `paso` POST
-- [ ] 6.3 Full suite: `pytest reportes/tests/test_validacion.py reportes/tests/test_views.py reportes/tests/test_formularios.py`
+- [x] 6.1 Run `test_post_paso_sin_valor_obligatorio_no_bloquea` unmodified — confirm still passes (`paso` POST untouched, design decision 2)
+- [x] 6.2 Add `test_post_paso_con_rango_invalido_no_bloquea` — 302 + both values persisted, no server-side block in `paso` POST
+- [x] 6.3 Full suite: `pytest reportes/tests/test_validacion.py reportes/tests/test_views.py reportes/tests/test_formularios.py`
