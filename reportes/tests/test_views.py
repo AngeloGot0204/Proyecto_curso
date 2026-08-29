@@ -208,6 +208,26 @@ def test_post_paso_repetido_no_duplica_fila(sesion_de_creador):
 
 
 @pytest.mark.django_db
+def test_post_paso_rango_hora_inicio_fin_persiste_dos_filas(sesion_de_creador):
+    client, reporte = sesion_de_creador
+
+    response = client.post(
+        reverse("reportes_paso", args=[reporte.id, "proceso-instalacion"]),
+        data={"p-01_inicio": "08:00", "p-01_fin": "10:00"},
+    )
+
+    assert response.status_code == 302
+    inicio = ValorDeReporte.objects.get(
+        reporte=reporte, identificador_de_campo="p-01_inicio"
+    )
+    fin = ValorDeReporte.objects.get(
+        reporte=reporte, identificador_de_campo="p-01_fin"
+    )
+    assert inicio.valor == "08:00"
+    assert fin.valor == "10:00"
+
+
+@pytest.mark.django_db
 def test_post_paso_ultima_seccion_redirige_a_si_misma(sesion_de_creador):
     client, reporte = sesion_de_creador
 
