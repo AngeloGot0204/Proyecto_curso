@@ -60,14 +60,31 @@ class ValoresIncompletos(ProblemaDeGeneracion):
 _SUFIJO_POR_CLAVE = {"celda": "", "celda_inicio": "_inicio", "celda_fin": "_fin"}
 
 
+def claves_de_valor(nodo):
+    """`valores`-dict keys one campo/item declares (design D5). Public so
+    both this module and `reportes` (the wizard app) derive the exact same
+    `ValorDeReporte.identificador_de_campo` names from one owner — never a
+    copy of `_SUFIJO_POR_CLAVE` that could drift. Extracted from
+    `_destinos`, which still owns pairing each key with its cell
+    coordinate."""
+    return [
+        f"{nodo['id']}{_SUFIJO_POR_CLAVE[clave]}"
+        for clave in _claves_de_celda_requeridas(nodo.get("tipo"))
+    ]
+
+
 def _destinos(nodo):
     """`(clave_en_valores, coordenada)` pairs for one campo/item (design
     D1). Single derivation shared by the completeness pass and the write
     pass, so a validated-as-present key can never be written to the wrong
-    cell — `_claves_de_celda_requeridas` already encodes range-vs-scalar."""
+    cell — `_claves_de_celda_requeridas` already encodes range-vs-scalar.
+    Keys come from `claves_de_valor` (design D5); this function only adds
+    each key's cell coordinate."""
     return [
-        (f"{nodo['id']}{_SUFIJO_POR_CLAVE[clave]}", nodo[clave])
-        for clave in _claves_de_celda_requeridas(nodo.get("tipo"))
+        (clave, nodo[clave_de_celda])
+        for clave, clave_de_celda in zip(
+            claves_de_valor(nodo), _claves_de_celda_requeridas(nodo.get("tipo"))
+        )
     ]
 
 
