@@ -227,6 +227,52 @@ def plantilla_xlsx(tmp_path):
 
 
 @pytest.fixture
+def reporte_listo_para_cerrar(
+    client,
+    usuario_factory,
+    estructura_con_validaciones,
+    tipo_con_definicion_activa_factory,
+    plantilla_xlsx,
+):
+    """A `(client, reporte)` pair ready for `cerrar_reporte` (backlog #7,
+    task 3.2, design's Testing Strategy): built on
+    `estructura_con_validaciones` with a real `.xlsx` template
+    (`rangos=("M10:P10", "M12:P12", "M25:P25")`) and all four obligatorio
+    `ValorDeReporte` rows persisted, so `puede_generar` is True. The
+    creador is already logged into `client`."""
+    from reportes.models import Reporte, ValorDeReporte
+
+    destino = plantilla_xlsx(rangos=("M10:P10", "M12:P12", "M25:P25"))
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+
+    creador = usuario_factory(username="creador_listo_para_cerrar")
+    tipo, definicion = tipo_con_definicion_activa_factory(
+        estructura=estructura_con_validaciones(),
+        plantilla=SimpleUploadedFile("plantilla.xlsx", contenido),
+    )
+    reporte = Reporte.objects.create(
+        tipo=tipo, definicion=definicion, creador=creador
+    )
+
+    for identificador, valor in (
+        ("observaciones-generales", "Todo en orden."),
+        ("estado-general", "Cumple"),
+        ("p-01_inicio", "08:00"),
+        ("p-01_fin", "09:00"),
+    ):
+        ValorDeReporte.objects.create(
+            reporte=reporte,
+            identificador_de_campo=identificador,
+            valor=valor,
+            autor=creador,
+        )
+
+    client.force_login(creador)
+    return client, reporte
+
+
+@pytest.fixture
 def cliente_autenticado(client, usuario_factory):
     """A Django test client already logged in as a fresh Usuario
     (`client.force_login` — authentication itself is #2's tested concern,

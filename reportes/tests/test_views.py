@@ -10,9 +10,10 @@ Non-blocking obligatorio marker).
 """
 
 import pytest
+from django.contrib.messages import get_messages
 from django.urls import reverse
 
-from reportes.models import Reporte, ValorDeReporte
+from reportes.models import EstadoDeReporte, Reporte, ValorDeReporte, VistoBueno
 
 
 @pytest.fixture
@@ -474,3 +475,67 @@ def test_post_paso_con_rango_invalido_no_bloquea(sesion_de_creador):
     )
     assert inicio.valor == "10:00"
     assert fin.valor == "08:00"
+
+
+# ---------------------------------------------------------------------------
+# cerrar_reporte (backlog #7, task 4; spec `cierre-reporte`; design D2, D9)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_cerrar_reporte_no_creador_devuelve_404(
+    cliente_autenticado, usuario_factory, reporte_factory
+):
+    otro_creador = usuario_factory(username="otro_creador_cierre")
+    reporte = reporte_factory(creador=otro_creador)
+
+    response = cliente_autenticado.post(
+        reverse("reportes_cerrar", args=[reporte.id])
+    )
+
+    assert response.status_code == 404
+    assert not VistoBueno.objects.filter(reporte=reporte).exists()
+
+
+@pytest.mark.django_db
+def test_cerrar_reporte_rechazado_si_no_puede_generar(
+    client, estructura_con_validaciones, reporte_con_validaciones_factory
+):
+    # No `ValorDeReporte` rows persisted — every obligatorio is missing, so
+    # `puede_generar` is False.
+    reporte = reporte_con_validaciones_factory(client, estructura_con_validaciones)
+
+    response = client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    assert not VistoBueno.objects.filter(reporte=reporte).exists()
+    reporte.refresh_from_db()
+    assert reporte.estado == EstadoDeReporte.EN_PROGRESO
+
+
+@pytest.mark.django_db
+def test_cerrar_reporte_creador_exitoso(reporte_listo_para_cerrar):
+    client, reporte = reporte_listo_para_cerrar
+
+    response = client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    assert VistoBueno.objects.filter(
+        reporte=reporte, usuario=reporte.creador
+    ).exists()
+    reporte.refresh_from_db()
+    assert reporte.estado == EstadoDeReporte.TERMINADO
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_revision", args=[reporte.id])
+
+
+@pytest.mark.django_db
+def test_cerrar_reporte_doble_post_es_idempotente(reporte_listo_para_cerrar):
+    client, reporte = reporte_listo_para_cerrar
+
+    primera = client.post(reverse("reportes_cerrar", args=[reporte.id]))
+    segunda = client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    assert primera.status_code == 302
+    assert segunda.status_code == 302
+    assert VistoBueno.objects.filter(reporte=reporte).count() == 1
+    mensajes_segunda = list(get_messages(segunda.wsgi_request))
+    assert any(mensaje.level_tag == "success" for mensaje in mensajes_segunda)

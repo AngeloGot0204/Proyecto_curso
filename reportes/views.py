@@ -20,17 +20,23 @@ spec `validacion-reporte`) is a GET-only, creator-scoped view that calls
 `reportes.validacion.validar_reporte` and renders its two buckets.
 """
 
+import logging
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from reportes.formularios import construir_formulario_seccion
-from reportes.models import Reporte
+from reportes.models import EstadoDeReporte, Reporte, VistoBueno
 from reportes.valores import desde_texto, guardar_valor, valores_de_reporte
 from reportes.validacion import validar_reporte
 from tipos_reporte.models import TipoDeReporte
+
+logger = logging.getLogger(__name__)
 
 
 def _seccion_por_id(estructura, seccion_id):
@@ -146,3 +152,35 @@ def revision(request, reporte_id):
         "resultado": resultado,
     }
     return render(request, "reportes/revision.html", contexto)
+
+
+@login_required
+@require_POST
+def cerrar_reporte(request, reporte_id):
+    """`POST /reportes/<reporte_id>/cerrar/` (backlog #7; spec
+    `cierre-reporte`; design D2, D9). Creator-scoped exactly like `paso`
+    and `revision`: a `Reporte` that exists but belongs to someone else
+    404s exactly like one that does not exist. Re-validates
+    `puede_generar` server-side — independent of any client-side gating in
+    `revision.html` — before creating the `VistoBueno`. `get_or_create`
+    inside `transaction.atomic()` makes a double-POST an idempotent no-op
+    (design D2): a bare `create()` would raise `IntegrityError` on the
+    `OneToOneField` for a double-click, which is exactly the raw-500
+    failure mode this design forbids."""
+    reporte = get_object_or_404(Reporte, pk=reporte_id, creador=request.user)
+    if not validar_reporte(reporte).puede_generar:
+        messages.error(
+            request,
+            "El reporte todavía tiene errores pendientes; no puede cerrarse.",
+        )
+        return redirect("reportes_revision", reporte_id=reporte.id)
+
+    with transaction.atomic():
+        VistoBueno.objects.get_or_create(
+            reporte=reporte, defaults={"usuario": request.user}
+        )
+        reporte.estado = EstadoDeReporte.TERMINADO
+        reporte.save(update_fields=["estado"])
+
+    messages.success(request, "Reporte cerrado. Ya puede generarse el documento.")
+    return redirect("reportes_revision", reporte_id=reporte.id)

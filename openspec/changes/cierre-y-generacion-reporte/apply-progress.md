@@ -1,8 +1,8 @@
 # Apply Progress: Cierre manual (visto bueno) y generación del documento
 
-## Batch 1 (this run) — Work Unit 1 / PR 1
+## Batch 1 — Work Unit 1 / PR 1 (merged)
 
-**Scope**: Phase 1 (Models & Migrations), Phase 2 (Shared Valores Helper refactor), Phase 3 task 3.1 only (`plantilla_xlsx` fixture). `cerrar_reporte`, `generar`, and template wiring (Phases 4-6, task 3.2) are explicitly deferred to PR 2/PR 3 per the assigned work-unit boundary.
+**Scope**: Phase 1 (Models & Migrations), Phase 2 (Shared Valores Helper refactor), Phase 3 task 3.1 only (`plantilla_xlsx` fixture).
 
 ### Completed Tasks
 
@@ -18,74 +18,90 @@
 - [x] 2.3 REFACTOR: `reportes/validacion.py::validar_reporte` uses `valores_de_reporte`
 - [x] 2.4 REFACTOR: `reportes/views.py::paso` uses `valores_de_reporte`; dropped now-unused `ValorDeReporte` import
 - [x] 2.5 `pytest reportes/tests/ -k "validar_reporte_coincide_con_validar_completitud or paso" -q` → 14 passed
-- [x] 3.1 `plantilla_xlsx(tmp_path)` fixture added to `reportes/tests/conftest.py`, with a dedicated RED→GREEN test (`test_conftest_plantilla_xlsx.py`) since it did not exist as a task-3.1 assertion in tasks.md but is required by strict TDD for any new fixture behavior
+- [x] 3.1 `plantilla_xlsx(tmp_path)` fixture added to `reportes/tests/conftest.py`, with a dedicated RED→GREEN test (`test_conftest_plantilla_xlsx.py`)
 - [x] 3.3 (scoped) `pytest reportes/tests/ -q` smoke check → no regressions
 
-### Deferred (out of scope for this PR 1 batch)
+## Batch 2 (this run) — Work Unit 2 / PR 2
 
-- [ ] 3.2 `reporte_listo_para_cerrar` fixture — deferred to PR 2 (`cerrar_reporte` work unit)
-- [ ] Phase 4 — `cerrar_reporte` view (PR 2)
+**Scope**: task 3.2 (`reporte_listo_para_cerrar` fixture, deferred from PR 1) + Phase 4 (`cerrar_reporte` view). `generar`, its template wiring, and Phases 5-7 remain deferred to PR 3.
+
+### Completed Tasks
+
+- [x] 3.2 `reporte_listo_para_cerrar` fixture added to `reportes/tests/conftest.py`: `(client, reporte)` built on `estructura_con_validaciones` with a real `plantilla_xlsx` (`rangos=("M10:P10", "M12:P12", "M25:P25")`), the creador logged in, and all four obligatorio `ValorDeReporte` rows persisted (`observaciones-generales="Todo en orden."`, `estado-general="Cumple"`, `p-01_inicio="08:00"`, `p-01_fin="09:00"`) so `puede_generar` is true.
+- [x] 4.1 RED: `test_cerrar_reporte_no_creador_devuelve_404`
+- [x] 4.2 RED: `test_cerrar_reporte_rechazado_si_no_puede_generar`
+- [x] 4.3 RED: `test_cerrar_reporte_creador_exitoso` (uses `reporte_listo_para_cerrar`)
+- [x] 4.4 RED: `test_cerrar_reporte_doble_post_es_idempotente`
+- [x] 4.5 GREEN: `reportes/urls.py` — `path("<int:reporte_id>/cerrar/", views.cerrar_reporte, name="reportes_cerrar")`
+- [x] 4.6 GREEN: `reportes/views.py` — module-level `logger = logging.getLogger(__name__)`; `cerrar_reporte` implemented per design (creator-scoped `get_object_or_404`, server-side `puede_generar` re-check, `get_or_create(VistoBueno)` + `estado=TERMINADO` inside `transaction.atomic()`, redirect to `reportes_revision` with flash message on both paths)
+- [x] 4.7 `pytest reportes/tests/test_views.py -k cerrar -q` → 4 passed
+
+### Deferred (out of scope for this PR 2 batch)
+
 - [ ] Phase 5 — `generar` view (PR 3)
 - [ ] Phase 6 — Template & Messages wiring (PR 3)
-- [ ] Phase 7 — Full regression & cleanup (final PR, after PR 2/PR 3 land)
+- [ ] Phase 7 — Full regression & cleanup (final PR, after PR 3 lands)
 
-## Files Changed
+## Files Changed (cumulative)
 
 | File | Action | What Was Done |
 |------|--------|---------------|
-| `reportes/models.py` | Modified | Added `EstadoDeReporte.TERMINADO`; added `VistoBueno` (`OneToOneField(Reporte)`); added `Generacion` (`ForeignKey(Reporte)`, unbounded) |
-| `reportes/migrations/0002_estado_terminado.py` | Created | `AlterField` on `Reporte.estado` — choices-only, no DDL |
-| `reportes/migrations/0003_vistobueno_generacion.py` | Created | `CreateModel` × 2 (`Generacion`, `VistoBueno`) |
-| `reportes/valores.py` | Modified | Added `valores_de_reporte(reporte) -> dict[str, str]` |
-| `reportes/validacion.py` | Modified | `validar_reporte` now calls `valores_de_reporte(reporte)` instead of the inline comprehension |
-| `reportes/views.py` | Modified | `paso`'s GET rehydration now calls `valores_de_reporte(reporte)`; dropped unused `ValorDeReporte` import |
-| `reportes/tests/conftest.py` | Modified | Added `plantilla_xlsx(tmp_path)` factory fixture (mirrors `tipos_reporte/tests/conftest.py`) |
-| `reportes/tests/test_models.py` | Modified | Added TERMINADO/VistoBueno/Generacion tests; updated import to include `Generacion`, `VistoBueno` |
-| `reportes/tests/test_valores.py` | Modified | Added `valores_de_reporte` tests; updated import |
-| `reportes/tests/test_conftest_plantilla_xlsx.py` | Created | RED→GREEN test proving `plantilla_xlsx` builds a real, loadable workbook with the requested sheet/merged ranges |
+| `reportes/models.py` | Modified (PR 1) | Added `EstadoDeReporte.TERMINADO`; added `VistoBueno` (`OneToOneField(Reporte)`); added `Generacion` (`ForeignKey(Reporte)`, unbounded) |
+| `reportes/migrations/0002_estado_terminado.py` | Created (PR 1) | `AlterField` on `Reporte.estado` — choices-only, no DDL |
+| `reportes/migrations/0003_vistobueno_generacion.py` | Created (PR 1) | `CreateModel` × 2 (`Generacion`, `VistoBueno`) |
+| `reportes/valores.py` | Modified (PR 1) | Added `valores_de_reporte(reporte) -> dict[str, str]` |
+| `reportes/validacion.py` | Modified (PR 1) | `validar_reporte` now calls `valores_de_reporte(reporte)` instead of the inline comprehension |
+| `reportes/tests/conftest.py` | Modified (PR 1: `plantilla_xlsx`; PR 2: `reporte_listo_para_cerrar`) | Added both fixtures |
+| `reportes/tests/test_models.py` | Modified (PR 1) | Added TERMINADO/VistoBueno/Generacion tests |
+| `reportes/tests/test_valores.py` | Modified (PR 1) | Added `valores_de_reporte` tests |
+| `reportes/tests/test_conftest_plantilla_xlsx.py` | Created (PR 1) | RED→GREEN test for `plantilla_xlsx` |
+| `reportes/tests/test_conftest_reporte_listo_para_cerrar.py` | Created (PR 2) | RED→GREEN test proving the fixture builds an eligible-to-close `Reporte` and logs its creador in |
+| `reportes/urls.py` | Modified (PR 2) | Added `reportes_cerrar` route |
+| `reportes/views.py` | Modified (PR 2) | Added `logging` import, module `logger`, `messages`/`transaction` imports; `paso`'s GET rehydration already used `valores_de_reporte` (PR 1); implemented `cerrar_reporte` |
+| `reportes/tests/test_views.py` | Modified (PR 2) | Added `EstadoDeReporte`, `VistoBueno`, `get_messages` imports; added 4 `cerrar_reporte` tests |
 
 ## TDD Cycle Evidence
 
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
 |------|-----------|-------|------------|-----|-------|-------------|----------|
-| 1.1/1.2 | `reportes/tests/test_models.py` | Unit | ✅ 62/62 (project baseline, `reportes/` suite) | ✅ Written — `AttributeError: type object 'EstadoDeReporte' has no attribute 'TERMINADO'` | ✅ Passed | ➖ Single (structural TextChoices member; no branching) | ➖ None needed |
-| 1.4/1.5 | `reportes/tests/test_models.py` | Unit (DB) | ✅ (same baseline) | ✅ Written — `ImportError: cannot import name 'Generacion'` | ✅ Passed (8/8 in file) | ✅ 3 cases (defaults/auto_now_add, IntegrityError on second VistoBueno, N Generacion rows) | ➖ None needed — models are declarative |
-| 2.1/2.2 | `reportes/tests/test_valores.py` | Unit (DB) | ✅ (existing 17 tests in file) | ✅ Written — `ImportError: cannot import name 'valores_de_reporte'` | ✅ Passed (19/19 in file) | ✅ 2 cases (non-empty dict from rows, empty dict from empty report) | ➖ None needed — single dict comprehension |
-| 2.3/2.4 | `reportes/tests/test_validacion.py`, `reportes/tests/test_views.py` | Approval (refactor) | ✅ Existing tests ARE the approval tests — ran before touching `validacion.py`/`views.py` | N/A — refactor task, behavior-preserving by design D5 | ✅ 14/14 passed after refactor (`validar_reporte_coincide_con_validar_completitud` + all `paso` tests) | N/A (refactor, no new behavior) | ✅ Extracted duplication into shared `valores_de_reporte` |
-| 3.1 | `reportes/tests/test_conftest_plantilla_xlsx.py` | Unit | ✅ (new file) | ✅ Written — `fixture 'plantilla_xlsx' not found` | ✅ Passed | ➖ Single (fixture mirrors an already-tested upstream pattern in `tipos_reporte`) | ➖ None needed |
+| 1.1/1.2 | `reportes/tests/test_models.py` | Unit | ✅ 62/62 (project baseline) | ✅ Written | ✅ Passed | ➖ Single (structural) | ➖ None needed |
+| 1.4/1.5 | `reportes/tests/test_models.py` | Unit (DB) | ✅ (same baseline) | ✅ Written | ✅ Passed (8/8) | ✅ 3 cases | ➖ None needed |
+| 2.1/2.2 | `reportes/tests/test_valores.py` | Unit (DB) | ✅ (existing 17 in file) | ✅ Written | ✅ Passed (19/19) | ✅ 2 cases | ➖ None needed |
+| 2.3/2.4 | `test_validacion.py`, `test_views.py` | Approval (refactor) | ✅ Existing tests ARE approval tests | N/A — refactor, behavior-preserving | ✅ 14/14 passed after refactor | N/A (refactor) | ✅ Extracted `valores_de_reporte` |
+| 3.1 | `test_conftest_plantilla_xlsx.py` | Unit | ✅ (new file) | ✅ Written — fixture not found | ✅ Passed | ➖ Single | ➖ None needed |
+| 3.2 | `test_conftest_reporte_listo_para_cerrar.py` | Integration (DB) | ✅ 69/69 (`reportes/` before this batch) | ✅ Written — `fixture 'reporte_listo_para_cerrar' not found` | ✅ Passed (1/1) | ➖ Single (fixture is a single deterministic build, mirrors the already-triangulated `plantilla_xlsx` pattern) | ➖ None needed — declarative fixture assembly |
+| 4.1-4.4 | `reportes/tests/test_views.py` | Integration (DB) | ✅ 70/70 (`reportes/` after 3.2, before Phase 4) | ✅ Written — all 4 failed with `NoReverseMatch: Reverse for 'reportes_cerrar' not found` (route did not exist) | ✅ Passed (4/4) after 4.5/4.6 | ✅ 4 cases (non-creator 404, ineligible rejection, happy path, idempotent double-POST) covering every `cierre-reporte` spec scenario | ➖ None needed — view matches design's exact contract verbatim, no duplication to extract |
 
-### Test Summary
+### Test Summary (Batch 2)
 
-- **Total tests written this batch**: 7 (1 model/estado + 3 model/visto-bueno-generacion + 2 valores + 1 fixture)
-- **Total tests passing (`reportes/` full suite)**: 69 (baseline 62 + 7 new — confirmed via `pytest reportes/ -q`)
-- **Layers used**: Unit (all — Django ORM model/queryset tests run against the test DB, consistent with this repo's existing pattern)
-- **Approval tests**: 2 files reused as approval tests for the Phase 2 refactor (`test_validacion.py`, relevant `test_views.py` `paso` tests) — 14 passed unchanged
-- **Pure functions created**: 1 (`valores_de_reporte`)
+- **Total tests written this batch**: 5 (1 fixture-proof + 4 `cerrar_reporte` view tests)
+- **Total tests passing (`reportes/` full suite)**: 74 (baseline 69 + 5 new — confirmed via `pytest reportes/ -q`)
+- **Layers used**: Integration (all 5 — Django test client against real DB-backed views/fixtures, consistent with this repo's existing pattern)
+- **Approval tests**: None — no refactoring in this batch
+- **Pure functions created**: 0 (view function `cerrar_reporte` has one side-effecting DB write path, matches `paso`'s existing shape)
 
-## Work Unit Evidence
+## Work Unit Evidence (Batch 2 / PR 2)
 
 | Evidence | Value |
 |---|---|
-| Focused test command and exact result | `pytest reportes/tests/test_models.py reportes/tests/test_valores.py -q` → all passing (8 + 19 = 27 passed in those two files alone) |
-| Runtime harness command/scenario and exact result | `pytest`'s `--reuse-db` (pytest-django) ran `migrate` against the real test Postgres/SQLite DB to apply `0002_estado_terminado` and `0003_vistobueno_generacion` before any test executed — this IS the "migrate on a scratch DB" harness the tasks artifact specifies; migrations applied cleanly with no errors. Confirmed additionally via `manage.py makemigrations --check --dry-run --skip-checks` → "No changes detected" (models and migrations are in sync). |
-| Rollback boundary | Revert `reportes/migrations/0002_estado_terminado.py`, `reportes/migrations/0003_vistobueno_generacion.py`, the `models.py` additions (`TERMINADO`, `VistoBueno`, `Generacion`), `valores.py::valores_de_reporte`, the `validacion.py`/`views.py` call-site swaps, and the new/modified test files. No data migration or backfill exists — existing `Reporte` rows keep `estado="en_progreso"`; `VistoBueno`/`Generacion` tables are empty and unreferenced by any other code path in this batch. |
+| Focused test command and exact result | `pytest reportes/tests/test_views.py -k cerrar -q` → `4 passed, 21 deselected` |
+| Runtime harness command/scenario and exact result | Manual POST via Django test client (per the tasks artifact's designated runtime harness for this unit) — exercised directly by all 4 `cerrar_reporte` integration tests, including the real idempotent double-POST scenario (`test_cerrar_reporte_doble_post_es_idempotente`) which sends two real sequential `client.post()` calls and asserts exactly one `VistoBueno` row plus no 500/`IntegrityError` |
+| Rollback boundary | Revert `reportes/views.py::cerrar_reporte` (and its new imports: `logging`, `messages`, `transaction`, `EstadoDeReporte`, `VistoBueno`), the `reportes_cerrar` entry in `reportes/urls.py`, the `reporte_listo_para_cerrar` fixture in `reportes/tests/conftest.py`, `reportes/tests/test_conftest_reporte_listo_para_cerrar.py`, and the 4 new tests + `EstadoDeReporte`/`VistoBueno`/`get_messages` imports in `reportes/tests/test_views.py`. `VistoBueno` rows created by manual testing (if any) remain valid but unused; no data loss. PR 1's models/migrations/valores refactor stay functional standalone. |
 
 ## Full Suite Confirmation
 
-- `pytest reportes/ -q` (baseline, before this batch): **62 passed**
-- `pytest reportes/ -q` (after this batch): **69 passed** in 131.84s
-- `pytest -q` (full project suite, after this batch): **210 passed** in 266.92s
-- `test_validar_reporte_coincide_con_validar_completitud` confirmed passing unchanged after the `valores_de_reporte` refactor (part of the 14/14 run above).
+- `pytest reportes/ -q` (baseline, before Batch 2): **69 passed**
+- `pytest reportes/ -q` (after Batch 2): **74 passed** in 158.71s
+- `pytest -q` (full project suite, after Batch 2, first run): **214 passed, 1 failed** — the 1 failure (`usuarios/tests/test_models.py::test_create_superuser_forces_rol_administrador`) was a transient Postgres connection drop (`OperationalError: server closed the connection unexpectedly`), unrelated to any file touched in this batch.
+- `pytest -q --reuse-db` (full project suite, re-run to confirm flake): **215 passed** in 294.15s — confirms the earlier failure was infrastructure flake, not a regression.
+- `manage.py makemigrations --check --dry-run --skip-checks` → "No changes detected" (no model changes in this batch; models/migrations still in sync from PR 1).
 
 ## Deviations from Design
 
 None — implementation matches design.md exactly:
-- `EstadoDeReporte.TERMINADO = "terminado", "Terminado"` (Interfaces/Contracts)
-- `VistoBueno`/`Generacion` field shapes, `on_delete` choices, and `related_name`s match the design's Interfaces/Contracts block verbatim
-- Migration 0002 is `AlterField` (choices-only); migration 0003 is `CreateModel` × 2 (Migration/Rollout section)
-- `valores_de_reporte(reporte) -> dict[str, str]` signature and body match design D5 exactly
-
-One addition beyond the literal task list: task 3.1 in tasks.md did not itself specify a test, but strict TDD requires a failing test before any new production/test-infrastructure behavior, so `test_conftest_plantilla_xlsx.py` was added to prove the fixture's construction is real (not asserted elsewhere yet, since `reporte_listo_para_cerrar` — the fixture that will consume it in PR 2 — is deferred).
+- `cerrar_reporte` body matches the Interfaces/Contracts code block verbatim (creator-scoped `get_object_or_404`, `puede_generar` re-check with `messages.error` + redirect, `transaction.atomic()` with `get_or_create` + `estado=TERMINADO` + `save(update_fields=["estado"])`, `messages.success` + redirect)
+- `reporte_listo_para_cerrar` fixture matches the design's Testing Strategy "Fixtures" paragraph exactly (same field values, same template `rangos`)
+- Route added exactly as specified: `path("<int:reporte_id>/cerrar/", views.cerrar_reporte, name="reportes_cerrar")`
 
 ## Issues Found
 

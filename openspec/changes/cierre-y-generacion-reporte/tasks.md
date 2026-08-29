@@ -45,18 +45,18 @@ Chain strategy: pending
 ## Phase 3: Test Fixtures (Foundation for generation tests)
 
 - [x] 3.1 `reportes/tests/conftest.py` — add `plantilla_xlsx(tmp_path)` factory fixture building a real `openpyxl` workbook with sheet `REPORTE` and merged ranges (`rangos=("M10:P10", "M12:P12", "M25:P25")`), mirroring `tipos_reporte/tests/conftest.py`'s pattern.
-- [ ] 3.2 `reportes/tests/conftest.py` — add `reporte_listo_para_cerrar` fixture returning `(client, reporte)`: uses `estructura_con_validaciones`, the real `plantilla_xlsx`, logs in the creator, and persists all four obligatorio `ValorDeReporte` rows (`observaciones-generales="Todo en orden."`, `estado-general="Cumple"`, `p-01_inicio="08:00"`, `p-01_fin="09:00"`) so `puede_generar` is true. **Deferred to PR 2** (`cerrar_reporte` work unit) — out of scope for this PR 1 slice.
+- [x] 3.2 `reportes/tests/conftest.py` — add `reporte_listo_para_cerrar` fixture returning `(client, reporte)`: uses `estructura_con_validaciones`, the real `plantilla_xlsx`, logs in the creator, and persists all four obligatorio `ValorDeReporte` rows (`observaciones-generales="Todo en orden."`, `estado-general="Cumple"`, `p-01_inicio="08:00"`, `p-01_fin="09:00"`) so `puede_generar` is true. Implemented in PR 2 (`cerrar_reporte` work unit).
 - [x] 3.3 Run `pytest reportes/tests/ -q` — confirm no regressions from fixture additions (fixtures unused yet, so this is a smoke check). Scoped to PR 1's additions only (`plantilla_xlsx` + Phase 1/2 changes); full-suite confirmation captured below.
 
 ## Phase 4: `cerrar_reporte` View (Core Implementation)
 
-- [ ] 4.1 RED: `reportes/tests/test_views.py` — `test_cerrar_reporte_no_creador_devuelve_404` (user B POSTs to A's reporte → 404, no `VistoBueno` row).
-- [ ] 4.2 RED: `reportes/tests/test_views.py` — `test_cerrar_reporte_rechazado_si_no_puede_generar` (missing obligatorio values → no `VistoBueno`, `estado` unchanged).
-- [ ] 4.3 RED: `reportes/tests/test_views.py` — `test_cerrar_reporte_creador_exitoso` (uses `reporte_listo_para_cerrar`: `VistoBueno` created, `estado == TERMINADO`, redirect to `reportes_revision`).
-- [ ] 4.4 RED: `reportes/tests/test_views.py` — `test_cerrar_reporte_doble_post_es_idempotente` (two POSTs → exactly one `VistoBueno` row, no 500/`IntegrityError`).
-- [ ] 4.5 GREEN: `reportes/urls.py` — add `path("<int:reporte_id>/cerrar/", views.cerrar_reporte, name="reportes_cerrar")`.
-- [ ] 4.6 GREEN: `reportes/views.py` — add module-level `logger = logging.getLogger(__name__)`; implement `cerrar_reporte` per design (creator-scoped `get_object_or_404`, `validar_reporte(reporte).puede_generar` re-check with `messages.error` + redirect on failure, `transaction.atomic()` block with `VistoBueno.objects.get_or_create(reporte=reporte, defaults={"usuario": request.user})` + `estado = EstadoDeReporte.TERMINADO` + `save(update_fields=["estado"])`, `messages.success` + redirect on success).
-- [ ] 4.7 Run `pytest reportes/tests/test_views.py -k cerrar -q` — confirm all `cerrar_reporte` tests pass.
+- [x] 4.1 RED: `reportes/tests/test_views.py` — `test_cerrar_reporte_no_creador_devuelve_404` (user B POSTs to A's reporte → 404, no `VistoBueno` row).
+- [x] 4.2 RED: `reportes/tests/test_views.py` — `test_cerrar_reporte_rechazado_si_no_puede_generar` (missing obligatorio values → no `VistoBueno`, `estado` unchanged).
+- [x] 4.3 RED: `reportes/tests/test_views.py` — `test_cerrar_reporte_creador_exitoso` (uses `reporte_listo_para_cerrar`: `VistoBueno` created, `estado == TERMINADO`, redirect to `reportes_revision`).
+- [x] 4.4 RED: `reportes/tests/test_views.py` — `test_cerrar_reporte_doble_post_es_idempotente` (two POSTs → exactly one `VistoBueno` row, no 500/`IntegrityError`).
+- [x] 4.5 GREEN: `reportes/urls.py` — add `path("<int:reporte_id>/cerrar/", views.cerrar_reporte, name="reportes_cerrar")`.
+- [x] 4.6 GREEN: `reportes/views.py` — add module-level `logger = logging.getLogger(__name__)`; implement `cerrar_reporte` per design (creator-scoped `get_object_or_404`, `validar_reporte(reporte).puede_generar` re-check with `messages.error` + redirect on failure, `transaction.atomic()` block with `VistoBueno.objects.get_or_create(reporte=reporte, defaults={"usuario": request.user})` + `estado = EstadoDeReporte.TERMINADO` + `save(update_fields=["estado"])`, `messages.success` + redirect on success).
+- [x] 4.7 Run `pytest reportes/tests/test_views.py -k cerrar -q` — confirm all `cerrar_reporte` tests pass.
 
 ## Phase 5: `generar` View (Core Implementation)
 
