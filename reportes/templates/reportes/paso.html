@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}{{ seccion.titulo }} — Reporte #{{ reporte.id }}{% endblock %}
+
+{% block content %}
+<h1>{{ seccion.titulo }}</h1>
+<p>{{ posicion }}</p>
+
+<nav>
+    <ol>
+        {% for paso_item in pasos %}
+        <li{% if paso_item.es_actual %} aria-current="step"{% endif %}>
+            {{ paso_item.titulo }}
+        </li>
+        {% endfor %}
+    </ol>
+</nav>
+
+<form method="post">
+    {% csrf_token %}
+    {% for campo in form %}
+    <p>
+        <label for="{{ campo.id_for_label }}">
+            {{ campo.label }}{% if campo.field.widget.attrs.required %} *{% endif %}
+        </label>
+        {{ campo }}
+    </p>
+    {% endfor %}
+    <button type="submit">Guardar y continuar</button>
+</form>
+
+<nav>
+    {% if url_anterior %}<a href="{{ url_anterior }}">Anterior</a>{% endif %}
+    {% if url_siguiente %}<a href="{{ url_siguiente }}">Siguiente</a>{% endif %}
+</nav>
+{% endblock %}

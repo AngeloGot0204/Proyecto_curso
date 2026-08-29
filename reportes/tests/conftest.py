@@ -128,7 +128,15 @@ def reporte_factory(db, usuario_factory, tipo_con_definicion_activa_factory):
             tipo, definicion = tipo_con_definicion_activa_factory()
             kwargs.setdefault("tipo", tipo)
             kwargs.setdefault("definicion", definicion)
-        kwargs.setdefault("creador", usuario_factory())
+        # `setdefault(key, usuario_factory())` would call `usuario_factory()`
+        # eagerly on every invocation regardless of whether `creador` is
+        # already in `kwargs` (Python evaluates arguments before the call),
+        # creating an unwanted extra Usuario row that can collide with an
+        # already-created "usuario_test" from another fixture in the same
+        # test (e.g. `cliente_autenticado`). Only call it when actually
+        # needed.
+        if "creador" not in kwargs:
+            kwargs["creador"] = usuario_factory()
         return Reporte.objects.create(**kwargs)
 
     return _crear
