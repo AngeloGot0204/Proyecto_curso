@@ -54,23 +54,23 @@ Chain strategy: pending
 
 ## Phase 3: Widen paso/revision, Narrow generar
 
-- [ ] 3.1 (RED) Add to `reportes/tests/test_views.py`: invited participant B requests any `paso` URL → 200 (spec wizard-captura "Invited participant accesses a step").
-- [ ] 3.2 (RED) Add: non-invited authenticated user C requests `paso` via direct URL → 404 (spec wizard-captura "Non-invited authenticated user is denied").
-- [ ] 3.3 (RED) Add: invited participant B requests `revision` → 200 (spec cierre-reporte "Invited participant views revision").
-- [ ] 3.4 (RED) Add: non-invited user C requests `revision` → 404 (spec cierre-reporte "Non-invited user is denied revision access").
-- [ ] 3.5 (RED) Add `test_generar_participante_invitado_es_exitoso`: invited participant B POSTs `generar` → 200, `Generacion.usuario == B` (replaces half of `test_generar_no_creador_tambien_puede_generar` per design's identified reversal).
-- [ ] 3.6 (RED) Add `test_generar_no_participante_devuelve_404`: non-participant authenticated user C POSTs `generar` → 404, no `Generacion` row created (spec generacion-documento "Non-participant authenticated user is denied").
-- [ ] 3.7 Remove/rewrite `test_generar_no_creador_tambien_puede_generar` in `reportes/tests/test_views.py`, replaced by 3.5 + 3.6 per design's "Exactly one test asserts #7's reversal" analysis.
-- [ ] 3.8 (RED) Add regression assertion confirming `test_paso_reporte_de_otro_usuario_da_404`, `test_get_revision_reporte_de_otro_usuario_da_404` still pass unchanged (stranger stays neither creator nor participant).
-- [ ] 3.9 (RED) Add `test_cerrar_reporte_participante_invitado_devuelve_404` in `reportes/tests/test_views.py`: invited non-creator B POSTs `cerrar_reporte` → 404, no `VistoBueno` created (spec cierre-reporte "Invited non-creator participant cannot close").
-- [ ] 3.10 (GREEN) Add `_reporte_accesible(reporte_id, usuario)` shim to `reportes/views.py` per design D1 (fetch via `get_object_or_404`, then `tiene_acceso` check, else raise `Http404`).
-- [ ] 3.11 (GREEN) Switch `paso` view in `reportes/views.py` to use `_reporte_accesible`.
-- [ ] 3.12 (GREEN) Switch `revision` view in `reportes/views.py` to use `_reporte_accesible`.
-- [ ] 3.13 (GREEN) Switch `generar` view in `reportes/views.py` to use `_reporte_accesible` (narrows from any-authenticated-user).
-- [ ] 3.14 Confirm `cerrar_reporte` keeps its strict `get_object_or_404(Reporte, pk=…, creador=request.user)` unchanged (does not use `_reporte_accesible`).
-- [ ] 3.15 Update `reportes/views.py` module docstring (currently states creator-only D9) to reflect creator-or-participant access.
-- [ ] 3.16 Add `sesion_de_invitado` fixture (local to `test_views.py`, mirrors `sesion_de_creador`) — logged-in invited non-creator client + reporte.
-- [ ] 3.17 Run all Phase 3 tests, confirm all pass.
+- [x] 3.1 (RED) Add to `reportes/tests/test_views.py`: invited participant B requests any `paso` URL → 200 (spec wizard-captura "Invited participant accesses a step").
+- [x] 3.2 (RED) Add: non-invited authenticated user C requests `paso` via direct URL → 404 (spec wizard-captura "Non-invited authenticated user is denied").
+- [x] 3.3 (RED) Add: invited participant B requests `revision` → 200 (spec cierre-reporte "Invited participant views revision").
+- [x] 3.4 (RED) Add: non-invited user C requests `revision` → 404 (spec cierre-reporte "Non-invited user is denied revision access").
+- [x] 3.5 (RED) Add `test_generar_participante_invitado_es_exitoso`: invited participant B POSTs `generar` → 200, `Generacion.usuario == B` (replaces half of `test_generar_no_creador_tambien_puede_generar` per design's identified reversal).
+- [x] 3.6 (RED) Add `test_generar_no_participante_devuelve_404`: non-participant authenticated user C POSTs `generar` → 404, no `Generacion` row created (spec generacion-documento "Non-participant authenticated user is denied").
+- [x] 3.7 Remove/rewrite `test_generar_no_creador_tambien_puede_generar` in `reportes/tests/test_views.py`, replaced by 3.5 + 3.6 per design's "Exactly one test asserts #7's reversal" analysis.
+- [x] 3.8 (RED) Add regression assertion confirming `test_paso_reporte_de_otro_usuario_da_404`, `test_get_revision_reporte_de_otro_usuario_da_404` still pass unchanged (stranger stays neither creator nor participant).
+- [x] 3.9 (RED) Add `test_cerrar_reporte_participante_invitado_devuelve_404` in `reportes/tests/test_views.py`: invited non-creator B POSTs `cerrar_reporte` → 404, no `VistoBueno` created (spec cierre-reporte "Invited non-creator participant cannot close").
+- [x] 3.10 (GREEN) Add `_reporte_accesible(reporte_id, usuario)` shim to `reportes/views.py` per design D1 (fetch via `get_object_or_404`, then `tiene_acceso` check, else raise `Http404`).
+- [x] 3.11 (GREEN) Switch `paso` view in `reportes/views.py` to use `_reporte_accesible`.
+- [x] 3.12 (GREEN) Switch `revision` view in `reportes/views.py` to use `_reporte_accesible`.
+- [x] 3.13 (GREEN) Switch `generar` view in `reportes/views.py` to use `_reporte_accesible` (narrows from any-authenticated-user).
+- [x] 3.14 Confirm `cerrar_reporte` keeps its strict `get_object_or_404(Reporte, pk=…, creador=request.user)` unchanged (does not use `_reporte_accesible`).
+- [x] 3.15 Update `reportes/views.py` module docstring (currently states creator-only D9) to reflect creator-or-participant access.
+- [x] 3.16 Add `sesion_de_invitado` fixture (local to `test_views.py`, mirrors `sesion_de_creador`) — logged-in invited non-creator client + reporte.
+- [x] 3.17 Run all Phase 3 tests, confirm all pass.
 
 ## Phase 4: Invite Action and Participantes View
 

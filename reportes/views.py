@@ -10,14 +10,19 @@ Post/Redirect/Get-style to the next section — or back to itself on the
 last section, since a finish screen is out of scope here (backlog #7; see
 design's Open Questions).
 
-Creator-only access (design D9) is enforced by scoping every `Reporte`
-lookup to `creador=request.user` inside `get_object_or_404`: a `Reporte`
-that exists but belongs to someone else 404s exactly like one that does not
-exist, leaking no existence information.
+Creator-or-invited-participant access (backlog #8; design D1; widened from
+the original creator-only D9) is enforced by `_reporte_accesible`: fetch
+via `get_object_or_404(Reporte, pk=…)`, then check `permisos.tiene_acceso`,
+raising `Http404` manually otherwise. A `Reporte` that exists but the
+requesting user has no access to 404s exactly like one that does not exist,
+leaking no existence information. `paso`, `revision`, and `generar` all use
+this shim; `cerrar_reporte` (and `invitar`) stay strictly creator-only and
+do NOT widen with invitations (spec `cierre-reporte`).
 
 `revision` (S-09 review screen; backlog `validacion-datos-formulario`;
-spec `validacion-reporte`) is a GET-only, creator-scoped view that calls
-`reportes.validacion.validar_reporte` and renders its two buckets.
+spec `validacion-reporte`) is a GET-only, creator-or-participant-scoped
+view that calls `reportes.validacion.validar_reporte` and renders its two
+buckets.
 """
 
 import logging
@@ -33,6 +38,7 @@ from django.views.decorators.http import require_POST
 
 from reportes.formularios import construir_formulario_seccion
 from reportes.models import EstadoDeReporte, Generacion, Reporte, VistoBueno
+from reportes.permisos import tiene_acceso
 from reportes.valores import desde_texto, guardar_valor, valores_de_reporte
 from reportes.validacion import validar_reporte
 from tipos_reporte import generador
@@ -54,6 +60,20 @@ def _seccion_por_id(estructura, seccion_id):
 
 def _ids_de_secciones(estructura):
     return [seccion["id"] for seccion in estructura.get("secciones", [])]
+
+
+def _reporte_accesible(reporte_id, usuario):
+    """Fetch-then-check-then-404 shim (design D1): used by `paso`,
+    `revision`, and `generar`, which are creator-OR-invited-participant
+    scoped. `get_object_or_404` cannot take an arbitrary boolean, and it
+    itself only ever raises `Http404` — raising `Http404` manually here
+    produces a byte-identical response, preserving D9's no-existence-leak
+    (same 404 for "absent" and "no access"). `cerrar_reporte` and `invitar`
+    stay creator-only and do NOT use this shim."""
+    reporte = get_object_or_404(Reporte, pk=reporte_id)
+    if not tiene_acceso(reporte, usuario):
+        raise Http404("Reporte inexistente o sin acceso.")
+    return reporte
 
 
 @login_required
@@ -78,7 +98,7 @@ def iniciar_reporte(request, codigo_tipo):
 @login_required
 def paso(request, reporte_id, seccion_id):
     """`GET`/`POST /reportes/<reporte_id>/paso/<seccion_id>/`."""
-    reporte = get_object_or_404(Reporte, pk=reporte_id, creador=request.user)
+    reporte = _reporte_accesible(reporte_id, request.user)
     estructura = reporte.definicion.estructura
     ids_de_secciones = _ids_de_secciones(estructura)
     seccion = _seccion_por_id(estructura, seccion_id)
@@ -145,10 +165,12 @@ def _url_paso(reporte_id, seccion_id):
 @login_required
 def revision(request, reporte_id):
     """`GET /reportes/<reporte_id>/revision/` (S-09; spec
-    `validacion-reporte`). Creator-scoped exactly like `paso` (design D9);
-    calls `validar_reporte` and renders both buckets plus the derived
-    `puede_generar` flag the template uses to disable "Generar"."""
-    reporte = get_object_or_404(Reporte, pk=reporte_id, creador=request.user)
+    `validacion-reporte`). Creator-or-invited-participant scoped, exactly
+    like `paso` (backlog #8; design D1; spec `cierre-reporte` — "Revision
+    View Access Widens With Invitations"); calls `validar_reporte` and
+    renders both buckets plus the derived `puede_generar` flag the template
+    uses to disable "Generar"."""
+    reporte = _reporte_accesible(reporte_id, request.user)
     resultado = validar_reporte(reporte)
     contexto = {
         "reporte": reporte,
@@ -162,9 +184,12 @@ def revision(request, reporte_id):
 @require_POST
 def cerrar_reporte(request, reporte_id):
     """`POST /reportes/<reporte_id>/cerrar/` (backlog #7; spec
-    `cierre-reporte`; design D2, D9). Creator-scoped exactly like `paso`
-    and `revision`: a `Reporte` that exists but belongs to someone else
-    404s exactly like one that does not exist. Re-validates
+    `cierre-reporte`; design D2, D9). Strictly creator-scoped, unaffected
+    by `ParticipacionEnReporte` (backlog #8; spec `cierre-reporte` —
+    "Cerrar Reporte Access Is Unaffected By Invitations"): a `Reporte`
+    that exists but belongs to someone else — including an invited
+    non-creator participant — 404s exactly like one that does not exist.
+    Re-validates
     `puede_generar` server-side — independent of any client-side gating in
     `revision.html` — before creating the `VistoBueno`. `get_or_create`
     inside `transaction.atomic()` makes a double-POST an idempotent no-op
@@ -194,18 +219,19 @@ def cerrar_reporte(request, reporte_id):
 @require_POST
 def generar(request, reporte_id):
     """`POST /reportes/<reporte_id>/generar/` (backlog #7, spec
-    `generacion-documento`; design D3, D6). NOT creator-scoped —
-    `get_object_or_404` has no `creador` filter, so any authenticated user
-    may generate a document for a closed report (design's "Non-creator
-    caveat"). Requires an existing `VistoBueno` (checked independently of
-    `puede_generar`), then re-validates `puede_generar` server-side
-    (defense in depth, mirrors `cerrar_reporte`'s own re-check). Catches
+    `generacion-documento`; design D3, D6). Creator-or-invited-participant
+    scoped via `_reporte_accesible` (backlog #8; design D1; spec
+    `generacion-documento` — "Creator or Invited Participant May Generate",
+    superseding the prior "Any Authenticated User May Generate"). Requires
+    an existing `VistoBueno` (checked independently of `puede_generar`),
+    then re-validates `puede_generar` server-side (defense in depth,
+    mirrors `cerrar_reporte`'s own re-check). Catches
     `ProblemaDeGeneracion` and degrades to a flash message + redirect —
     never a raw 500 (design D6: logged via stdlib `logger.exception`,
     Sentry-ready but not wired). On success, records a `Generacion` audit
     row and streams the `.xlsx` as an attachment with a server-derived
     filename (never user-supplied)."""
-    reporte = get_object_or_404(Reporte, pk=reporte_id)
+    reporte = _reporte_accesible(reporte_id, request.user)
 
     if not VistoBueno.objects.filter(reporte=reporte).exists():
         messages.error(
