@@ -234,15 +234,21 @@ def reporte_listo_para_cerrar(
     tipo_con_definicion_activa_factory,
     plantilla_xlsx,
 ):
-    """A `(client, reporte)` pair ready for `cerrar_reporte` (backlog #7,
-    task 3.2, design's Testing Strategy): built on
-    `estructura_con_validaciones` with a real `.xlsx` template
-    (`rangos=("M10:P10", "M12:P12", "M25:P25")`) and all four obligatorio
-    `ValorDeReporte` rows persisted, so `puede_generar` is True. The
-    creador is already logged into `client`."""
+    """A `(client, reporte)` pair ready for `cerrar_reporte` and `generar`
+    (backlog #7, tasks 3.2/5, design's Testing Strategy): built on
+    `estructura_con_validaciones` with a real `.xlsx` template and all four
+    obligatorio `ValorDeReporte` rows persisted, so `puede_generar` is
+    True. The creador is already logged into `client`.
+
+    `estructura_con_validaciones`'s `p-01` item declares TWO independent
+    anchor cells on the same row (`celda_inicio="M25"`,
+    `celda_fin="P25"`) — a single `M25:P25` merge would swallow `P25` into
+    a read-only `MergedCell` (openpyxl only the merge's top-left cell is
+    writable), so `M25` and `P25` are deliberately left as two ordinary,
+    unmerged, independently-writable cells here."""
     from reportes.models import Reporte, ValorDeReporte
 
-    destino = plantilla_xlsx(rangos=("M10:P10", "M12:P12", "M25:P25"))
+    destino = plantilla_xlsx(rangos=("M10:P10", "M12:P12"))
     with open(destino, "rb") as archivo:
         contenido = archivo.read()
 

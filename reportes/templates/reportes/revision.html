@@ -35,5 +35,17 @@
 </section>
 {% endif %}
 
-<button type="button" {% if not resultado.puede_generar %}disabled{% endif %}>Generar</button>
+{% if tiene_visto_bueno %}
+<form method="post" action="{% url 'reportes_generar' reporte.id %}">
+    {% csrf_token %}
+    <button type="submit">Generar</button>
+</form>
+{% endif %}
+
+{% if reporte.creador_id == request.user.id %}
+<form method="post" action="{% url 'reportes_cerrar' reporte.id %}">
+    {% csrf_token %}
+    <button type="submit" {% if not resultado.puede_generar %}disabled{% endif %}>Cerrar reporte</button>
+</form>
+{% endif %}
 {% endblock %}

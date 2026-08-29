@@ -9,11 +9,18 @@ duplicate rows on re-POST), the creator-only 404 (D9), the unknown-
 Non-blocking obligatorio marker).
 """
 
+from io import BytesIO
+from unittest import mock
+
 import pytest
 from django.contrib.messages import get_messages
+from django.template.loader import render_to_string
 from django.urls import reverse
+from openpyxl import load_workbook
 
-from reportes.models import EstadoDeReporte, Reporte, ValorDeReporte, VistoBueno
+from reportes.models import EstadoDeReporte, Generacion, Reporte, ValorDeReporte, VistoBueno
+from reportes.validacion import validar_reporte
+from tipos_reporte.generador import PlantillaIlegible
 
 
 @pytest.fixture
@@ -539,3 +546,182 @@ def test_cerrar_reporte_doble_post_es_idempotente(reporte_listo_para_cerrar):
     assert VistoBueno.objects.filter(reporte=reporte).count() == 1
     mensajes_segunda = list(get_messages(segunda.wsgi_request))
     assert any(mensaje.level_tag == "success" for mensaje in mensajes_segunda)
+
+
+# ---------------------------------------------------------------------------
+# generar (backlog #7, task 5; spec `generacion-documento`; design D3, D6)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_generar_sin_visto_bueno_redirige_con_error(reporte_listo_para_cerrar):
+    # `reporte_listo_para_cerrar` is eligible but never closed — no
+    # `VistoBueno` row exists yet (spec: "Generation attempted before
+    # closure").
+    client, reporte = reporte_listo_para_cerrar
+
+    response = client.post(reverse("reportes_generar", args=[reporte.id]))
+
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_revision", args=[reporte.id])
+    assert not Generacion.objects.filter(reporte=reporte).exists()
+    mensajes = list(get_messages(response.wsgi_request))
+    assert any(mensaje.level_tag == "error" for mensaje in mensajes)
+
+
+@pytest.mark.django_db
+def test_generar_rechazado_si_no_puede_generar_pese_a_visto_bueno(
+    reporte_listo_para_cerrar,
+):
+    # `VistoBueno` exists, but a later edit made the report ineligible
+    # again (spec: "Generation rejected when no longer eligible").
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+    ValorDeReporte.objects.filter(
+        reporte=reporte, identificador_de_campo="observaciones-generales"
+    ).delete()
+
+    response = client.post(reverse("reportes_generar", args=[reporte.id]))
+
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_revision", args=[reporte.id])
+    assert not Generacion.objects.filter(reporte=reporte).exists()
+    mensajes = list(get_messages(response.wsgi_request))
+    assert any(mensaje.level_tag == "error" for mensaje in mensajes)
+
+
+@pytest.mark.django_db
+def test_generar_no_creador_tambien_puede_generar(
+    reporte_listo_para_cerrar, usuario_factory
+):
+    # Spec: "Any Authenticated User May Generate" — non-creator user B
+    # succeeds once the report is closed.
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+    client.logout()
+    otro = usuario_factory(username="usuario-no-creador-generar")
+    client.force_login(otro)
+
+    response = client.post(reverse("reportes_generar", args=[reporte.id]))
+
+    assert response.status_code == 200
+    generacion = Generacion.objects.get(reporte=reporte)
+    assert generacion.usuario == otro
+
+
+@pytest.mark.django_db
+def test_generar_captura_problema_de_generacion_y_redirige(reporte_listo_para_cerrar):
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    with mock.patch(
+        "reportes.views.generador.generar_reporte",
+        side_effect=PlantillaIlegible("plantilla rota"),
+    ):
+        response = client.post(reverse("reportes_generar", args=[reporte.id]))
+
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_revision", args=[reporte.id])
+    assert not Generacion.objects.filter(reporte=reporte).exists()
+    mensajes = list(get_messages(response.wsgi_request))
+    assert any(mensaje.level_tag == "error" for mensaje in mensajes)
+
+
+@pytest.mark.django_db
+def test_generar_exitoso_streamea_xlsx_con_headers_correctos(
+    reporte_listo_para_cerrar,
+):
+    from django.utils import timezone
+
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    response = client.post(reverse("reportes_generar", args=[reporte.id]))
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    esperado = (
+        f"{reporte.tipo.codigo}-{reporte.id}-{timezone.localdate():%Y%m%d}.xlsx"
+    )
+    assert response["Content-Disposition"] == f'attachment; filename="{esperado}"'
+    libro = load_workbook(BytesIO(response.content))
+    assert libro.sheetnames == ["REPORTE"]
+    assert libro["REPORTE"]["M10"].value == "Todo en orden."
+    assert libro["REPORTE"]["M25"].value == "08:00"
+
+
+@pytest.mark.django_db
+def test_generar_repetido_crea_multiples_filas_generacion(reporte_listo_para_cerrar):
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    primera = client.post(reverse("reportes_generar", args=[reporte.id]))
+    segunda = client.post(reverse("reportes_generar", args=[reporte.id]))
+
+    assert primera.status_code == 200
+    assert segunda.status_code == 200
+    assert Generacion.objects.filter(reporte=reporte).count() == 2
+
+
+# ---------------------------------------------------------------------------
+# Template & messages wiring (backlog #7, task 6; design D4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_get_revision_con_visto_bueno_muestra_form_generar(reporte_listo_para_cerrar):
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert f'action="{reverse("reportes_generar", args=[reporte.id])}"' in contenido
+    assert "csrfmiddlewaretoken" in contenido
+    assert "<form" in contenido
+
+
+@pytest.mark.django_db
+def test_get_revision_no_creador_no_ve_boton_cerrar(
+    reporte_listo_para_cerrar, usuario_factory, rf
+):
+    _client, reporte = reporte_listo_para_cerrar
+    otro = usuario_factory(username="otro-no-creador-revision")
+    request = rf.get(reverse("reportes_revision", args=[reporte.id]))
+    request.user = otro
+
+    resultado = validar_reporte(reporte)
+    contenido = render_to_string(
+        "reportes/revision.html",
+        {"reporte": reporte, "resultado": resultado, "tiene_visto_bueno": False},
+        request=request,
+    )
+
+    assert "Cerrar reporte" not in contenido
+
+
+@pytest.mark.django_db
+def test_edicion_post_cierre_sigue_funcionando(reporte_listo_para_cerrar):
+    # Spec `cierre-reporte`: "Editing a value after closure succeeds" —
+    # `paso` stays fully open even once `estado == TERMINADO`.
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+    reporte.refresh_from_db()
+    assert reporte.estado == EstadoDeReporte.TERMINADO
+
+    response = client.post(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"]),
+        data={
+            "observaciones-generales": "Actualizado tras cierre.",
+            "estado-general": "Cumple",
+        },
+    )
+
+    assert response.status_code == 302
+    valor = ValorDeReporte.objects.get(
+        reporte=reporte, identificador_de_campo="observaciones-generales"
+    )
+    assert valor.valor == "Actualizado tras cierre."
