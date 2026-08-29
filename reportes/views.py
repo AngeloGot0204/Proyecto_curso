@@ -14,6 +14,10 @@ Creator-only access (design D9) is enforced by scoping every `Reporte`
 lookup to `creador=request.user` inside `get_object_or_404`: a `Reporte`
 that exists but belongs to someone else 404s exactly like one that does not
 exist, leaking no existence information.
+
+`revision` (S-09 review screen; backlog `validacion-datos-formulario`;
+spec `validacion-reporte`) is a GET-only, creator-scoped view that calls
+`reportes.validacion.validar_reporte` and renders its two buckets.
 """
 
 from django.contrib.auth.decorators import login_required
@@ -25,6 +29,7 @@ from django.views.decorators.http import require_POST
 from reportes.formularios import construir_formulario_seccion
 from reportes.models import Reporte, ValorDeReporte
 from reportes.valores import desde_texto, guardar_valor
+from reportes.validacion import validar_reporte
 from tipos_reporte.models import TipoDeReporte
 
 
@@ -129,3 +134,18 @@ def paso(request, reporte_id, seccion_id):
 
 def _url_paso(reporte_id, seccion_id):
     return reverse("reportes_paso", args=[reporte_id, seccion_id])
+
+
+@login_required
+def revision(request, reporte_id):
+    """`GET /reportes/<reporte_id>/revision/` (S-09; spec
+    `validacion-reporte`). Creator-scoped exactly like `paso` (design D9);
+    calls `validar_reporte` and renders both buckets plus the derived
+    `puede_generar` flag the template uses to disable "Generar"."""
+    reporte = get_object_or_404(Reporte, pk=reporte_id, creador=request.user)
+    resultado = validar_reporte(reporte)
+    contexto = {
+        "reporte": reporte,
+        "resultado": resultado,
+    }
+    return render(request, "reportes/revision.html", contexto)

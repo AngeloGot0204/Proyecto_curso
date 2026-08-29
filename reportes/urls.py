@@ -9,4 +9,9 @@ urlpatterns = [
         views.paso,
         name="reportes_paso",
     ),
+    path(
+        "<int:reporte_id>/revision/",
+        views.revision,
+        name="reportes_revision",
+    ),
 ]
