@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Adjuntos — Reporte #{{ reporte.id }}{% endblock %}
+
+{% block content %}
+<h1>Adjuntos del reporte</h1>
+
+<section>
+    <table>
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Categoría</th>
+                <th>Autor</th>
+                <th>Fecha de subida</th>
+                <th>Tamaño (bytes)</th>
+                <th>Descarga</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for adjunto in adjuntos %}
+            <tr>
+                <td>{{ adjunto.nombre_original }}</td>
+                <td>{{ adjunto.get_categoria_display }}</td>
+                <td>{{ adjunto.autor.username }}</td>
+                <td>{{ adjunto.fecha_subida }}</td>
+                <td>{{ adjunto.tamano_bytes }}</td>
+                <td><a href="{{ adjunto.archivo.url }}">Descargar</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6">Todavía no hay adjuntos.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

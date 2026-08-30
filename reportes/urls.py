@@ -35,4 +35,14 @@ urlpatterns = [
         views.participantes,
         name="reportes_participantes",
     ),
+    path(
+        "<int:reporte_id>/adjuntos/subir/",
+        views.subir_adjunto,
+        name="reportes_adjuntos_subir",
+    ),
+    path(
+        "<int:reporte_id>/adjuntos/",
+        views.adjuntos_de_reporte,
+        name="reportes_adjuntos",
+    ),
 ]

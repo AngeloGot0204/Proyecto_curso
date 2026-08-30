@@ -35,26 +35,26 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Server Validation Module (D7, TDD)
 
-- [ ] 2.1 RED: write `test_valida_formato_permitido` in `reportes/tests/test_adjuntos.py` — parametrized over JPEG/PNG/WEBP/HEIC/HEIF content-types, using `SimpleUploadedFile`, no DB.
-- [ ] 2.2 RED: write `test_rechaza_formato_no_permitido` (e.g. `image/gif`, `application/pdf`).
-- [ ] 2.3 RED: write `test_acepta_tamano_limite_8mb` (exactly 8MB accepted) and `test_rechaza_tamano_excedido_8mb_mas_1` (8MB + 1 byte rejected) — boundary per D7.
-- [ ] 2.4 GREEN: create `reportes/adjuntos.py` with `FORMATOS_PERMITIDOS`, `TAMANO_MAXIMO_BYTES = 8 * 1024 * 1024`, `SECCION_DE_ADJUNTOS`, and `validar_adjunto(archivo) -> str | None` returning stable error ids (`formato-no-permitido`, `tamano-excedido`).
-- [ ] 2.5 REFACTOR: confirm `validar_adjunto` is pure over an `UploadedFile` (no DB access), matching `validacion.py`'s R1-R4 posture; run 2.1-2.3 green.
+- [x] 2.1 RED: write `test_valida_formato_permitido` in `reportes/tests/test_adjuntos.py` — parametrized over JPEG/PNG/WEBP/HEIC/HEIF content-types, using `SimpleUploadedFile`, no DB.
+- [x] 2.2 RED: write `test_rechaza_formato_no_permitido` (e.g. `image/gif`, `application/pdf`).
+- [x] 2.3 RED: write `test_acepta_tamano_limite_8mb` (exactly 8MB accepted) and `test_rechaza_tamano_excedido_8mb_mas_1` (8MB + 1 byte rejected) — boundary per D7.
+- [x] 2.4 GREEN: create `reportes/adjuntos.py` with `FORMATOS_PERMITIDOS`, `TAMANO_MAXIMO_BYTES = 8 * 1024 * 1024`, `SECCION_DE_ADJUNTOS`, and `validar_adjunto(archivo) -> str | None` returning stable error ids (`formato-no-permitido`, `tamano-excedido`).
+- [x] 2.5 REFACTOR: confirm `validar_adjunto` is pure over an `UploadedFile` (no DB access), matching `validacion.py`'s R1-R4 posture; run 2.1-2.3 green.
 
 ## Phase 3: Upload & List Endpoint (D2, TDD)
 
-- [ ] 3.1 RED: write `test_subir_adjunto_happy_path_crea_adjunto` — 201, response body has `id`/`nombre`/`url`/`tamano_bytes`, `Adjunto.objects.count() == 1` and `ValorDeReporte.objects.count() == 0`.
-- [ ] 3.2 RED: write `test_subir_adjunto_formato_no_permitido_devuelve_400_sin_crear_fila` (400 `{"error":"formato-no-permitido"}`, `Adjunto.objects.count() == 0`).
-- [ ] 3.3 RED: write `test_subir_adjunto_tamano_excedido_devuelve_400_sin_crear_fila` (400 `{"error":"tamano-excedido"}`, no row created — spec "Server-Side Size Ceiling").
-- [ ] 3.4 RED: write `test_subir_adjunto_seccion_no_admite_adjuntos_400` (`seccion_id` not `SECCION_DE_ADJUNTOS` → 400 `{"error":"seccion-no-admite-adjuntos"}`, never trusted from client).
-- [ ] 3.5 RED: write `test_subir_adjunto_no_participante_devuelve_404` (threat matrix "Routing" — non-creator/non-invited → 404, no existence leak).
-- [ ] 3.6 RED: write `test_multiples_adjuntos_sin_limite_de_cantidad` (spec "No Hard Cap on Attachment Count": N valid attachments all accepted).
-- [ ] 3.7 RED: write `test_aislamiento_un_adjunto_invalido_no_bloquea_paso` in `reportes/tests/test_adjuntos.py` — two requests: POST the step with valid field values (asserts step 302 and values persisted), then POST an oversized attachment to `subir_adjunto` (asserts 400, `Adjunto.objects.count() == 0`); confirm both outcomes are independent (spec "Per-Attachment Failure Isolation").
-- [ ] 3.8 GREEN: implement `reportes/views.py::subir_adjunto` (`@login_required @require_POST`, `_reporte_accesible`, calls `validar_adjunto` before any `Adjunto.objects.create`, `JsonResponse` 201/400) — run 3.1-3.7 green.
-- [ ] 3.9 RED: write `test_lista_adjuntos_autorizado_incluye_metadata_y_enlace` (spec "Server-Side Listing and Download": response includes `nombre_original`, `categoria`, `fecha_subida`, `autor`, `tamano_bytes`, download link).
-- [ ] 3.10 GREEN: implement `reportes/views.py::adjuntos_de_reporte` (GET list, `_reporte_accesible`) and create `reportes/templates/reportes/adjuntos.html`.
-- [ ] 3.11 Wire `reportes/urls.py` routes `reportes_adjuntos_subir` (`/reportes/<id>/adjuntos/subir/`) and `reportes_adjuntos` (`/reportes/<id>/adjuntos/`).
-- [ ] 3.12 REFACTOR: confirm `JsonResponse` error ids match the design interface contract exactly (`formato-no-permitido`, `tamano-excedido`, `archivo-ausente`, `seccion-no-admite-adjuntos`); run full Phase 3 suite green.
+- [x] 3.1 RED: write `test_subir_adjunto_happy_path_crea_adjunto` — 201, response body has `id`/`nombre`/`url`/`tamano_bytes`, `Adjunto.objects.count() == 1` and `ValorDeReporte.objects.count() == 0`.
+- [x] 3.2 RED: write `test_subir_adjunto_formato_no_permitido_devuelve_400_sin_crear_fila` (400 `{"error":"formato-no-permitido"}`, `Adjunto.objects.count() == 0`).
+- [x] 3.3 RED: write `test_subir_adjunto_tamano_excedido_devuelve_400_sin_crear_fila` (400 `{"error":"tamano-excedido"}`, no row created — spec "Server-Side Size Ceiling").
+- [x] 3.4 RED: write `test_subir_adjunto_seccion_no_admite_adjuntos_400` (`seccion_id` not `SECCION_DE_ADJUNTOS` → 400 `{"error":"seccion-no-admite-adjuntos"}`, never trusted from client).
+- [x] 3.5 RED: write `test_subir_adjunto_no_participante_devuelve_404` (threat matrix "Routing" — non-creator/non-invited → 404, no existence leak).
+- [x] 3.6 RED: write `test_multiples_adjuntos_sin_limite_de_cantidad` (spec "No Hard Cap on Attachment Count": N valid attachments all accepted).
+- [x] 3.7 RED: write `test_aislamiento_un_adjunto_invalido_no_bloquea_paso` in `reportes/tests/test_adjuntos.py` — two requests: POST the step with valid field values (asserts step 302 and values persisted), then POST an oversized attachment to `subir_adjunto` (asserts 400, `Adjunto.objects.count() == 0`); confirm both outcomes are independent (spec "Per-Attachment Failure Isolation").
+- [x] 3.8 GREEN: implement `reportes/views.py::subir_adjunto` (`@login_required @require_POST`, `_reporte_accesible`, calls `validar_adjunto` before any `Adjunto.objects.create`, `JsonResponse` 201/400) — run 3.1-3.7 green.
+- [x] 3.9 RED: write `test_lista_adjuntos_autorizado_incluye_metadata_y_enlace` (spec "Server-Side Listing and Download": response includes `nombre_original`, `categoria`, `fecha_subida`, `autor`, `tamano_bytes`, download link).
+- [x] 3.10 GREEN: implement `reportes/views.py::adjuntos_de_reporte` (GET list, `_reporte_accesible`) and create `reportes/templates/reportes/adjuntos.html`.
+- [x] 3.11 Wire `reportes/urls.py` routes `reportes_adjuntos_subir` (`/reportes/<id>/adjuntos/subir/`) and `reportes_adjuntos` (`/reportes/<id>/adjuntos/`).
+- [x] 3.12 REFACTOR: confirm `JsonResponse` error ids match the design interface contract exactly (`formato-no-permitido`, `tamano-excedido`, `archivo-ausente`, `seccion-no-admite-adjuntos`); run full Phase 3 suite green.
 
 ## Phase 4: Client Pipeline & Offline Queue (D3, D4)
 

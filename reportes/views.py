@@ -39,16 +39,24 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.http import Http404, HttpResponse, HttpResponseBadRequest
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseBadRequest,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from reportes import listado
+from reportes.adjuntos import SECCION_DE_ADJUNTOS, validar_adjunto
 from reportes.formularios import construir_formulario_seccion
 from reportes.models import (
+    Adjunto,
     CambioDeValor,
+    CategoriaDeAdjunto,
     EstadoDeReporte,
     Generacion,
     ParticipacionEnReporte,
@@ -423,6 +431,83 @@ def participantes(request, reporte_id):
         "cambios": cambios,
     }
     return render(request, "reportes/participantes.html", contexto)
+
+
+@login_required
+@require_POST
+def subir_adjunto(request, reporte_id):
+    """`POST /reportes/<reporte_id>/adjuntos/subir/` (backlog #11; spec
+    `adjuntos-reporte`; design D2, D7). One request per attachment, issued
+    by `adjuntos.js` (Phase 4) — deliberately NOT part of `paso`'s
+    Post/Redirect/Get body, so a rejected attachment can never abort that
+    redirect or silently swallow the step's field values (design D2's
+    rationale, spec "Per-Attachment Failure Isolation"). Creator-or-invited-
+    participant scoped via `_reporte_accesible`, exactly like `paso`.
+
+    `validar_adjunto` runs BEFORE any `Adjunto.objects.create` (design D7):
+    a rejected upload creates no row and writes no blob. `seccion_id` is
+    never trusted from the client (threat matrix "Routing") — only
+    `SECCION_DE_ADJUNTOS` is accepted. `JsonResponse` is new to this
+    codebase (existing views use `messages` + redirect); it is required
+    here because a redirect carries no per-attachment outcome, which is the
+    whole point of this dedicated endpoint (design's Interfaces/Contracts).
+    """
+    reporte = _reporte_accesible(reporte_id, request.user)
+
+    archivo = request.FILES.get("archivo")
+    if archivo is None:
+        return JsonResponse({"error": "archivo-ausente"}, status=400)
+
+    seccion_id = request.POST.get("seccion_id")
+    if seccion_id != SECCION_DE_ADJUNTOS:
+        return JsonResponse(
+            {"error": "seccion-no-admite-adjuntos"}, status=400
+        )
+
+    error = validar_adjunto(archivo)
+    if error is not None:
+        return JsonResponse({"error": error}, status=400)
+
+    categoria = request.POST.get("categoria")
+    if categoria not in CategoriaDeAdjunto.values:
+        categoria = CategoriaDeAdjunto.EVIDENCIA
+
+    adjunto = Adjunto.objects.create(
+        reporte=reporte,
+        seccion_id=seccion_id,
+        categoria=categoria,
+        archivo=archivo,
+        nombre_original=archivo.name,
+        formato_original=archivo.content_type,
+        tamano_bytes=archivo.size,
+        autor=request.user,
+    )
+
+    return JsonResponse(
+        {
+            "id": adjunto.id,
+            "nombre": adjunto.nombre_original,
+            "url": adjunto.archivo.url,
+            "tamano_bytes": adjunto.tamano_bytes,
+        },
+        status=201,
+    )
+
+
+@login_required
+def adjuntos_de_reporte(request, reporte_id):
+    """`GET /reportes/<reporte_id>/adjuntos/` (backlog #11; spec
+    `adjuntos-reporte` — "Server-Side Listing and Download"; design's
+    Interfaces/Contracts). Creator-or-invited-participant scoped via
+    `_reporte_accesible`, exactly like `paso`/`revision`/`generar`. Renders
+    each attachment's metadata plus a download link (`archivo.url`) — the
+    listing itself is access-scoped, but the underlying Vercel Blob URL is
+    public-but-unguessable (design's known, accepted limitation, unchanged
+    from `plantilla`/`logo`)."""
+    reporte = _reporte_accesible(reporte_id, request.user)
+    adjuntos = reporte.adjuntos.select_related("autor")
+    contexto = {"reporte": reporte, "adjuntos": adjuntos}
+    return render(request, "reportes/adjuntos.html", contexto)
 
 
 @login_required
