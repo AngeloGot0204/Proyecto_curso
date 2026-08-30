@@ -90,7 +90,7 @@ Chain strategy: stacked-to-main
 
 ## Phase 7: Cleanup / Documentation
 
-- [ ] 7.1 Resolve `design.md` Open Questions: confirm `SECCION_DE_ADJUNTOS`'s real `seccion.id` against the production definition YAML once available, or document the fixture-only resolution from 1.5 as the interim answer.
-- [ ] 7.2 Confirm/record anchor-slot box defaults (320x240px, aspect-preserving fit) against the real `.xlsx` layout once the template declares its four slots.
-- [ ] 7.3 Confirm CDN pinning/SRI decision for `heic2any` and `browser-image-compression` — match the existing Dexie tag's no-`integrity` precedent, or tighten both at once.
-- [ ] 7.4 Run the full `pytest` suite and confirm no regressions in existing tests (`reportes/`, `tipos_reporte/`).
+- [x] 7.1 Resolve `design.md` Open Questions: confirm `SECCION_DE_ADJUNTOS`'s real `seccion.id` against the production definition YAML once available, or document the fixture-only resolution from 1.5 as the interim answer. Resolved (2026-08-30): real production template inspected directly, `SECCION_DE_ADJUNTOS` corrected from the placeholder `"s-08-croquis-evidencia"` to `"resultados"`, verified live end-to-end.
+- [x] 7.2 Confirm/record anchor-slot box defaults (320x240px, aspect-preserving fit) against the real `.xlsx` layout once the template declares its four slots. Deferred by user decision: slot cells will be configured later via Django admin once `estructura["adjuntos"]` is populated; `_incrustar_adjuntos` correctly no-ops with zero declared slots in the meantime (non-blocking, documented in design.md Open Questions).
+- [x] 7.3 Confirm CDN pinning/SRI decision for `heic2any` and `browser-image-compression` — match the existing Dexie tag's no-`integrity` precedent, or tighten both at once. Resolved: matched the existing no-`integrity` precedent as shipped, no change needed.
+- [x] 7.4 Run the full `pytest` suite and confirm no regressions in existing tests (`reportes/`, `tipos_reporte/`). 327/327 passed (692s, single process, real Neon Postgres test DB), zero regressions across the full adjuntos change (4 PRs) plus the SECCION_DE_ADJUNTOS/defer/cache-bump fixes.
