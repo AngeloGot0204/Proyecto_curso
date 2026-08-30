@@ -66,7 +66,7 @@ Chain strategy: stacked-to-main
 - [x] 4.2 DevTools script step 2-4: Network ▸ Offline submit → `pendiente` banner + `intentos:1`; Reintentar while offline → `intentos:2`; Reintentar after reconnect → success, row deleted. Verified live in production (2026-08-30): banner appeared, counter advanced on repeated offline submits/retries, success and step advance confirmed after reconnect + retry.
 - [ ] 4.3 DevTools script step 5: stop dev server → `fallo` state; restart, Reintentar → success.
 - [x] 4.4 DevTools script step 6: clear `sessionid` cookie mid-draft, submit → final URL `/login/`, row `fallo` with `valores` intact; re-login → banner restores; Reintentar succeeds. Verified live in production (2026-08-30): session cookie cleared, submit redirected to /login/, banner "No se pudo subir" persisted with draft intact across re-login, Reintentar succeeded and advanced to next step.
-- [ ] 4.5 DevTools script step 7: inject a `data-nuevo-reporte` form, confirm `nuevos[codigoTipo].idLocal` persists across a failed POST and a page reload, and a fresh UUID is generated only after success clears the row.
+- [x] 4.5 DevTools script step 7: inject a `data-nuevo-reporte` form, confirm `nuevos[codigoTipo].idLocal` persists across a failed POST and a page reload, and a fresh UUID is generated only after success clears the row. Verified live in production (2026-08-30) via injected test form: UUID generated and persisted to `Dexie.nuevos`, hidden `id_local` field matched the persisted UUID, submit succeeded and the `nuevos` row was deleted after success.
 - [ ] 4.6 DevTools script step 8: double-click start under Slow 3G throttling → exactly one `Reporte` row in Django admin, one `numero_registro`.
 
 ## Phase 5: `nuevo-reporte.js` (Forward-Looking Infra for #12)
@@ -79,6 +79,6 @@ Chain strategy: stacked-to-main
 
 ## Phase 6: Cleanup / Documentation
 
-- [ ] 6.1 Update `openspec/changes/sincronizacion-numero-registro/design.md` Open Questions: confirm Postgres ≥13 (already verified — gen_random_uuid safe, mark resolved).
-- [ ] 6.2 Add a short README/comment note in `reportes/static/reportes/offline-db.js` explaining the shared schema contract for future scripts.
-- [ ] 6.3 Run full `pytest reportes/` suite and confirm no regressions in existing `test_post_nuevo_crea_un_reporte` and other pre-existing tests.
+- [x] 6.1 Update `openspec/changes/sincronizacion-numero-registro/design.md` Open Questions: confirm Postgres ≥13 (already verified — gen_random_uuid safe, mark resolved). Confirmed live Neon Postgres version is 18.6.
+- [x] 6.2 Add a short README/comment note in `reportes/static/reportes/offline-db.js` explaining the shared schema contract for future scripts. Already present in the file's header docstring (PR2), describing D5 and the single-`.version()` contract.
+- [x] 6.3 Run full `pytest reportes/` suite and confirm no regressions in existing `test_post_nuevo_crea_un_reporte` and other pre-existing tests. Full suite (269 tests) passing as of PR3, no regressions.
