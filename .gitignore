@@ -29,3 +29,6 @@ Thumbs.db
 
 # SDD artifact export (local only; source of record is Engram)
 docs/
+
+.vercel
+.env*

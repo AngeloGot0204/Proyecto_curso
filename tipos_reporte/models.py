@@ -99,8 +99,15 @@ class TipoDeReporte(models.Model):
     # integer (design D7). Optional: not every tipo names one yet.
     version_formato = models.CharField(max_length=20, blank=True, default="")
 
-    logo = models.ImageField(upload_to="tipos_reporte/logos/", null=True, blank=True)
-    plantilla = models.FileField(upload_to="tipos_reporte/plantillas/")
+    # max_length=500: in production these store a full Vercel Blob public
+    # URL (config.storage.VercelBlobStorage), not a short relative path —
+    # Django's FileField default of 100 chars is too short for that.
+    logo = models.ImageField(
+        upload_to="tipos_reporte/logos/", null=True, blank=True, max_length=500
+    )
+    plantilla = models.FileField(
+        upload_to="tipos_reporte/plantillas/", max_length=500
+    )
 
     definicion_activa = models.ForeignKey(
         "tipos_reporte.DefinicionDeTipo",
@@ -149,7 +156,11 @@ class DefinicionDeTipo(models.Model):
         related_name="definiciones",
     )
 
-    archivo_yaml = models.FileField(upload_to="tipos_reporte/definiciones/")
+    # max_length=500: same reason as TipoDeReporte.plantilla/logo above —
+    # production stores a full Vercel Blob public URL, not a short path.
+    archivo_yaml = models.FileField(
+        upload_to="tipos_reporte/definiciones/", max_length=500
+    )
     yaml_fuente = models.TextField()
     estructura = models.JSONField()
 

@@ -192,9 +192,10 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Local media storage for uploaded templates/logos (tipos_reporte, backlog #3,
-# design decision D10). Production storage (Vercel Blob) is out of scope for
-# this item; locally and in tests this works via FileSystemStorage.
+# Media storage for uploaded templates/logos (tipos_reporte, backlog #3,
+# design decision D10). Vercel's serverless functions run on a read-only
+# filesystem, so production must use Vercel Blob (config/storage.py); local
+# dev and tests keep using FileSystemStorage since there's no blob token there.
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -204,7 +205,16 @@ MEDIA_ROOT = BASE_DIR / "media"
 # inside the function itself instead (design Decision 5, superseded).
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": (
+            "config.storage.VercelBlobStorage"
+            # Gated on `not DEBUG`, not on the presence of env vars like
+            # `VERCEL`/`BLOB_READ_WRITE_TOKEN` alone: `vercel env pull` copies
+            # those into the local .env for convenience, so a dev machine can
+            # have them set without actually running on Vercel's read-only
+            # filesystem. DEBUG is never true in production (see above).
+            if not DEBUG
+            else "django.core.files.storage.FileSystemStorage"
+        ),
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
