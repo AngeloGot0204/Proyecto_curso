@@ -6,6 +6,7 @@
 {% block extra_head %}
 <script src="https://unpkg.com/dexie@3/dist/dexie.js" crossorigin="anonymous"></script>
 <script src="{% static 'reportes/paso.js' %}" defer></script>
+<script src="{% static 'reportes/offline-db.js' %}"></script>
 <script src="{% static 'reportes/paso-offline.js' %}" defer></script>
 <script>
     if ("serviceWorker" in navigator) {
