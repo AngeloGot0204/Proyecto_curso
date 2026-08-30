@@ -26,12 +26,13 @@ buckets.
 """
 
 import logging
+import uuid
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
-from django.http import Http404, HttpResponse
+from django.db import IntegrityError, transaction
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -103,18 +104,51 @@ def _reporte_accesible(reporte_id, usuario):
 @login_required
 @require_POST
 def iniciar_reporte(request, codigo_tipo):
-    """`POST /reportes/<codigo_tipo>/nuevo/` (design D7)."""
+    """`POST /reportes/<codigo_tipo>/nuevo/` (design D7; idempotency per
+    change `sincronizacion-numero-registro`, design D3/D8).
+
+    `id_local` is a client-generated UUID sent as a hidden POST field so a
+    retried POST (network retry, double-click, offline-then-retry) resolves
+    to the SAME `Reporte` via `get_or_create(id_local=..., creador=...)`
+    instead of creating a duplicate. Non-JS callers that send no `id_local`
+    fall back to a server-generated `uuid.uuid4()` — the DB `db_default`
+    (design D2) is the ultimate backstop either way. The lookup includes
+    `creador` (design D3): a hostile POST reusing someone else's `id_local`
+    falls through to `create()`, and the global `unique=True` constraint on
+    `id_local` turns that into an `IntegrityError` → 400, never a silent
+    handoff of another user's `Reporte`."""
     tipo = get_object_or_404(TipoDeReporte, codigo=codigo_tipo)
     if tipo.definicion_activa_id is None:
         raise Http404("Este tipo de reporte no tiene una definición activa.")
 
-    reporte = Reporte.objects.create(
-        tipo=tipo,
-        definicion=tipo.definicion_activa,
-        creador=request.user,
-    )
+    crudo = request.POST.get("id_local")
+    if crudo:
+        try:
+            id_local = uuid.UUID(crudo)
+        except (ValueError, AttributeError):
+            return HttpResponseBadRequest("id_local inválido.")
+    else:
+        id_local = uuid.uuid4()
 
-    ids_de_secciones = _ids_de_secciones(tipo.definicion_activa.estructura)
+    try:
+        with transaction.atomic():
+            reporte, creado = Reporte.objects.get_or_create(
+                id_local=id_local,
+                creador=request.user,
+                defaults={
+                    "tipo": tipo,
+                    "definicion": tipo.definicion_activa,
+                },
+            )
+    except IntegrityError:
+        return HttpResponseBadRequest("id_local ya utilizado.")
+
+    if not creado and reporte.tipo_id != tipo.id:
+        return HttpResponseBadRequest(
+            "id_local corresponde a otro tipo de reporte."
+        )
+
+    ids_de_secciones = _ids_de_secciones(reporte.definicion.estructura)
     primera_seccion = ids_de_secciones[0]
     return redirect("reportes_paso", reporte_id=reporte.id, seccion_id=primera_seccion)
 
