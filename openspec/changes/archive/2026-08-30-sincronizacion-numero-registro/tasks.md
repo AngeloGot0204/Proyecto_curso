@@ -62,12 +62,12 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Manual Verification (No Automated JS Coverage — Documented Limitation)
 
-- [ ] 4.1 DevTools script step 1: fetch submit path — single `fetch` POST then `document` GET of next step; `borradores` row for previous step is gone.
+- [x] 4.1 DevTools script step 1: fetch submit path — single `fetch` POST then `document` GET of next step; `borradores` row for previous step is gone. Verified live in dev server (2026-08-30): Preserve log showed `proceso-instalacion/` fetch POST with 302 redirect chain to `ensayo-pull-test/`; `borradores` table showed 0 entries after submit (previous step's row cleared).
 - [x] 4.2 DevTools script step 2-4: Network ▸ Offline submit → `pendiente` banner + `intentos:1`; Reintentar while offline → `intentos:2`; Reintentar after reconnect → success, row deleted. Verified live in production (2026-08-30): banner appeared, counter advanced on repeated offline submits/retries, success and step advance confirmed after reconnect + retry.
-- [ ] 4.3 DevTools script step 5: stop dev server → `fallo` state; restart, Reintentar → success.
+- [x] 4.3 DevTools script step 5: stop dev server → `fallo` state; restart, Reintentar → success. Verified live in dev server (2026-08-30): stopping the server produced `pendiente` (not `fallo`) with `intentos:1` — correct per 3.4, since a connection-refused fetch error is indistinguishable from offline and only an HTTP >= 400 response yields `fallo`. Restarted server, clicked Reintentar, submit succeeded and advanced to step 5, banner cleared.
 - [x] 4.4 DevTools script step 6: clear `sessionid` cookie mid-draft, submit → final URL `/login/`, row `fallo` with `valores` intact; re-login → banner restores; Reintentar succeeds. Verified live in production (2026-08-30): session cookie cleared, submit redirected to /login/, banner "No se pudo subir" persisted with draft intact across re-login, Reintentar succeeded and advanced to next step.
 - [x] 4.5 DevTools script step 7: inject a `data-nuevo-reporte` form, confirm `nuevos[codigoTipo].idLocal` persists across a failed POST and a page reload, and a fresh UUID is generated only after success clears the row. Verified live in production (2026-08-30) via injected test form: UUID generated and persisted to `Dexie.nuevos`, hidden `id_local` field matched the persisted UUID, submit succeeded and the `nuevos` row was deleted after success.
-- [ ] 4.6 DevTools script step 8: double-click start under Slow 3G throttling → exactly one `Reporte` row in Django admin, one `numero_registro`.
+- [x] 4.6 DevTools script step 8: double-click start under Slow 3G throttling → exactly one `Reporte` row in Django admin, one `numero_registro`. Verified live in dev server (2026-08-30) via injected test form (mirroring 4.5): two rapid `requestSubmit()` calls under Slow 3G with the same persisted `id_local` produced exactly one `Reporte` row (id 13, numero_registro 13), confirmed via `manage.py shell` query (Reporte admin registration doesn't exist, so DB was queried directly instead).
 
 ## Phase 5: `nuevo-reporte.js` (Forward-Looking Infra for #12)
 
