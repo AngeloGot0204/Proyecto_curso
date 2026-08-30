@@ -39,26 +39,26 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: View, URL, Template — mis_reportes
 
-- [ ] 2.1 (RED) Add to `reportes/tests/test_views.py`: `test_mis_reportes_anonimo_redirige_a_login` — anonymous `GET reverse("reportes_mis")` → 302 to `LOGIN_URL`, no report data in body (spec "Anonymous user is redirected").
-- [ ] 2.2 (RED) Add `test_mis_reportes_lista_solo_accesibles`: creator A sees R1 (own) and R2 (invited), not R3 (stranger's) (spec "User sees only accessible reports").
-- [ ] 2.3 (RED) Add `test_mis_reportes_admin_sin_relacion_no_ve_reporte_ajeno`: staff/admin user with no `creador`/`ParticipacionEnReporte` relation to R4 → R4 absent from response (spec "Admin Override Explicitly Out of Scope").
-- [ ] 2.4 (RED) Add `test_mis_reportes_agrupa_creados_por_mi`: A's own report appears under the "creados por mí" section (spec "Report grouped as created by me").
-- [ ] 2.5 (RED) Add `test_mis_reportes_agrupa_compartidos_conmigo`: A's invited-only report appears under "compartidos conmigo" and NOT under "creados por mí" (spec "Report grouped as shared with me").
-- [ ] 2.6 (RED) Add `test_mis_reportes_chip_en_progreso` and `test_mis_reportes_chip_terminado`: rendered body shows "En progreso"/"Terminado" via `get_estado_display`, and `"generado"` never appears anywhere in the body (spec "Status Indicator Limited to Real Estado Values").
-- [ ] 2.7 (RED) Add `test_mis_reportes_busqueda_por_tipo`: `?q=auditoria` narrows results to matching `tipo` only (spec "Search by tipo nombre").
-- [ ] 2.8 (RED) Add `test_mis_reportes_filtro_estado`: `?estado=terminado` narrows to `terminado` reports only (spec "Filter by estado").
-- [ ] 2.9 (RED) Add `test_mis_reportes_busqueda_y_estado_combinados`: `?q=` and `?estado=` both set → only reports matching both (spec "Search and estado filter combine").
-- [ ] 2.10 (RED) Add `test_mis_reportes_estado_invalido_no_falla`: `?estado=basura` → 200, full unfiltered set rendered (design D3, spec "unrecognized `?estado=` MUST NOT raise an error").
-- [ ] 2.11 (RED) Add `test_mis_reportes_orden_mas_reciente_primero`: 3 reports with distinct back-dated `fecha_creacion` (via `queryset.update(...)`, per design's `auto_now_add` note) → rendered order matches `-fecha_creacion` descending (spec "Most recent report appears first").
-- [ ] 2.12 (RED) Add `test_mis_reportes_pagina_1_tiene_20_y_pagina_2_tiene_1`: 21 accessible reports → page 1 shows 20, `?page=2` shows the remaining 1 (spec "Results beyond one page are paginated", design D2 page size = 20).
-- [ ] 2.13 (RED) Add `test_mis_reportes_page_param_invalido_no_falla`: `?page=abc` and `?page=999` both → 200, clamped to a valid page (design D2 `get_page` behavior).
-- [ ] 2.14 (RED) Add `test_mis_reportes_pagina_2_preserva_query_string`: `?page=2&q=x` → pagination links in the body still carry `q=x` (design's `{% querystring %}` note).
-- [ ] 2.15 (RED) Add `test_mis_reportes_no_muestra_numero_registro`: a report with a populated `numero_registro` → value does not appear anywhere in the rendered body (spec "No numero_registro Column in List").
-- [ ] 2.16 (GREEN) Add `TAMANO_DE_PAGINA = 20` module constant and `mis_reportes` view to `reportes/views.py` per design's shown shape: `@login_required`, read `q`/`estado`/`page` from `request.GET`, compose via `listado.reportes_accesibles` → `listado.aplicar_busqueda` → optional `.filter(estado=...)`, `Paginator(qs, TAMANO_DE_PAGINA).get_page(...)`, partition `page_obj` into `creados`/`compartidos` by `reporte.creador_id == request.user.id`.
-- [ ] 2.17 (GREEN) Add `path("mis/", views.mis_reportes, name="reportes_mis")` to `reportes/urls.py`.
-- [ ] 2.18 (GREEN) Create `reportes/templates/reportes/mis_reportes.html`: search form (`?q=`), estado `<select>` sourced from `EstadoDeReporte.choices` with a "Todos" empty option, two `<section>` blocks ("Creados por mí" / "Compartidos conmigo") each with `{% empty %}` states, status chip via `{{ reporte.get_estado_display }}`, pagination controls using `{% querystring %}`, row links to `reportes_revision`, logout form (moved from `templates/inicio.html`) — `participantes.html`-style `<section>`/table structure per design.
-- [ ] 2.19 Run 2.1–2.15, confirm all pass.
-- [ ] 2.20 (REFACTOR) Confirm `mis_reportes.html` contains no `numero_registro`/`id_local` reference and no `Generacion` query exists in the view (spec "No numero_registro Column" + "Status Indicator Limited to Real Estado Values", enforced by construction per design).
+- [x] 2.1 (RED) Add to `reportes/tests/test_views.py`: `test_mis_reportes_anonimo_redirige_a_login` — anonymous `GET reverse("reportes_mis")` → 302 to `LOGIN_URL`, no report data in body (spec "Anonymous user is redirected").
+- [x] 2.2 (RED) Add `test_mis_reportes_lista_solo_accesibles`: creator A sees R1 (own) and R2 (invited), not R3 (stranger's) (spec "User sees only accessible reports").
+- [x] 2.3 (RED) Add `test_mis_reportes_admin_sin_relacion_no_ve_reporte_ajeno`: staff/admin user with no `creador`/`ParticipacionEnReporte` relation to R4 → R4 absent from response (spec "Admin Override Explicitly Out of Scope").
+- [x] 2.4 (RED) Add `test_mis_reportes_agrupa_creados_por_mi`: A's own report appears under the "creados por mí" section (spec "Report grouped as created by me").
+- [x] 2.5 (RED) Add `test_mis_reportes_agrupa_compartidos_conmigo`: A's invited-only report appears under "compartidos conmigo" and NOT under "creados por mí" (spec "Report grouped as shared with me").
+- [x] 2.6 (RED) Add `test_mis_reportes_chip_en_progreso` and `test_mis_reportes_chip_terminado`: rendered body shows "En progreso"/"Terminado" via `get_estado_display`, and `"generado"` never appears anywhere in the body (spec "Status Indicator Limited to Real Estado Values").
+- [x] 2.7 (RED) Add `test_mis_reportes_busqueda_por_tipo`: `?q=auditoria` narrows results to matching `tipo` only (spec "Search by tipo nombre").
+- [x] 2.8 (RED) Add `test_mis_reportes_filtro_estado`: `?estado=terminado` narrows to `terminado` reports only (spec "Filter by estado").
+- [x] 2.9 (RED) Add `test_mis_reportes_busqueda_y_estado_combinados`: `?q=` and `?estado=` both set → only reports matching both (spec "Search and estado filter combine").
+- [x] 2.10 (RED) Add `test_mis_reportes_estado_invalido_no_falla`: `?estado=basura` → 200, full unfiltered set rendered (design D3, spec "unrecognized `?estado=` MUST NOT raise an error").
+- [x] 2.11 (RED) Add `test_mis_reportes_orden_mas_reciente_primero`: 3 reports with distinct back-dated `fecha_creacion` (via `queryset.update(...)`, per design's `auto_now_add` note) → rendered order matches `-fecha_creacion` descending (spec "Most recent report appears first").
+- [x] 2.12 (RED) Add `test_mis_reportes_pagina_1_tiene_20_y_pagina_2_tiene_1`: 21 accessible reports → page 1 shows 20, `?page=2` shows the remaining 1 (spec "Results beyond one page are paginated", design D2 page size = 20).
+- [x] 2.13 (RED) Add `test_mis_reportes_page_param_invalido_no_falla`: `?page=abc` and `?page=999` both → 200, clamped to a valid page (design D2 `get_page` behavior).
+- [x] 2.14 (RED) Add `test_mis_reportes_pagina_2_preserva_query_string`: `?page=2&q=x` → pagination links in the body still carry `q=x` (design's `{% querystring %}` note).
+- [x] 2.15 (RED) Add `test_mis_reportes_no_muestra_numero_registro`: a report with a populated `numero_registro` → value does not appear anywhere in the rendered body (spec "No numero_registro Column in List").
+- [x] 2.16 (GREEN) Add `TAMANO_DE_PAGINA = 20` module constant and `mis_reportes` view to `reportes/views.py` per design's shown shape: `@login_required`, read `q`/`estado`/`page` from `request.GET`, compose via `listado.reportes_accesibles` → `listado.aplicar_busqueda` → optional `.filter(estado=...)`, `Paginator(qs, TAMANO_DE_PAGINA).get_page(...)`, partition `page_obj` into `creados`/`compartidos` by `reporte.creador_id == request.user.id`.
+- [x] 2.17 (GREEN) Add `path("mis/", views.mis_reportes, name="reportes_mis")` to `reportes/urls.py`.
+- [x] 2.18 (GREEN) Create `reportes/templates/reportes/mis_reportes.html`: search form (`?q=`), estado `<select>` sourced from `EstadoDeReporte.choices` with a "Todos" empty option, two `<section>` blocks ("Creados por mí" / "Compartidos conmigo") each with `{% empty %}` states, status chip via `{{ reporte.get_estado_display }}`, pagination controls using `{% querystring %}`, row links to `reportes_revision`, logout form (moved from `templates/inicio.html`) — `participantes.html`-style `<section>`/table structure per design.
+- [x] 2.19 Run 2.1–2.15, confirm all pass.
+- [x] 2.20 (REFACTOR) Confirm `mis_reportes.html` contains no `numero_registro`/`id_local` reference and no `Generacion` query exists in the view (spec "No numero_registro Column" + "Status Indicator Limited to Real Estado Values", enforced by construction per design).
 
 ## Phase 3: Landing Redirect — usuarios/views.py::inicio
 

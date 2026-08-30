@@ -23,6 +23,12 @@ do NOT widen with invitations (spec `cierre-reporte`).
 spec `validacion-reporte`) is a GET-only, creator-or-participant-scoped
 view that calls `reportes.validacion.validar_reporte` and renders its two
 buckets.
+
+`mis_reportes` (backlog #12, spec `listado-reportes`; design's View shape)
+is the "Mis reportes" dashboard: a searchable, filterable, paginated,
+creator/participant-grouped list over `reportes.listado`'s pure query
+helpers. Reachable directly at `reportes/mis/` in this PR;
+`usuarios/views.py::inicio` is repointed at it in PR 3 of this chain.
 """
 
 import logging
@@ -31,6 +37,7 @@ import uuid
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
@@ -38,6 +45,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from reportes import listado
 from reportes.formularios import construir_formulario_seccion
 from reportes.models import (
     CambioDeValor,
@@ -56,6 +64,8 @@ from tipos_reporte.generador import ProblemaDeGeneracion
 from tipos_reporte.models import TipoDeReporte
 
 logger = logging.getLogger(__name__)
+
+TAMANO_DE_PAGINA = 20
 
 
 def service_worker(request):
@@ -413,3 +423,35 @@ def participantes(request, reporte_id):
         "cambios": cambios,
     }
     return render(request, "reportes/participantes.html", contexto)
+
+
+@login_required
+def mis_reportes(request):
+    """`GET /reportes/mis/` (backlog #12; spec `listado-reportes`; design's
+    View shape / D2 / D3 / D4). Access-scoped to creator-or-invited-
+    participant via `listado.reportes_accesibles` — no admin override
+    (spec "Admin Override Explicitly Out of Scope"). `?q=` search and
+    `?estado=` filter are both optional and combinable; an unrecognized
+    `?estado=` is silently ignored, never an error (design D3).
+    `Paginator.get_page` clamps an invalid/out-of-range `?page=` instead of
+    raising (design D2). The page's rows are partitioned in Python into
+    "creados por mí" / "compartidos conmigo" using the same
+    `creador_id == request.user.id` idiom `participantes.html` already
+    uses."""
+    q = (request.GET.get("q") or "").strip()
+    estado = listado.normalizar_estado(request.GET.get("estado"))
+    qs = listado.aplicar_busqueda(listado.reportes_accesibles(request.user), q)
+    if estado:
+        qs = qs.filter(estado=estado)
+    page_obj = Paginator(qs, TAMANO_DE_PAGINA).get_page(request.GET.get("page"))
+    creados = [r for r in page_obj if r.creador_id == request.user.id]
+    compartidos = [r for r in page_obj if r.creador_id != request.user.id]
+    contexto = {
+        "page_obj": page_obj,
+        "creados": creados,
+        "compartidos": compartidos,
+        "q": q,
+        "estado": estado,
+        "estados": EstadoDeReporte.choices,
+    }
+    return render(request, "reportes/mis_reportes.html", contexto)

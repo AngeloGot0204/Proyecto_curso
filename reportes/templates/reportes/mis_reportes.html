@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Mis reportes{% endblock %}
+
+{% block content %}
+<h1>Mis reportes</h1>
+
+<form method="get" action="{% url 'reportes_mis' %}">
+    <label for="q">Buscar</label>
+    <input type="text" id="q" name="q" value="{{ q }}" placeholder="Tipo o creador">
+
+    <label for="estado">Estado</label>
+    <select id="estado" name="estado">
+        <option value="" {% if not estado %}selected{% endif %}>Todos</option>
+        {% for valor, etiqueta in estados %}
+        <option value="{{ valor }}" {% if estado == valor %}selected{% endif %}>{{ etiqueta }}</option>
+        {% endfor %}
+    </select>
+
+    <button type="submit">Filtrar</button>
+</form>
+
+<section>
+    <h2>Creados por mí</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>Estado</th>
+                <th>Fecha de creación</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for reporte in creados %}
+            <tr>
+                <td><a href="{% url 'reportes_revision' reporte.id %}">{{ reporte.tipo.nombre }}</a></td>
+                <td>{{ reporte.get_estado_display }}</td>
+                <td>{{ reporte.fecha_creacion }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="3">Todavía no creaste ningún reporte.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Compartidos conmigo</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>Creador</th>
+                <th>Estado</th>
+                <th>Fecha de creación</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for reporte in compartidos %}
+            <tr>
+                <td><a href="{% url 'reportes_revision' reporte.id %}">{{ reporte.tipo.nombre }}</a></td>
+                <td>{{ reporte.creador.username }}</td>
+                <td>{{ reporte.get_estado_display }}</td>
+                <td>{{ reporte.fecha_creacion }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4">Todavía no te invitaron a ningún reporte.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% if page_obj.paginator.num_pages > 1 %}
+<nav aria-label="Paginación">
+    {% if page_obj.has_previous %}
+    <a href="{% querystring page=page_obj.previous_page_number %}">Anterior</a>
+    {% endif %}
+    <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="{% querystring page=page_obj.next_page_number %}">Siguiente</a>
+    {% endif %}
+</nav>
+{% endif %}
+
+<form method="post" action="{% url 'logout' %}">
+    {% csrf_token %}
+    <button type="submit">Cerrar sesión</button>
+</form>
+{% endblock %}

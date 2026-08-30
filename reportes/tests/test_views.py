@@ -1130,3 +1130,368 @@ def test_post_paso_actualiza_servidor_actualizado_en_siguiente_get(sesion_de_cre
 
     assert response_despues.status_code == 200
     assert valor.fecha.isoformat() in contenido_despues
+
+
+# ---------------------------------------------------------------------------
+# mis_reportes (backlog #12, PR 2 of 3; spec `listado-reportes`; design's
+# View shape / D2 / D3 / D4). Focused command: `pytest
+# reportes/tests/test_views.py -q -k "mis_reportes"`.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_mis_reportes_anonimo_redirige_a_login(client, reporte_factory):
+    """Spec 'Anonymous user is redirected'."""
+    reporte_factory()
+
+    response = client.get(reverse("reportes_mis"))
+
+    assert response.status_code == 302
+    assert reverse("login") in response.url
+    assert Reporte.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_mis_reportes_lista_solo_accesibles(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Spec 'User sees only accessible reports': creator A sees R1 (own)
+    and R2 (invited), not R3 (stranger's)."""
+    a = usuario_factory(username="mis-reportes-a")
+    b = usuario_factory(username="mis-reportes-b")
+    tipo1, definicion1 = tipo_con_definicion_activa_factory(
+        nombre="Accesibles 1", codigo="accesibles-1"
+    )
+    tipo2, definicion2 = tipo_con_definicion_activa_factory(
+        nombre="Accesibles 2", codigo="accesibles-2"
+    )
+    tipo3, definicion3 = tipo_con_definicion_activa_factory(
+        nombre="Accesibles 3", codigo="accesibles-3"
+    )
+    r1 = reporte_factory(creador=a, tipo=tipo1, definicion=definicion1)
+    r2 = reporte_factory(creador=b, tipo=tipo2, definicion=definicion2)
+    ParticipacionEnReporte.objects.create(reporte=r2, usuario=a)
+    r3 = reporte_factory(creador=b, tipo=tipo3, definicion=definicion3)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+    reportes_en_pagina = list(response.context["page_obj"])
+
+    assert response.status_code == 200
+    assert r1 in reportes_en_pagina
+    assert r2 in reportes_en_pagina
+    assert r3 not in reportes_en_pagina
+
+
+@pytest.mark.django_db
+def test_mis_reportes_admin_sin_relacion_no_ve_reporte_ajeno(
+    client, usuario_factory, reporte_factory
+):
+    """Spec 'Admin Override Explicitly Out of Scope': a staff/admin user
+    with no creador/participacion relation to R4 does not see it."""
+    admin = usuario_factory(username="mis-reportes-admin", is_staff=True, is_superuser=True)
+    otro = usuario_factory(username="mis-reportes-creador-r4")
+    r4 = reporte_factory(creador=otro)
+    client.force_login(admin)
+
+    response = client.get(reverse("reportes_mis"))
+    reportes_en_pagina = list(response.context["page_obj"])
+
+    assert response.status_code == 200
+    assert r4 not in reportes_en_pagina
+
+
+@pytest.mark.django_db
+def test_mis_reportes_agrupa_creados_por_mi(client, usuario_factory, reporte_factory):
+    """Spec 'Report grouped as created by me'."""
+    a = usuario_factory(username="mis-reportes-agrupa-creador")
+    r1 = reporte_factory(creador=a)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+
+    assert response.status_code == 200
+    assert r1 in response.context["creados"]
+    assert r1 not in response.context["compartidos"]
+
+
+@pytest.mark.django_db
+def test_mis_reportes_agrupa_compartidos_conmigo(
+    client, usuario_factory, reporte_factory, participacion_factory
+):
+    """Spec 'Report grouped as shared with me': invited-only report
+    appears under 'compartidos conmigo' and NOT under 'creados por mí'."""
+    b = usuario_factory(username="mis-reportes-agrupa-otro-creador")
+    r2 = reporte_factory(creador=b)
+    invitado = participacion_factory(r2, username="mis-reportes-agrupa-invitado")
+    client.force_login(invitado)
+
+    response = client.get(reverse("reportes_mis"))
+
+    assert response.status_code == 200
+    assert r2 in response.context["compartidos"]
+    assert r2 not in response.context["creados"]
+
+
+@pytest.mark.django_db
+def test_mis_reportes_chip_en_progreso(client, usuario_factory, reporte_factory):
+    """Spec 'en_progreso report renders its real status'."""
+    a = usuario_factory(username="mis-reportes-chip-en-progreso")
+    reporte_factory(creador=a, estado=EstadoDeReporte.EN_PROGRESO)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "En progreso" in contenido
+    assert "generado" not in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_chip_terminado(client, usuario_factory, reporte_factory):
+    """Spec 'terminado report renders its real status'."""
+    a = usuario_factory(username="mis-reportes-chip-terminado")
+    reporte_factory(creador=a, estado=EstadoDeReporte.TERMINADO)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Terminado" in contenido
+    assert "generado" not in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_busqueda_por_tipo(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Spec 'Search by tipo nombre': `?q=auditoria` narrows results to the
+    matching tipo only (design D4 accent-folding)."""
+    a = usuario_factory(username="mis-reportes-busqueda")
+    tipo_auditoria, definicion_auditoria = tipo_con_definicion_activa_factory(
+        nombre="Auditoría", codigo="auditoria-busqueda"
+    )
+    tipo_inspeccion, definicion_inspeccion = tipo_con_definicion_activa_factory(
+        nombre="Inspección", codigo="inspeccion-busqueda"
+    )
+    r_auditoria = reporte_factory(
+        creador=a, tipo=tipo_auditoria, definicion=definicion_auditoria
+    )
+    reporte_factory(creador=a, tipo=tipo_inspeccion, definicion=definicion_inspeccion)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"), {"q": "auditoria"})
+    reportes_en_pagina = list(response.context["page_obj"])
+
+    assert response.status_code == 200
+    assert reportes_en_pagina == [r_auditoria]
+
+
+@pytest.mark.django_db
+def test_mis_reportes_filtro_estado(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Spec 'Filter by estado': `?estado=terminado` narrows to terminado
+    reports only."""
+    a = usuario_factory(username="mis-reportes-filtro-estado")
+    tipo1, definicion1 = tipo_con_definicion_activa_factory(
+        nombre="Filtro estado 1", codigo="filtro-estado-1"
+    )
+    tipo2, definicion2 = tipo_con_definicion_activa_factory(
+        nombre="Filtro estado 2", codigo="filtro-estado-2"
+    )
+    reporte_factory(
+        creador=a, tipo=tipo1, definicion=definicion1, estado=EstadoDeReporte.EN_PROGRESO
+    )
+    terminado = reporte_factory(
+        creador=a, tipo=tipo2, definicion=definicion2, estado=EstadoDeReporte.TERMINADO
+    )
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"), {"estado": "terminado"})
+    reportes_en_pagina = list(response.context["page_obj"])
+
+    assert response.status_code == 200
+    assert reportes_en_pagina == [terminado]
+
+
+@pytest.mark.django_db
+def test_mis_reportes_busqueda_y_estado_combinados(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Spec 'Search and estado filter combine'."""
+    a = usuario_factory(username="mis-reportes-combinado")
+    tipo_auditoria, definicion_auditoria = tipo_con_definicion_activa_factory(
+        nombre="Auditoría", codigo="auditoria-combinado"
+    )
+    coincide = reporte_factory(
+        creador=a,
+        tipo=tipo_auditoria,
+        definicion=definicion_auditoria,
+        estado=EstadoDeReporte.TERMINADO,
+    )
+    reporte_factory(
+        creador=a,
+        tipo=tipo_auditoria,
+        definicion=definicion_auditoria,
+        estado=EstadoDeReporte.EN_PROGRESO,
+    )
+    tipo_inspeccion, definicion_inspeccion = tipo_con_definicion_activa_factory(
+        nombre="Inspección", codigo="inspeccion-combinado"
+    )
+    reporte_factory(
+        creador=a,
+        tipo=tipo_inspeccion,
+        definicion=definicion_inspeccion,
+        estado=EstadoDeReporte.TERMINADO,
+    )
+    client.force_login(a)
+
+    response = client.get(
+        reverse("reportes_mis"), {"q": "auditoria", "estado": "terminado"}
+    )
+    reportes_en_pagina = list(response.context["page_obj"])
+
+    assert response.status_code == 200
+    assert reportes_en_pagina == [coincide]
+
+
+@pytest.mark.django_db
+def test_mis_reportes_estado_invalido_no_falla(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Design D3, spec 'unrecognized ?estado= MUST NOT raise an error':
+    `?estado=basura` returns 200 with the full unfiltered set."""
+    a = usuario_factory(username="mis-reportes-estado-invalido")
+    tipo1, definicion1 = tipo_con_definicion_activa_factory(
+        nombre="Estado invalido 1", codigo="estado-invalido-1"
+    )
+    tipo2, definicion2 = tipo_con_definicion_activa_factory(
+        nombre="Estado invalido 2", codigo="estado-invalido-2"
+    )
+    reporte_factory(
+        creador=a, tipo=tipo1, definicion=definicion1, estado=EstadoDeReporte.EN_PROGRESO
+    )
+    reporte_factory(
+        creador=a, tipo=tipo2, definicion=definicion2, estado=EstadoDeReporte.TERMINADO
+    )
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"), {"estado": "basura"})
+
+    assert response.status_code == 200
+    assert len(response.context["page_obj"]) == 2
+
+
+@pytest.mark.django_db
+def test_mis_reportes_orden_mas_reciente_primero(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Spec 'Most recent report appears first'."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    a = usuario_factory(username="mis-reportes-orden")
+    tipo1, definicion1 = tipo_con_definicion_activa_factory(
+        nombre="Orden 1", codigo="orden-1"
+    )
+    tipo2, definicion2 = tipo_con_definicion_activa_factory(
+        nombre="Orden 2", codigo="orden-2"
+    )
+    tipo3, definicion3 = tipo_con_definicion_activa_factory(
+        nombre="Orden 3", codigo="orden-3"
+    )
+    r1 = reporte_factory(creador=a, tipo=tipo1, definicion=definicion1)
+    r2 = reporte_factory(creador=a, tipo=tipo2, definicion=definicion2)
+    r3 = reporte_factory(creador=a, tipo=tipo3, definicion=definicion3)
+    ahora = timezone.now()
+    Reporte.objects.filter(pk=r1.pk).update(fecha_creacion=ahora - timedelta(days=2))
+    Reporte.objects.filter(pk=r2.pk).update(fecha_creacion=ahora - timedelta(days=1))
+    Reporte.objects.filter(pk=r3.pk).update(fecha_creacion=ahora)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+    reportes_en_pagina = list(response.context["page_obj"])
+
+    assert response.status_code == 200
+    assert reportes_en_pagina == [r3, r2, r1]
+
+
+@pytest.mark.django_db
+def test_mis_reportes_pagina_1_tiene_20_y_pagina_2_tiene_1(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Spec 'Results beyond one page are paginated', design D2 page size =
+    20."""
+    a = usuario_factory(username="mis-reportes-paginacion")
+    tipo, definicion = tipo_con_definicion_activa_factory(
+        nombre="Paginación", codigo="paginacion-mis-reportes"
+    )
+    for _ in range(21):
+        reporte_factory(creador=a, tipo=tipo, definicion=definicion)
+    client.force_login(a)
+
+    respuesta_pagina_1 = client.get(reverse("reportes_mis"))
+    respuesta_pagina_2 = client.get(reverse("reportes_mis"), {"page": "2"})
+
+    assert respuesta_pagina_1.status_code == 200
+    assert len(respuesta_pagina_1.context["page_obj"]) == 20
+    assert respuesta_pagina_2.status_code == 200
+    assert len(respuesta_pagina_2.context["page_obj"]) == 1
+
+
+@pytest.mark.django_db
+def test_mis_reportes_page_param_invalido_no_falla(
+    client, usuario_factory, reporte_factory
+):
+    """Design D2 `get_page` behavior: `?page=abc` and `?page=999` both
+    clamp to a valid page instead of raising."""
+    a = usuario_factory(username="mis-reportes-page-invalido")
+    reporte_factory(creador=a)
+    client.force_login(a)
+
+    respuesta_no_numerica = client.get(reverse("reportes_mis"), {"page": "abc"})
+    respuesta_fuera_de_rango = client.get(reverse("reportes_mis"), {"page": "999"})
+
+    assert respuesta_no_numerica.status_code == 200
+    assert respuesta_fuera_de_rango.status_code == 200
+
+
+@pytest.mark.django_db
+def test_mis_reportes_pagina_2_preserva_query_string(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+):
+    """Design's `{% querystring %}` note: `?page=2&q=x` keeps `q=x` in the
+    pagination links rendered in the body."""
+    a = usuario_factory(username="mis-reportes-querystring")
+    tipo, definicion = tipo_con_definicion_activa_factory(
+        nombre="Consulta preservada", codigo="querystring-mis-reportes"
+    )
+    for _ in range(21):
+        reporte_factory(creador=a, tipo=tipo, definicion=definicion)
+    client.force_login(a)
+
+    response = client.get(
+        reverse("reportes_mis"), {"page": "2", "q": "mis-reportes-querystring"}
+    )
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "q=mis-reportes-querystring" in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_no_muestra_numero_registro(client, usuario_factory, reporte_factory):
+    """Spec 'No numero_registro Column in List'."""
+    a = usuario_factory(username="mis-reportes-numero-registro")
+    reporte = reporte_factory(creador=a)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert str(reporte.numero_registro) not in contenido
