@@ -181,9 +181,50 @@ def _validar_colisiones_de_celda(nodos):
     return problemas
 
 
+_MAXIMO_DE_ANCLAS_DE_ADJUNTOS = 4
+
+
+def _validar_anclas_de_adjuntos(estructura: dict) -> list[ProblemaDeDefinicion]:
+    """R7 (backlog #11, design D6): validates the notation of every
+    declared attachment anchor slot (`estructura["adjuntos"][*]["celda"]`,
+    reusing `_es_celda_valida`, same as R3) and rejects more than
+    `_MAXIMO_DE_ANCLAS_DE_ADJUNTOS` declared slots.
+
+    Deliberately does NOT reuse R6's merged-anchor-cell rule
+    (`celda-no-es-ancla`) or `_validar_colisiones_de_celda`: a floating
+    image anchors to a cell CORNER, it is never written into the cell, so a
+    merged non-anchor cell — or a cell shared with a data field — is a
+    legitimate embedding target, not a collision (design D6)."""
+    adjuntos = estructura.get("adjuntos") or []
+    problemas = []
+    for i, slot in enumerate(adjuntos):
+        celda = slot.get("celda") if isinstance(slot, dict) else None
+        if not _es_celda_valida(celda):
+            problemas.append(
+                ProblemaDeDefinicion(
+                    regla="ancla-de-adjunto-mal-formada",
+                    ubicacion=f"adjuntos[{i}]",
+                    mensaje=f"'celda': '{celda}' no es una notación de celda válida.",
+                )
+            )
+    if len(adjuntos) > _MAXIMO_DE_ANCLAS_DE_ADJUNTOS:
+        problemas.append(
+            ProblemaDeDefinicion(
+                regla="anclas-de-adjunto-excedidas",
+                ubicacion="adjuntos",
+                mensaje=(
+                    f"Se declararon {len(adjuntos)} anclas de adjuntos; el "
+                    f"máximo permitido es {_MAXIMO_DE_ANCLAS_DE_ADJUNTOS}."
+                ),
+            )
+        )
+    return problemas
+
+
 def validar_estructura(estructura: dict) -> list[ProblemaDeDefinicion]:
-    """Runs R1-R4 over the full definition and accumulates every problem
-    found (spec: "Exhaustive activation validation") — never returns early."""
+    """Runs R1-R4 and R7 over the full definition and accumulates every
+    problem found (spec: "Exhaustive activation validation") — never
+    returns early."""
     problemas: list[ProblemaDeDefinicion] = []
     nodos = list(_iterar_nodos(estructura))
 
@@ -193,6 +234,7 @@ def validar_estructura(estructura: dict) -> list[ProblemaDeDefinicion]:
         problemas.extend(_validar_notacion_de_celda(ubicacion, nodo))
 
     problemas.extend(_validar_colisiones_de_celda(nodos))
+    problemas.extend(_validar_anclas_de_adjuntos(estructura))
 
     return problemas
 

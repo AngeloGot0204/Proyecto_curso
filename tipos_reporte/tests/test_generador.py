@@ -640,3 +640,178 @@ def test_plantilla_sin_imagen_con_logo_definido_no_inserta_ninguna_imagen(
     libro = load_workbook(resultado)
     hoja = libro[estructura["hoja"]]
     assert hoja._images == []
+
+
+# --- Phase 5: attachment embedding via anchor slots (backlog #11, D5/D6) ---
+#
+# `generacion-reporte-excel` delta spec, "Attachment Embedding via Anchor
+# Slots": `_incrustar_adjuntos` is a generalization of, not a reuse of,
+# `_intercambiar_logo`'s single-fixed-anchor mechanism — it uses openpyxl's
+# STRING anchor form (`hoja.add_image(img, "B40")`), so `Image.width/height`
+# DO define the drawing box (the inverse of `_intercambiar_logo`, which
+# copies a pre-existing anchor object and ignores `Image.width/height`).
+
+
+def _cuatro_slots_de_adjuntos():
+    return [
+        {"celda": "B40"},
+        {"celda": "B60"},
+        {"celda": "B80"},
+        {"celda": "B100"},
+    ]
+
+
+@pytest.mark.django_db
+def test_adjuntos_dentro_del_limite_de_anclas_se_incrustan(
+    tipo_de_reporte_factory, plantilla_xlsx, imagen_png, definicion_valida, valores_completos
+):
+    """Spec scenario "Attachments within anchor-slot count are embedded": 3
+    stored attachments and a template declaring 4 anchor slots must embed
+    all 3, each at its corresponding anchor slot."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    estructura["adjuntos"] = _cuatro_slots_de_adjuntos()
+    destino = plantilla_xlsx(nombre_hoja=estructura["hoja"])
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    tipo = tipo_de_reporte_factory(plantilla=SimpleUploadedFile("plantilla.xlsx", contenido))
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("definicion.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+    adjuntos = [
+        open(imagen_png(nombre=f"adjunto-{i}.png", tamano=(400, 300)), "rb")
+        for i in range(3)
+    ]
+
+    try:
+        resultado = generar_reporte(definicion, valores_completos(), adjuntos=adjuntos)
+    finally:
+        for archivo in adjuntos:
+            archivo.close()
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    assert len(hoja._images) == 3
+    anclas_esperadas = {(1, 39), (1, 59), (1, 79)}  # (col, row), 0-indexed
+    anclas_obtenidas = {
+        (imagen.anchor._from.col, imagen.anchor._from.row) for imagen in hoja._images
+    }
+    assert anclas_obtenidas == anclas_esperadas
+
+
+@pytest.mark.django_db
+def test_adjuntos_mas_alla_del_limite_de_anclas_quedan_almacenados_no_incrustados(
+    tipo_de_reporte_factory, plantilla_xlsx, imagen_png, definicion_valida, valores_completos
+):
+    """Spec scenario "Attachments beyond anchor-slot count remain stored,
+    not embedded": 6 stored attachments and 4 declared anchor slots must
+    embed only 4 — `zip` truncation, no error raised."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    estructura["adjuntos"] = _cuatro_slots_de_adjuntos()
+    destino = plantilla_xlsx(nombre_hoja=estructura["hoja"])
+    with open(destino, "rb") as archivo:
+        contenido = archivo.read()
+    tipo = tipo_de_reporte_factory(plantilla=SimpleUploadedFile("plantilla.xlsx", contenido))
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("definicion.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+    adjuntos = [
+        open(imagen_png(nombre=f"adjunto-{i}.png", tamano=(400, 300)), "rb")
+        for i in range(6)
+    ]
+
+    try:
+        resultado = generar_reporte(definicion, valores_completos(), adjuntos=adjuntos)
+    finally:
+        for archivo in adjuntos:
+            archivo.close()
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    assert len(hoja._images) == 4
+
+
+@pytest.mark.django_db
+def test_sin_adjuntos_deja_las_anclas_vacias(
+    tipo_de_reporte_factory, plantilla_xlsx, definicion_valida, valores_completos
+):
+    """Spec scenario "No attachments leaves anchor slots empty": a
+    `Reporte` with no stored attachments and a template declaring anchor
+    slots must leave the exported sheet's anchor slots empty, and
+    generation must still succeed normally."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    estructura["adjuntos"] = _cuatro_slots_de_adjuntos()
+    definicion = _definicion_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx, estructura)
+
+    resultado = generar_reporte(definicion, valores_completos(), adjuntos=())
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    assert hoja._images == []
+
+
+@pytest.mark.django_db
+def test_plantilla_sin_anclas_declaradas_no_incrusta_nada(
+    tipo_de_reporte_factory, plantilla_xlsx, imagen_png, definicion_valida, valores_completos
+):
+    """Spec scenario "Template without declared anchor slots skips
+    embedding entirely": a `DefinicionDeTipo` whose template declares no
+    `adjuntos` anchor slots must perform no embedding at all, even with
+    stored attachments — generation proceeds as before this change (cell
+    values and logo swap only)."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()  # no "adjuntos" key
+    definicion = _definicion_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx, estructura)
+    adjunto = open(imagen_png(nombre="adjunto.png", tamano=(400, 300)), "rb")
+
+    try:
+        resultado = generar_reporte(
+            definicion, valores_completos(), adjuntos=[adjunto]
+        )
+    finally:
+        adjunto.close()
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    assert hoja._images == []
+
+
+@pytest.mark.django_db
+def test_adjunto_no_decodificable_se_omite_sin_interrumpir_la_generacion(
+    tipo_de_reporte_factory, plantilla_xlsx, definicion_valida, valores_completos
+):
+    """Threat Matrix "Untrusted file parsing": a stored file Pillow cannot
+    decode (e.g. an unconverted HEIC that reached storage because client
+    conversion failed) must be SKIPPED, never raised as
+    `ProblemaDeGeneracion` — the isolation philosophy already established
+    server-side in PR 2 ("bloqueo solo del adjunto"), one layer down."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = definicion_valida()
+    estructura["adjuntos"] = [{"celda": "B40"}]
+    definicion = _definicion_con_plantilla(tipo_de_reporte_factory, plantilla_xlsx, estructura)
+    adjunto_no_decodificable = SimpleUploadedFile(
+        "adjunto.heic", b"esto no es una imagen decodificable"
+    )
+
+    resultado = generar_reporte(
+        definicion, valores_completos(), adjuntos=[adjunto_no_decodificable]
+    )
+
+    libro = load_workbook(resultado)
+    hoja = libro[estructura["hoja"]]
+    assert hoja._images == []

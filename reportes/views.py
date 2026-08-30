@@ -355,7 +355,11 @@ def generar(request, reporte_id):
 
     valores = valores_de_reporte(reporte)
     try:
-        buffer = generador.generar_reporte(reporte.definicion, valores)
+        buffer = generador.generar_reporte(
+            reporte.definicion,
+            valores,
+            adjuntos=[adjunto.archivo for adjunto in reporte.adjuntos.all()],
+        )
     except ProblemaDeGeneracion:
         logger.exception(
             "Fallo al generar el documento del reporte #%s", reporte.id

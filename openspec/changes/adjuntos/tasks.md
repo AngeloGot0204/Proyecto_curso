@@ -67,18 +67,18 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: Excel Embedding & Anchor Validation (D5, D6, TDD)
 
-- [ ] 5.1 RED: write a malformed-anchor-coordinate test for the `adjuntos` slot list in `tipos_reporte/tests/test_validacion_plantilla.py` (R7, `regla="ancla-de-adjunto-mal-formada"`).
-- [ ] 5.2 RED: write a >4-declared-slots test (R7, `regla="anclas-de-adjunto-excedidas"`).
-- [ ] 5.3 GREEN: add R7 to `tipos_reporte/validacion.py`, reusing `_es_celda_valida` over `estructura["adjuntos"][*]["celda"]`; explicitly do NOT apply R6's merged-anchor rule or `_validar_colisiones_de_celda` (D6 — floating images anchor to a cell corner, not written into it).
-- [ ] 5.4 RED: write the "Attachments within anchor-slot count are embedded" test in `tipos_reporte/tests/test_generador.py` (3 attachments, 4 declared slots → all 3 embedded; assert `len(hoja._images)` and each `anchor._from`).
-- [ ] 5.5 RED: write the "Attachments beyond anchor-slot count remain stored, not embedded" test (6 attachments, 4 slots → only 4 embedded, no error raised).
-- [ ] 5.6 RED: write the "No attachments leaves anchor slots empty" test (0 attachments, slots declared → generation succeeds, no images embedded).
-- [ ] 5.7 RED: write the "Template without declared anchor slots skips embedding entirely" test (no `adjuntos:` key → `_incrustar_adjuntos` no-ops, cell values/logo swap unaffected).
-- [ ] 5.8 RED: write an undecodable-file-skipped test (threat matrix "Untrusted file parsing" — an unconverted HEIC that reached storage makes `PIL.Image.open` raise; assert it is skipped via `try/except … continue`, never raised as `ProblemaDeGeneracion`).
-- [ ] 5.9 GREEN: implement `tipos_reporte/generador.py::_incrustar_adjuntos(hoja, estructura, adjuntos)` using openpyxl's string-anchor form (`hoja.add_image(img, slot["celda"])`, NOT copying an existing anchor object like `_intercambiar_logo`), `zip(estructura.get("adjuntos") or [], adjuntos)` enforcing the 4-slot cap via truncation, decode failures caught and `logger.exception`-logged.
-- [ ] 5.10 GREEN: add `adjuntos=()` keyword to `generar_reporte(definicion, valores, adjuntos=())`, calling `_incrustar_adjuntos` alongside `_intercambiar_logo` before returning the workbook; confirm every existing `generar_reporte(definicion, valores)` call (including prior tests) remains valid with the default.
-- [ ] 5.11 GREEN: wire `reportes/views.py::generar` to pass `adjuntos=[a.archivo for a in reporte.adjuntos.all()]` (dependency direction preserved — `tipos_reporte` never imports `reportes`).
-- [ ] 5.12 REFACTOR: run full Phase 5 suite green; confirm scenario coverage against all 4 `generacion-reporte-excel` delta scenarios.
+- [x] 5.1 RED: write a malformed-anchor-coordinate test for the `adjuntos` slot list in `tipos_reporte/tests/test_validacion_plantilla.py` (R7, `regla="ancla-de-adjunto-mal-formada"`).
+- [x] 5.2 RED: write a >4-declared-slots test (R7, `regla="anclas-de-adjunto-excedidas"`).
+- [x] 5.3 GREEN: add R7 to `tipos_reporte/validacion.py`, reusing `_es_celda_valida` over `estructura["adjuntos"][*]["celda"]`; explicitly do NOT apply R6's merged-anchor rule or `_validar_colisiones_de_celda` (D6 — floating images anchor to a cell corner, not written into it).
+- [x] 5.4 RED: write the "Attachments within anchor-slot count are embedded" test in `tipos_reporte/tests/test_generador.py` (3 attachments, 4 declared slots → all 3 embedded; assert `len(hoja._images)` and each `anchor._from`).
+- [x] 5.5 RED: write the "Attachments beyond anchor-slot count remain stored, not embedded" test (6 attachments, 4 slots → only 4 embedded, no error raised).
+- [x] 5.6 RED: write the "No attachments leaves anchor slots empty" test (0 attachments, slots declared → generation succeeds, no images embedded).
+- [x] 5.7 RED: write the "Template without declared anchor slots skips embedding entirely" test (no `adjuntos:` key → `_incrustar_adjuntos` no-ops, cell values/logo swap unaffected).
+- [x] 5.8 RED: write an undecodable-file-skipped test (threat matrix "Untrusted file parsing" — an unconverted HEIC that reached storage makes `PIL.Image.open` raise; assert it is skipped via `try/except … continue`, never raised as `ProblemaDeGeneracion`).
+- [x] 5.9 GREEN: implement `tipos_reporte/generador.py::_incrustar_adjuntos(hoja, estructura, adjuntos)` using openpyxl's string-anchor form (`hoja.add_image(img, slot["celda"])`, NOT copying an existing anchor object like `_intercambiar_logo`), `zip(estructura.get("adjuntos") or [], adjuntos)` enforcing the 4-slot cap via truncation, decode failures caught and `logger.exception`-logged.
+- [x] 5.10 GREEN: add `adjuntos=()` keyword to `generar_reporte(definicion, valores, adjuntos=())`, calling `_incrustar_adjuntos` alongside `_intercambiar_logo` before returning the workbook; confirm every existing `generar_reporte(definicion, valores)` call (including prior tests) remains valid with the default.
+- [x] 5.11 GREEN: wire `reportes/views.py::generar` to pass `adjuntos=[a.archivo for a in reporte.adjuntos.all()]` (dependency direction preserved — `tipos_reporte` never imports `reportes`).
+- [x] 5.12 REFACTOR: run full Phase 5 suite green; confirm scenario coverage against all 4 `generacion-reporte-excel` delta scenarios.
 
 ## Phase 6: Manual DevTools Verification (No Automated JS Coverage — Documented Limitation)
 

@@ -13,12 +13,21 @@ This module implements every phase of the change's `tasks.md`: Phase 1
 (cell writing + sheet-only export) and Phase 4 (logo swap).
 """
 
+import logging
 from io import BytesIO
 
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as ImagenOpenpyxl
 
 from tipos_reporte.validacion import _claves_de_celda_requeridas, _iterar_nodos
+
+logger = logging.getLogger(__name__)
+
+# Design D5's Open Questions default (confirmed for this PR): a declared
+# attachment anchor slot with no explicit `ancho_px`/`alto_px` fits the
+# image within a 320x240 box, aspect ratio preserved.
+_ANCHO_PX_POR_DEFECTO = 320
+_ALTO_PX_POR_DEFECTO = 240
 
 
 class ProblemaDeGeneracion(Exception):
@@ -128,6 +137,53 @@ def _intercambiar_logo(hoja, logo):
         hoja.add_image(nueva)
 
 
+def _encajar(imagen, slot):
+    """Aspect-preserving fit of `imagen` inside `slot`'s declared box
+    (`ancho_px`/`alto_px`, defaulting to `_ANCHO_PX_POR_DEFECTO` x
+    `_ALTO_PX_POR_DEFECTO`, design D5). Contrast with `_intercambiar_logo`:
+    there a pre-existing anchor OBJECT defines position and extent and
+    `Image.width/height` is ignored; here there is no pre-existing drawing,
+    so `Image.width/height` is exactly what openpyxl derives the new
+    `OneCellAnchor`'s `ext` (extent) from."""
+    ancho_max = slot.get("ancho_px", _ANCHO_PX_POR_DEFECTO)
+    alto_max = slot.get("alto_px", _ALTO_PX_POR_DEFECTO)
+    escala = min(ancho_max / imagen.width, alto_max / imagen.height)
+    return round(imagen.width * escala), round(imagen.height * escala)
+
+
+def _incrustar_adjuntos(hoja, estructura, adjuntos):
+    """Embed up to `_MAXIMO_DE_ANCLAS_DE_ADJUNTOS` stored attachments into
+    the template's declared anchor slots (backlog #11, design D5, spec
+    "Attachment Embedding via Anchor Slots"). A generalization of, not a
+    reuse of, `_intercambiar_logo`'s single-fixed-anchor mechanism: this
+    uses openpyxl's STRING anchor form (`hoja.add_image(img, "B40")`),
+    which makes openpyxl build a fresh `OneCellAnchor` FROM `Image.width/
+    height`, the inverse of `_intercambiar_logo`'s object-reuse mechanism.
+
+    `zip` truncation is what enforces the anchor-slot cap: attachments
+    beyond the declared slot count are simply never reached, staying
+    stored and listable server-side (spec scenario 2); no declared
+    `adjuntos` key or no stored attachments both yield zero iterations
+    (spec scenarios 3 and 4).
+
+    A file Pillow cannot decode (e.g. an unconverted HEIC that reached
+    storage — design's documented risk) is skipped, never raised: turning
+    it into a `ProblemaDeGeneracion` would let one attachment block the
+    whole document, the same failure mode the "bloqueo solo del adjunto"
+    isolation requirement forbids one layer down (design D5)."""
+    for slot, archivo in zip(estructura.get("adjuntos") or [], adjuntos):
+        try:
+            imagen = ImagenOpenpyxl(BytesIO(archivo.read()))
+        except Exception:
+            logger.exception(
+                "No se pudo decodificar un adjunto para incrustarlo en el "
+                "reporte generado; se omite y continúa la generación."
+            )
+            continue
+        imagen.width, imagen.height = _encajar(imagen, slot)
+        hoja.add_image(imagen, slot["celda"])
+
+
 def _escribir_valores(hoja, estructura, valores):
     """Write every present `valores` key into its anchor cell (design's
     Sequence, step 6). Walks the same nodes `_validar_completitud` walks,
@@ -152,7 +208,7 @@ def _exportar_solo_hoja_declarada(libro, nombre_hoja):
     libro.active = 0
 
 
-def generar_reporte(definicion, valores: dict):
+def generar_reporte(definicion, valores: dict, adjuntos=()):
     """Fill `definicion`'s template with `valores` and return the generated
     `.xlsx` bytes (design's Sequence, steps 1-8).
 
@@ -160,6 +216,13 @@ def generar_reporte(definicion, valores: dict):
     function trusts `definicion.estructura` and adds no re-validation of
     anchor cells (ADR-0002 Compliance table, "Write only to merged-range
     anchor cells").
+
+    `adjuntos` (backlog #11, design D5) is an optional keyword-only-in-
+    spirit iterable of file-like objects (each exposing `.read()`) — the
+    caller's already-fetched `Adjunto.archivo` values, injected rather than
+    queried, so `tipos_reporte` never imports `reportes` (dependency
+    direction). Defaults to `()`, so every pre-existing
+    `generar_reporte(definicion, valores)` call remains valid unchanged.
     """
     tipo = definicion.tipo
     estructura = definicion.estructura
@@ -210,6 +273,10 @@ def generar_reporte(definicion, valores: dict):
     # Design's Sequence, step 6: write every present value into its anchor
     # cell.
     _escribir_valores(hoja, estructura, valores)
+
+    # Backlog #11 (design D5): embed stored attachments into their declared
+    # anchor slots, alongside the logo swap, before exporting.
+    _incrustar_adjuntos(hoja, estructura, adjuntos)
 
     # Design's Sequence, step 7: export only the declared sheet.
     _exportar_solo_hoja_declarada(libro, nombre_hoja)
