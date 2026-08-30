@@ -82,7 +82,7 @@ Chain strategy: stacked-to-main
 
 ## Phase 6: Manual DevTools Verification (No Automated JS Coverage — Documented Limitation)
 
-- [ ] 6.1 DevTools script: select a real iPhone-captured HEIC file; confirm `heic2any` converts to JPEG before `browser-image-compression` runs, and the uploaded file is JPEG.
+- [ ] 6.1 DevTools script: select a real iPhone-captured HEIC file; confirm `heic2any` converts to JPEG before `browser-image-compression` runs, and the uploaded file is JPEG. **Partially verified (2026-08-30)**: no real HEIC sample available, so a simulated file (PNG bytes relabeled `image/heic`/`.heic`) was used instead — confirmed HEIC detection fires and `heic2any` is invoked, and confirmed the "conversion failure falls back to original file" path succeeds end-to-end (201, chip "Adjunto subido"). Genuine successful HEIC→JPEG conversion against real device output remains unverified — needs a real HEIC file when available.
 - [ ] 6.2 DevTools script: Network ▸ block both CDN script URLs; confirm the original file still uploads under the 8MiB ceiling without blocking capture (spec "CDN unreachable falls back to original file").
 - [ ] 6.3 DevTools script: Network ▸ Offline, capture an attachment → `adjuntos_pendientes` row appears; go Online, trigger reconcile/retry → row syncs via its own `fetch` to `/reportes/<id>/adjuntos/subir/` and clears.
 - [ ] 6.4 DevTools script: confirm an existing v2 IndexedDB (with populated `borradores`/`nuevos` rows) upgrades cleanly to v3 with `adjuntos_pendientes` added, no data loss to the existing stores.
