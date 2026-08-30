@@ -315,6 +315,25 @@ def test_post_paso_no_ultima_seccion_redirige_a_siguiente(sesion_de_creador):
     )
 
 
+@pytest.mark.django_db
+def test_paso_post_redirect_es_seguible(sesion_de_creador):
+    """Change `sincronizacion-numero-registro` (design's Interfaces/D4;
+    spec `reporte-idempotent-creation` scenario 11): `paso`'s POST answers
+    302, and following it with `follow=True` lands 200 on the next step —
+    exactly the `response.redirected`/`response.url` contract the
+    fetch-based client submit depends on."""
+    client, reporte = sesion_de_creador
+
+    response = client.post(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"]),
+        data={"turno": "Día"},
+        follow=True,
+    )
+
+    assert response.redirect_chain
+    assert response.status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # paso — client-side JS contract (backlog validacion-datos-formulario, Phase 5)
 # ---------------------------------------------------------------------------

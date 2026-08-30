@@ -12,7 +12,7 @@ rationale, including why `estado` currently declares only `EN_PROGRESO`
 
 from django.conf import settings
 from django.db import models
-from django.db.models import UniqueConstraint
+from django.db.models import Func, UniqueConstraint, Value
 
 
 class EstadoDeReporte(models.TextChoices):
@@ -30,7 +30,16 @@ class Reporte(models.Model):
     """One capture session against a `TipoDeReporte` (spec: Reporte
     creation). `definicion` snapshots the `DefinicionDeTipo` version in
     effect when the session started, independent of later re-activations of
-    `tipo` (design's Interfaces/Contracts invariant, service-enforced)."""
+    `tipo` (design's Interfaces/Contracts invariant, service-enforced).
+
+    `id_local` and `numero_registro` (change `sincronizacion-numero-registro`,
+    design D1/D2) are both filled by Postgres-level `db_default` expressions,
+    never by Python — `gen_random_uuid()` and `nextval(...)` are volatile, so
+    `ADD COLUMN` backfills a distinct value per existing row, and Django's
+    `INSERT … RETURNING` (enabled by `db_default` + Postgres's
+    `can_return_columns_from_insert`) populates both on the in-memory
+    instance immediately after `create()`/`get_or_create()` — no
+    `refresh_from_db()` needed."""
 
     tipo = models.ForeignKey(
         "tipos_reporte.TipoDeReporte",
@@ -52,6 +61,18 @@ class Reporte(models.Model):
         max_length=20,
         choices=EstadoDeReporte.choices,
         default=EstadoDeReporte.EN_PROGRESO,
+    )
+    id_local = models.UUIDField(
+        unique=True,
+        editable=False,
+        db_default=Func(function="gen_random_uuid"),
+    )
+    numero_registro = models.BigIntegerField(
+        unique=True,
+        editable=False,
+        db_default=Func(
+            Value("reportes_numero_registro_seq"), function="nextval"
+        ),
     )
 
     class Meta:
