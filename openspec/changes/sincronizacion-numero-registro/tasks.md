@@ -51,14 +51,14 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Upload Queue — Shared Dexie Schema + Fetch Submit
 
-- [ ] 3.1 Create `reportes/static/reportes/offline-db.js` with the single `version(2).stores({ borradores: "[reporteId+seccionId], reporteId, estado", nuevos: "codigoTipo" })` declaration (D5).
-- [ ] 3.2 Add `<script src="{% static 'reportes/offline-db.js' %}">` before `paso-offline.js` in `reportes/templates/reportes/paso.html`.
-- [ ] 3.3 Rewrite `paso-offline.js` submit handler: replace `form.submit()` with `fetch(form.action, {method:"POST", body:new FormData(form), credentials:"same-origin", redirect:"follow"})`.
-- [ ] 3.4 Implement outcome branching: `response.ok`/`response.redirected` → delete Dexie row, `location.assign(response.url)`; final URL `/login/` → `estado:"fallo"`, `ultimoError:"sesion_expirada"`; HTTP >= 400 → `estado:"fallo"`, `intentos++`; network error/`!navigator.onLine` → `estado:"pendiente"`, `intentos++`.
-- [ ] 3.5 Add `pendiente`/`fallo` state fields (`intentos`, `ultimoError`) to the Dexie draft row per the state machine table in design.md.
-- [ ] 3.6 Render inline retry banner via `form.insertAdjacentElement("beforebegin", …)` (mirrors #9's restore prompt) showing attempt count and a "Reintentar" button.
-- [ ] 3.7 Wire "Reintentar" to re-serialize the *current* form and re-run the fetch submit (step 3.3), transitioning back to `enviando`.
-- [ ] 3.8 Update `reconciliar()` to restore `pendiente`/`fallo` rows on page load and re-render the banner with existing values.
+- [x] 3.1 Create `reportes/static/reportes/offline-db.js` with the single `version(2).stores({ borradores: "[reporteId+seccionId], reporteId, estado", nuevos: "codigoTipo" })` declaration (D5).
+- [x] 3.2 Add `<script src="{% static 'reportes/offline-db.js' %}">` before `paso-offline.js` in `reportes/templates/reportes/paso.html`.
+- [x] 3.3 Rewrite `paso-offline.js` submit handler: replace `form.submit()` with `fetch(form.action, {method:"POST", body:new FormData(form), credentials:"same-origin", redirect:"follow"})`.
+- [x] 3.4 Implement outcome branching: `response.ok`/`response.redirected` → delete Dexie row, `location.assign(response.url)`; final URL `/login/` → `estado:"fallo"`, `ultimoError:"sesion_expirada"`; HTTP >= 400 → `estado:"fallo"`, `intentos++`; network error/`!navigator.onLine` → `estado:"pendiente"`, `intentos++`.
+- [x] 3.5 Add `pendiente`/`fallo` state fields (`intentos`, `ultimoError`) to the Dexie draft row per the state machine table in design.md.
+- [x] 3.6 Render inline retry banner via `form.insertAdjacentElement("beforebegin", …)` (mirrors #9's restore prompt) showing attempt count and a "Reintentar" button.
+- [x] 3.7 Wire "Reintentar" to re-serialize the *current* form and re-run the fetch submit (step 3.3), transitioning back to `enviando`.
+- [x] 3.8 Update `reconciliar()` to restore `pendiente`/`fallo` rows on page load and re-render the banner with existing values.
 
 ## Phase 4: Manual Verification (No Automated JS Coverage — Documented Limitation)
 

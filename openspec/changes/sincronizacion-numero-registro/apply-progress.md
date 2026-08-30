@@ -88,3 +88,59 @@ One clarification made during implementation: design's Testing Strategy leaves s
 ## Status
 
 18/18 assigned tasks (Phase 1 + Phase 2) complete. Ready for `sdd-verify`, or for `sdd-apply` to continue with PR 2 (Phase 3/4) in a later batch.
+
+---
+
+## PR 2 of 3 — `tasks.md` Phase 3 (Upload Queue) — 2026-08-30
+
+**Scope**: tasks 3.1-3.8 only (client-side upload queue: `offline-db.js`, fetch-based `paso-offline.js` rewrite, retry banner). Phase 4 (manual DevTools verification) is explicitly deferred to the user, live. Phase 5 (`nuevo-reporte.js`) and Phase 6 (cleanup) are out of scope for this batch. No server-side files touched (already merged to `main` in PR 1).
+
+### Completed Tasks
+
+- [x] 3.1 Created `reportes/static/reportes/offline-db.js` — single `Dexie("reportes-offline").version(2).stores({ borradores: "[reporteId+seccionId], reporteId, estado", nuevos: "codigoTipo" })`, exposed as `window.reportesOfflineDB`.
+- [x] 3.2 Added `<script src="{% static 'reportes/offline-db.js' %}"></script>` in `reportes/templates/reportes/paso.html`, between the Dexie CDN tag and the (deferred) `paso.js`/`paso-offline.js` tags.
+- [x] 3.3 Rewrote `paso-offline.js`'s submit handler (`intentarEnvio()`) to use `fetch(form.action, {method:"POST", body:new FormData(form), credentials:"same-origin", redirect:"follow"})` instead of `form.submit()`.
+- [x] 3.4 Implemented outcome branching in `manejarRespuesta()`: final URL `/login/` checked first → `fallo`/`sesion_expirada`, then navigates to login (draft preserved); else `response.ok`/`response.redirected` → delete Dexie row, `location.assign(response.url)`; else HTTP >= 400 → `fallo` with `intentos++`; fetch rejection (network error) or `!navigator.onLine` (checked before the fetch call, to skip a doomed request) → `pendiente` with `intentos++`.
+- [x] 3.5 Added `intentos` (number) and `ultimoError` (string|null) fields to every `borradores` row write (`escribirBorrador` now defaults them to `0`/`null`; `marcarComo()` increments `intentos` from the previously-stored value).
+- [x] 3.6 Added `mostrarBanner()`/`limpiarBanner()` (new "Retry banner UI" section), rendering via `form.insertAdjacentElement("beforebegin", …)` exactly like the existing `crearPrompt()`/`mostrarPrompt()` restore-prompt pattern, with a `data-borrador-banner` container (distinct attribute from `data-borrador-prompt` so the two UIs never collide) and a `data-borrador-reintentar` button.
+- [x] 3.7 Reintentar button's click handler calls `intentarEnvio()` directly — since `intentarEnvio()` always re-reads `new FormData(form)` at call time, this naturally re-serializes whatever the user has currently typed and transitions back through `escribirBorrador("enviando")`.
+- [x] 3.8 `reconciliar()` gained a new branch, checked before the existing `enviando`/`borrador` branches: `estado === "pendiente" || estado === "fallo"` → `mostrarBanner(fila)` with the stored row (existing `intentos`/`ultimoError`), no automatic retry.
+
+### Files Changed
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `reportes/static/reportes/offline-db.js` | Created | Single shared Dexie schema owner (v2), exposes `window.reportesOfflineDB` |
+| `reportes/static/reportes/paso-offline.js` | Modified | Consumes `window.reportesOfflineDB` instead of opening its own `Dexie(...)`/`.version(1)`; fetch-based submit pipeline (`intentarEnvio`, `manejarRespuesta`, `marcarComo`, `obtenerIntentosPrevios`); retry banner UI (`mostrarBanner`, `limpiarBanner`, `mensajeBanner`); `reconciliar()` restores `pendiente`/`fallo` |
+| `reportes/templates/reportes/paso.html` | Modified | Added non-deferred `<script>` for `offline-db.js`, positioned after the Dexie CDN tag and before the deferred `paso.js`/`paso-offline.js` tags so the shared schema is guaranteed ready first |
+
+### Key Implementation Decisions
+
+1. **`offline-db.js` script tag is intentionally NOT `defer`**: it's placed immediately after the (also non-deferred) Dexie CDN `<script>` tag, so it executes synchronously in document order — right after Dexie loads, before the parser reaches the deferred `paso.js`/`paso-offline.js` tags. This guarantees `window.reportesOfflineDB` exists before any deferred consumer script runs, without needing a `DOMContentLoaded`/event-based handshake between the two files.
+2. **Login-redirect check ordered before the success check** in `manejarRespuesta()`: a `fetch` that follows a redirect to `/login/` still resolves with `response.ok === true` (the login page itself renders 200) and `response.redirected === true`, so checking `new URL(response.url).pathname === "/login/"` first is required — otherwise a session-expired submission would be misclassified as success and the row would be deleted, contradicting the "Draft Survives Session Expiry" requirement.
+3. **`!navigator.onLine` short-circuits before calling `fetch`** rather than relying solely on the `fetch` rejection path, per design's explicit "network error/`!navigator.onLine`" wording — avoids an unnecessary request attempt when the browser already knows it's offline, matching the manual DevTools script's "Network ▸ Offline, submit → no navigation" expectation more directly (both paths still land on the same `marcarComo("pendiente", …)` outcome).
+4. **`ultimoError` uses internal string codes** (`"sesion_expirada"`, `"http_" + status`, `"error_de_red"`, `"sin_conexion"`, `"respuesta_inesperada"`) rather than free-form/localized text — matches the spec's literal `ultimoError:"sesion_expirada"` example and keeps the field machine-inspectable for the Phase 4 manual DevTools verification.
+5. **Reintentar re-uses `intentarEnvio()` verbatim** (no separate "retry" function) — since it always reads live `FormData(form)`, this is simpler than design's phrasing ("re-serialize the current form and re-run the fetch submit") suggested as two steps, and guarantees the retry path and the original submit path can never drift apart.
+6. **Distinct DOM markers** (`data-borrador-banner`/`data-borrador-reintentar` vs. the pre-existing `data-borrador-prompt`/`data-borrador-restaurar`/`data-borrador-descartar`) so the retry banner (pendiente/fallo) and the stale-draft restore prompt (`#9`) can never be confused with each other or accidentally styled/queried together.
+
+### Deviations from Design
+
+None identified. `manejarRespuesta`'s branch ordering (login-check before ok-check) is a necessary clarification of the design's prose ordering, not a deviation — the design's own D4 rationale explicitly describes `response.redirected` following through to a 200, which is exactly the condition requiring the login check to run first.
+
+### Test Coverage / TDD Note
+
+Per the task brief and this project's documented limitation (no JS test runner), Phase 3 has no automated coverage. TDD RED/GREEN was skipped for this phase as instructed; Phase 4 (manual DevTools script, tasks 4.1-4.6) is deferred to the user, to be run live against a dev server.
+
+### Runtime Harness — Full Python Suite
+
+`./.venv/Scripts/python.exe -m pytest -q` run from the project root (full suite, all apps, not just `reportes/`) — **269 passed in 611.14s (0:10:11), 0 failed**. Confirms the `paso.html` template change (covered by Django view tests) introduced no regressions.
+
+### Rollback Boundary
+
+`git checkout -- reportes/templates/reportes/paso.html reportes/static/reportes/paso-offline.js`, `rm reportes/static/reportes/offline-db.js`. No other file in this PR depends on `offline-db.js` yet (Phase 5's `nuevo-reporte.js` is out of scope and does not exist in this batch).
+
+## Remaining Tasks (out of scope for this PR — PR 3, plus user-run Phase 4)
+
+- [ ] Phase 4: Manual Verification (DevTools scripts, tasks 4.1-4.6) — to be run live by the user against a dev server, per task brief
+- [ ] Phase 5: `nuevo-reporte.js` forward-looking infra (PR 3)
+- [ ] Phase 6: Cleanup/Documentation (6.1 design.md Open Question resolution, 6.2 offline-db.js README note, 6.3 final full-suite confirmation)

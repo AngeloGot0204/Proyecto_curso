@@ -1,14 +1,22 @@
 /**
- * Client-side offline draft layer for the `paso` wizard step (change
- * `capa-offline`; design's "Technical Approach", "Data Flow", "Interfaces /
- * Contracts"). Vanilla JS only, hand-rolled debounce, no build step
- * (ADR-0001) — Dexie is the sole third-party dependency, loaded via CDN in
- * `paso.html`. No JS test runner exists in this project (spec's Out of
- * Scope); coverage is the manual DevTools script in tasks.md Phase 5.
+ * Client-side offline draft layer for the `paso` wizard step (changes
+ * `capa-offline` and `sincronizacion-numero-registro`; design's "Technical
+ * Approach", "Data Flow", "Interfaces / Contracts"). Vanilla JS only,
+ * hand-rolled debounce, no build step (ADR-0001) — Dexie is the sole
+ * third-party dependency, loaded via CDN in `paso.html`. The Dexie schema
+ * itself lives in `offline-db.js` (D5), loaded before this file and exposed
+ * as `window.reportesOfflineDB`. No JS test runner exists in this project
+ * (spec's Out of Scope); coverage is the manual DevTools script in
+ * tasks.md Phase 4.
  *
  * Depends on the rendered-attribute contract on the step `<form>`:
  * `data-reporte-id`, `data-seccion-id`, `data-servidor-actualizado`
  * (design's File Changes / Interfaces sections).
+ *
+ * Submission uses `fetch()` instead of `form.submit()` (design's D4), so
+ * outcome can be observed and reflected as `pendiente`/`fallo` draft states
+ * with an inline, manually-retryable banner (ADR-0004 / S-15 — never
+ * Background Sync, never a silent automatic retry).
  */
 (function () {
     "use strict";
@@ -25,6 +33,13 @@
         return;
     }
 
+    var db = window.reportesOfflineDB;
+    if (!db) {
+        // offline-db.js failed to load or run before this script — same
+        // degrade-to-online-only contract as the Dexie-undefined guard above.
+        return;
+    }
+
     var RETARDO_MS = 400; // trailing-edge debounce (ADR-0001, no library);
     // above typical inter-keystroke gaps (~150-250ms), far below reaching
     // the submit button.
@@ -36,11 +51,6 @@
     if (isNaN(servidorMs)) {
         servidorMs = 0;
     }
-
-    var db = new Dexie("reportes-offline");
-    db.version(1).stores({
-        borradores: "[reporteId+seccionId], reporteId, estado",
-    });
 
     var temporizadorDebounce = null;
 
@@ -76,6 +86,8 @@
             valores: serializarFormulario(),
             actualizadoEn: Date.now(),
             estado: estado,
+            intentos: 0,
+            ultimoError: null,
         };
         return db.borradores.put(fila);
     }
@@ -113,14 +125,69 @@
         escribirInmediato();
     });
 
-    // ---- Submit handler (design's "clear-on-success" Decision) ----------
+    // ---- Fetch-based submit (design's D4, "clear-on-success" Decision,
+    // and the pendiente/fallo state machine) --------------------------------
 
-    form.addEventListener("submit", function (evento) {
-        evento.preventDefault();
+    function obtenerIntentosPrevios() {
+        return db.borradores.get([reporteId, seccionId]).then(function (fila) {
+            return fila && typeof fila.intentos === "number" ? fila.intentos : 0;
+        });
+    }
+
+    function marcarComo(estado, ultimoError) {
+        return obtenerIntentosPrevios().then(function (previos) {
+            var fila = {
+                reporteId: reporteId,
+                seccionId: seccionId,
+                valores: serializarFormulario(),
+                actualizadoEn: Date.now(),
+                estado: estado,
+                intentos: previos + 1,
+                ultimoError: ultimoError,
+            };
+            return db.borradores.put(fila).catch(function () {
+                // Dexie write failure still shows the banner from the
+                // in-memory row — offline storage never blocks feedback.
+            }).then(function () {
+                mostrarBanner(fila);
+            });
+        });
+    }
+
+    function manejarRespuesta(respuesta) {
+        var urlFinal = new URL(respuesta.url, window.location.href);
+        if (urlFinal.pathname === "/login/") {
+            // Session expired mid-draft — redirect to login without
+            // discarding the local draft (upload-queue spec's "Draft
+            // Survives Session Expiry").
+            return marcarComo("fallo", "sesion_expirada").then(function () {
+                location.assign(respuesta.url);
+            });
+        }
+        if (respuesta.ok || respuesta.redirected) {
+            return db.borradores.delete([reporteId, seccionId]).catch(function () {
+                // Deletion failure never blocks navigation to the next step.
+            }).then(function () {
+                limpiarBanner();
+                location.assign(respuesta.url);
+            });
+        }
+        if (respuesta.status >= 400) {
+            return marcarComo("fallo", "http_" + respuesta.status);
+        }
+        return marcarComo("fallo", "respuesta_inesperada");
+    }
+
+    function intentarEnvio() {
         if (temporizadorDebounce) {
             clearTimeout(temporizadorDebounce);
             temporizadorDebounce = null;
         }
+        if (!navigator.onLine) {
+            marcarComo("pendiente", "sin_conexion");
+            return;
+        }
+        var datosEnvio = new FormData(form);
         escribirBorrador("enviando")
             .catch(function () {
                 // Any Dexie rejection still lets the submit proceed —
@@ -128,8 +195,24 @@
                 // contract).
             })
             .then(function () {
-                form.submit();
+                return fetch(form.action, {
+                    method: "POST",
+                    body: datosEnvio,
+                    credentials: "same-origin",
+                    redirect: "follow",
+                });
+            })
+            .then(manejarRespuesta)
+            .catch(function () {
+                // Network error (offline mid-request, DNS failure, server
+                // unreachable, etc.) — never a silent retry (ADR-0004/S-15).
+                marcarComo("pendiente", "error_de_red");
             });
+    }
+
+    form.addEventListener("submit", function (evento) {
+        evento.preventDefault();
+        intentarEnvio();
     });
 
     // ---- Restore-prompt UI ------------------------------------------------
@@ -187,11 +270,58 @@
         );
     }
 
+    // ---- Retry banner UI (design's D6 — mirrors the restore-prompt pattern
+    // above; `pendiente`/`fallo` states, upload-queue spec's "Manual Retry
+    // Affordance") -----------------------------------------------------------
+
+    function limpiarBanner() {
+        var banner = document.querySelector("[data-borrador-banner]");
+        if (banner) {
+            banner.remove();
+        }
+    }
+
+    function mensajeBanner(fila) {
+        if (fila.estado === "pendiente") {
+            return "Sin conexión — pendiente de subir (" + fila.intentos + ")";
+        }
+        return "No se pudo subir (" + fila.intentos + " intentos)";
+    }
+
+    function mostrarBanner(fila) {
+        limpiarBanner();
+        var contenedor = document.createElement("div");
+        contenedor.setAttribute("role", "alert");
+        contenedor.setAttribute("data-borrador-banner", "");
+        contenedor.innerHTML =
+            "<p>" + mensajeBanner(fila) + "</p>" +
+            '<button type="button" data-borrador-reintentar>Reintentar</button>';
+        form.insertAdjacentElement("beforebegin", contenedor);
+        contenedor.querySelector("[data-borrador-reintentar]").addEventListener(
+            "click",
+            function () {
+                // Re-serializes the *current* form (the user may have
+                // edited it while pendiente/fallo) and re-runs the fetch
+                // submit — transitions back to "enviando" (design's state
+                // table).
+                intentarEnvio();
+            }
+        );
+        return contenedor;
+    }
+
     // ---- Reconciliation on load (design's state table) --------------------
 
     function reconciliar() {
         db.borradores.get([reporteId, seccionId]).then(function (fila) {
             if (!fila) {
+                return;
+            }
+
+            if (fila.estado === "pendiente" || fila.estado === "fallo") {
+                // Restore the banner with the existing intentos/ultimoError
+                // values — no automatic retry (ADR-0004/S-15).
+                mostrarBanner(fila);
                 return;
             }
 
