@@ -36,5 +36,16 @@
         nuevos: "codigoTipo",
     });
 
+    // v3 (backlog #11, design D4): adds the attachment upload queue. Dexie
+    // inherits unlisted stores from the previous version, so `borradores`/
+    // `nuevos` keep their exact v2 shapes — pure "add one object store", no
+    // data migration. `[reporteId+seccionId]` is a compound INDEX here, not
+    // the primary key (unlike `borradores`), since a section may have any
+    // number of pending attachments (spec "No Hard Cap on Attachment
+    // Count") — `++id` is the auto-incrementing primary key instead.
+    db.version(3).stores({
+        adjuntos_pendientes: "++id, reporteId, [reporteId+seccionId], estado",
+    });
+
     window.reportesOfflineDB = db;
 })();

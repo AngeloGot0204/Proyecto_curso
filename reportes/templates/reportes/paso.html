@@ -8,6 +8,14 @@
 <script src="{% static 'reportes/paso.js' %}" defer></script>
 <script src="{% static 'reportes/offline-db.js' %}"></script>
 <script src="{% static 'reportes/paso-offline.js' %}" defer></script>
+{% if seccion.id == "s-08-croquis-evidencia" %}
+{# Backlog #11, design D3 — both CDN libraries are best-effort only (see
+   adjuntos.js's header); pinned to jsdelivr, matching the Dexie CDN tag's
+   no-`integrity` precedent above pending tasks.md 7.3. #}
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js" crossorigin="anonymous"></script>
+<script src="{% static 'reportes/adjuntos.js' %}"></script>
+{% endif %}
 <script>
     if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
@@ -48,6 +56,37 @@
     {% endfor %}
     <button type="submit">Guardar y continuar</button>
 </form>
+
+{% if seccion.id == "s-08-croquis-evidencia" %}
+{# Backlog #11, spec `adjuntos-reporte`, design D2 — deliberately outside
+   the step's own <form>: attachments upload via adjuntos.js's own dedicated
+   fetch() to reportes_adjuntos_subir, never as part of this form's POST, so
+   a rejected/offline attachment never blocks or rolls back the step's field
+   values ("Per-Attachment Failure Isolation"). #}
+<section data-adjuntos
+          data-reporte-id="{{ reporte.id }}"
+          data-seccion-id="{{ seccion.id }}"
+          data-adjuntos-url="{% url 'reportes_adjuntos_subir' reporte.id %}">
+    <h2>Adjuntos (croquis/evidencia)</h2>
+    <p>
+        <label for="id_adjunto_categoria">Categoría</label>
+        <select id="id_adjunto_categoria" data-adjunto-categoria>
+            <option value="evidencia" selected>Evidencia</option>
+            <option value="croquis">Croquis</option>
+        </select>
+    </p>
+    <p>
+        <label for="id_adjunto_archivo">Agregar foto o croquis</label>
+        <input type="file"
+               id="id_adjunto_archivo"
+               accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+               multiple
+               data-adjunto>
+    </p>
+    <ul data-adjuntos-lista aria-live="polite"></ul>
+    <p><a href="{% url 'reportes_adjuntos' reporte.id %}">Ver adjuntos subidos</a></p>
+</section>
+{% endif %}
 
 <nav>
     {% if url_anterior %}<a href="{{ url_anterior }}">Anterior</a>{% endif %}
