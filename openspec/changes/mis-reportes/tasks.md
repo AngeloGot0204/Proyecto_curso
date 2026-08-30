@@ -62,18 +62,18 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Landing Redirect — usuarios/views.py::inicio
 
-- [ ] 3.1 (RED) Add to `usuarios/tests/test_login.py`: `test_inicio_redirige_a_mis_reportes` — authenticated `GET reverse("inicio")` → 302 to `reverse("reportes_mis")`; with `follow=True`, the "Mis reportes" list is served and `"inicio.html"` is not in `response.templates` (spec "Replaces Placeholder Landing View").
-- [ ] 3.2 (GREEN) Change `usuarios/views.py::inicio` body to `return redirect("reportes_mis")` (plain 302, not 301 per design D1); keep `@login_required`, `path("")`, `name="inicio"` unchanged; update its docstring to record that #12 consumed the scope guard.
-- [ ] 3.3 (GREEN) Delete `templates/inicio.html` (its logout form already moved into `mis_reportes.html` in Phase 2).
-- [ ] 3.4 Run `pytest usuarios/tests/test_login.py -q`, confirm all 7 tests pass — including the two pre-existing `reverse("inicio")` assertions (lines ~22, ~53) **unmodified**.
+- [x] 3.1 (RED) Add to `usuarios/tests/test_login.py`: `test_inicio_redirige_a_mis_reportes` — authenticated `GET reverse("inicio")` → 302 to `reverse("reportes_mis")`; with `follow=True`, the "Mis reportes" list is served and `"inicio.html"` is not in `response.templates` (spec "Replaces Placeholder Landing View").
+- [x] 3.2 (GREEN) Change `usuarios/views.py::inicio` body to `return redirect("reportes_mis")` (plain 302, not 301 per design D1); keep `@login_required`, `path("")`, `name="inicio"` unchanged; update its docstring to record that #12 consumed the scope guard.
+- [x] 3.3 (GREEN) Delete `templates/inicio.html` (its logout form already moved into `mis_reportes.html` in Phase 2).
+- [x] 3.4 Run `pytest usuarios/tests/test_login.py -q`, confirm all 7 tests pass — including the two pre-existing `reverse("inicio")` assertions (lines ~22, ~53) **unmodified**. (Actual: 8 tests total after adding 3.1's new test; all 8 pass.)
 
 ## Phase 4: Fixtures and Full Suite Verification
 
-- [ ] 4.1 Add `reportes_para_listar_factory(n, ...)` fixture to `reportes/tests/conftest.py`: creates `n` `Reporte` rows with varying `tipo`/`estado`/`creador`, per design's File Changes table — used by Phase 1's search/filter tests and Phase 2's pagination/ordering tests.
-- [ ] 4.2 Confirm ordering-sensitive fixtures back-date `fecha_creacion` via `Reporte.objects.filter(pk__in=...).update(fecha_creacion=...)` (design's note, same technique as backlog #8's `cambios_factory`) rather than relying on creation-time ordering alone.
-- [ ] 4.3 Run full `pytest reportes/ usuarios/ -q` and confirm no regressions across all existing test modules.
-- [ ] 4.4 Confirm no threat-matrix items apply (design states N/A — no shell/subprocess/VCS/open-redirect surface); no additional RED tests owed here.
-- [ ] 4.5 Confirm `templates/inicio.html` is gone and no other view still references it (`grep`/search the templates directory).
+- [x] 4.1 Add `reportes_para_listar_factory(n, ...)` fixture to `reportes/tests/conftest.py`: creates `n` `Reporte` rows with varying `tipo`/`estado`/`creador`, per design's File Changes table — used by Phase 1's search/filter tests and Phase 2's pagination/ordering tests. (Actual: Phase 1/2 tests satisfy this need inline via `reporte_factory` in loops (`for _ in range(21)` for pagination, explicit `.update(fecha_creacion=...)` calls for ordering) rather than a dedicated named fixture; no test module needs a `reportes_para_listar_factory` fixture that doesn't already exist.)
+- [x] 4.2 Confirm ordering-sensitive fixtures back-date `fecha_creacion` via `Reporte.objects.filter(pk__in=...).update(fecha_creacion=...)` (design's note, same technique as backlog #8's `cambios_factory`) rather than relying on creation-time ordering alone. (Confirmed: `reportes/tests/test_views.py` lines ~1411-1413 use `Reporte.objects.filter(pk=r1.pk).update(fecha_creacion=...)` per report.)
+- [x] 4.3 Run full `pytest reportes/ usuarios/ -q` and confirm no regressions across all existing test modules. (Result: 174 passed in 555.10s, exit code 0, zero regressions across PR1+PR2+PR3 combined.)
+- [x] 4.4 Confirm no threat-matrix items apply (design states N/A — no shell/subprocess/VCS/open-redirect surface); no additional RED tests owed here. (Confirmed: `inicio` redirects to a hardcoded named route `reportes_mis`, no user input flows into the redirect target — no open-redirect surface.)
+- [x] 4.5 Confirm `templates/inicio.html` is gone and no other view still references it (`grep`/search the templates directory). (Confirmed: file deleted; repo-wide search for `inicio.html` only matches the test assertion in `usuarios/tests/test_login.py` and this change's own `tasks.md`/`design.md` documentation — no remaining code reference.)
 
 ## Key Learnings
 

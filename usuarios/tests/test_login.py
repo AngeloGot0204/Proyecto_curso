@@ -56,6 +56,19 @@ def test_logout_ends_session_and_redirects_protected_view_to_login(client, usuar
 
 
 @pytest.mark.django_db
+def test_inicio_redirige_a_mis_reportes(client, usuario_activo):
+    client.login(username="usuario_activo", password="clave-valida-123")
+
+    response = client.get(reverse("inicio"))
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_mis")
+
+    response = client.get(reverse("inicio"), follow=True)
+    assert response.status_code == 200
+    assert "inicio.html" not in [t.name for t in response.templates]
+
+
+@pytest.mark.django_db
 def test_administrador_can_access_django_admin(client, db):
     Usuario.objects.create_user(
         username="admin_rol", password="clave-valida-123", rol="administrador"

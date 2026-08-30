@@ -1,12 +1,15 @@
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
+from django.shortcuts import redirect
 
 
 @login_required
 def inicio(request):
-    """Minimal post-login landing page.
+    """Post-login landing page.
 
-    Scope guard: this view must accumulate no report-domain logic.
-    Backlog item #12 replaces it with the real dashboard.
+    Backlog item #12 consumed this view's scope guard: it now redirects
+    (302, not 301, to preserve revert-based rollback) to the real
+    dashboard at ``reportes_mis``. This view keeps its own URL name/path
+    and ``@login_required`` decorator so ``LOGIN_REDIRECT_URL = "inicio"``
+    keeps working transparently.
     """
-    return render(request, "inicio.html")
+    return redirect("reportes_mis")
