@@ -71,11 +71,11 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: `nuevo-reporte.js` (Forward-Looking Infra for #12)
 
-- [ ] 5.1 Create `reportes/static/reportes/nuevo-reporte.js`: on `DOMContentLoaded`, query `form[data-nuevo-reporte][data-codigo-tipo]`; no-op (`if (!form) return;`) when absent, mirroring `paso-offline.js`'s defensive opening.
-- [ ] 5.2 Implement `crypto.randomUUID()` generation persisted to `Dexie.nuevos[codigoTipo]` BEFORE the first POST, reusing the stored UUID on subsequent loads/retries.
-- [ ] 5.3 Inject a hidden `<input type="hidden" name="id_local">` populated from the persisted UUID before submit.
-- [ ] 5.4 On `response.redirected` success, delete the `Dexie.nuevos[codigoTipo]` row and `location.assign(response.url)`.
-- [ ] 5.5 Document in code comments that this ships with no host template (D7) and is verified only via an injected test form until #12 lands.
+- [x] 5.1 Create `reportes/static/reportes/nuevo-reporte.js`: on `DOMContentLoaded`, query `form[data-nuevo-reporte][data-codigo-tipo]`; no-op (`if (!form) return;`) when absent, mirroring `paso-offline.js`'s defensive opening.
+- [x] 5.2 Implement `crypto.randomUUID()` generation persisted to `Dexie.nuevos[codigoTipo]` BEFORE the first POST, reusing the stored UUID on subsequent loads/retries.
+- [x] 5.3 Inject a hidden `<input type="hidden" name="id_local">` populated from the persisted UUID before submit.
+- [x] 5.4 On `response.redirected` success, delete the `Dexie.nuevos[codigoTipo]` row and `location.assign(response.url)`.
+- [x] 5.5 Document in code comments that this ships with no host template (D7) and is verified only via an injected test form until #12 lands.
 
 ## Phase 6: Cleanup / Documentation
 

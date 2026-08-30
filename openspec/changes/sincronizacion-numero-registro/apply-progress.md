@@ -144,3 +144,52 @@ Per the task brief and this project's documented limitation (no JS test runner),
 - [ ] Phase 4: Manual Verification (DevTools scripts, tasks 4.1-4.6) — to be run live by the user against a dev server, per task brief
 - [ ] Phase 5: `nuevo-reporte.js` forward-looking infra (PR 3)
 - [ ] Phase 6: Cleanup/Documentation (6.1 design.md Open Question resolution, 6.2 offline-db.js README note, 6.3 final full-suite confirmation)
+
+---
+
+## PR 3 of 3 — `tasks.md` Phase 5 (`nuevo-reporte.js`) — 2026-08-30
+
+**Scope**: tasks 5.1-5.5 only — new, currently-unreferenced client infra for backlog #12 (forward-looking, per design's D7). No host page/template exists yet; this file ships unused until #12 builds a page that includes it. Phase 6 (cleanup/docs) and any other file are explicitly out of scope for this batch. `paso-offline.js`, `offline-db.js`, and all Python files were left untouched.
+
+### Completed Tasks
+
+- [x] 5.1 Created `reportes/static/reportes/nuevo-reporte.js`. On `DOMContentLoaded`, queries `form[data-nuevo-reporte][data-codigo-tipo]`; no-ops (`if (!form) return;`) when absent, mirroring `paso-offline.js`'s defensive opening (also guards `typeof Dexie === "undefined"` and a missing `window.reportesOfflineDB`, same degrade-to-server-default contract as `paso-offline.js`).
+- [x] 5.2 `obtenerOCrearIdLocal()` reads `db.nuevos.get(codigoTipo)`; reuses the stored `idLocal` if the row already exists, otherwise generates one via `crypto.randomUUID()` and persists it with `db.nuevos.put({codigoTipo, idLocal})` — all **before** the first `fetch` POST, so a reload or a failed submit's retry reuses the same value.
+- [x] 5.3 `inyectarCampoOculto(idLocal)` creates (or reuses, if already present) a `<input type="hidden" name="id_local">` appended to the form and sets its `value` to the persisted UUID, resolved through the `idLocalListo` promise chain before every submit.
+- [x] 5.4 On submit, `fetch(form.action, {...})` with the same D4 options as `paso-offline.js` (`credentials:"same-origin"`, `redirect:"follow"`); on `respuesta.redirected` (success — the report now exists idempotently per D3), deletes the `db.nuevos` row for `codigoTipo` and calls `location.assign(respuesta.url)`. Non-redirected/network-error branches intentionally **keep** the row so a retry reuses the same `id_local` rather than orphaning a server-side row under a discarded UUID (no retry UI is implemented — out of scope for this PR; #12 owns the host page's error handling).
+- [x] 5.5 File-header comment documents D7 explicitly: "no template in this codebase yet renders a `form[data-nuevo-reporte][data-codigo-tipo]`" and that verification is manual only, via an injected test form (tasks.md 4.5), until #12 lands.
+
+### Files Changed
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `reportes/static/reportes/nuevo-reporte.js` | Created | `id_local` generation/persistence/injection + fetch submit + Dexie `nuevos` row lifecycle, per design's D7/D5/D4/D3, Data Flow diagram, and state contract |
+
+### Key Implementation Decisions
+
+1. **`DOMContentLoaded` listener, not top-level `document.querySelector` at parse time**: unlike `paso-offline.js` (which runs as a deferred script after the DOM is already parsed, so it queries synchronously at the top of its IIFE), the task brief explicitly specifies "on `DOMContentLoaded`" for this file — since #12's future template loading order is unknown, wrapping the query in a `DOMContentLoaded` handler is more robust regardless of whether the script tag ends up deferred or not.
+2. **Hidden input lookup is idempotent** (`form.querySelector('input[name="id_local"]')` before creating one): guards against the handler somehow running twice or the template already declaring the hidden input itself — avoids duplicate `id_local` fields being submitted.
+3. **`respuesta.redirected` is the sole success signal** (not `respuesta.ok`, unlike `paso-offline.js`'s `manejarRespuesta`): task 5.4 explicitly names `response.redirected` as the trigger; `iniciar_reporte` always redirects (302) on success and never returns a 200 body directly, so this is a safe, narrower match — no login-redirect edge case exists here yet since there's no analogous "next step redirects to login" ambiguity for this brand-new-report entry point (that concern is specific to `paso-offline.js`'s multi-step wizard).
+4. **Failure/network-error branches keep the `nuevos` row instead of clearing or marking it `fallo`**: task 5.4 only specifies the success-path deletion; Phase 5 has no state-machine/banner requirement (that's `paso-offline.js`'s Phase 3 concern), so on any non-success outcome the simplest and safest behavior consistent with D7's "reused... on subsequent loads/retries" contract is to leave the row untouched — a future #12 page reload will naturally pick up and reuse the same `id_local` via `obtenerOCrearIdLocal()`.
+5. **No automated test coverage** (per task brief): this project has no JS test runner; Phase 5 has no RED/GREEN cycle. Verification is deferred to task 4.5 (already in tasks.md, unchanged by this PR), to be done live with the user via an injected `data-nuevo-reporte` test form in DevTools.
+
+### Deviations from Design
+
+None. Implementation follows design's D2/D3/D4/D5/D7, the Data Flow diagram's "Nuevo reporte page (future, #12)" swimlane, and tasks.md 5.1-5.5 verbatim.
+
+### Runtime Harness — Full Python Suite
+
+`./.venv/Scripts/python.exe -m pytest -q` run from the project root — **269 passed in 613.46s (0:10:13), 0 failed**. Confirms zero regressions; expected, since this PR touches only one new, currently-unreferenced JS file and no Python code.
+
+### Rollback Boundary
+
+`rm reportes/static/reportes/nuevo-reporte.js`. No other file in the repository references or depends on this file yet (D7) — deleting it is a no-op for every existing page.
+
+### Status
+
+5/5 assigned tasks (Phase 5) complete. Combined with PR 1 (Phase 1-2) and PR 2 (Phase 3), all of tasks.md is now implemented except Phase 4 (manual DevTools verification, partially done live by the user — 4.2 and 4.4 already checked off; 4.1, 4.3, 4.5, 4.6 remain) and Phase 6 (cleanup/docs). Ready for `sdd-verify`, or for a follow-up `sdd-apply` pass to close out Phase 6.
+
+## Remaining Tasks (after PR 3)
+
+- [ ] Phase 4: 4.1, 4.3, 4.5, 4.6 — remaining manual DevTools verification steps (user-run)
+- [ ] Phase 6: Cleanup/Documentation (6.1 design.md Open Question resolution, 6.2 offline-db.js README note, 6.3 final full-suite confirmation — already satisfied by this PR's 269/269 run)
