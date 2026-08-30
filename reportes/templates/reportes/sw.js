@@ -71,6 +71,20 @@ self.addEventListener("fetch", function (evento) {
   var esNavegacionDePaso = solicitud.mode === "navigate" && /\/reportes\/\d+\/paso\/[^/]+\/?$/.test(url.pathname);
   var esEstatico = url.pathname.indexOf("/static/") === 0 || url.origin !== self.location.origin;
 
+  // Last-resort fallback: the Fetch API requires event.respondWith() to
+  // resolve to a Response, never `undefined` — returning `undefined` (e.g.
+  // from an empty cache.match()) throws "Failed to convert value to
+  // 'Response'" inside the worker and surfaces as a hard network error even
+  // when the underlying failure was benign (a stale/never-cached URL, a
+  // transient hiccup). Every branch below must end in a real Response.
+  function respuestaDeReserva() {
+    return new Response("Sin conexión.", {
+      status: 503,
+      statusText: "Offline",
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
   if (esNavegacionDePaso) {
     // Network-first: server data is authoritative; stale HTML must never
     // win while online. Cache the response only when it is a genuine,
@@ -87,7 +101,9 @@ self.addEventListener("fetch", function (evento) {
           return respuesta;
         })
         .catch(function () {
-          return caches.match(solicitud);
+          return caches.match(solicitud).then(function (respuestaCacheada) {
+            return respuestaCacheada || respuestaDeReserva();
+          });
         })
     );
     return;
@@ -100,15 +116,19 @@ self.addEventListener("fetch", function (evento) {
         if (respuestaCacheada) {
           return respuestaCacheada;
         }
-        return fetch(solicitud).then(function (respuesta) {
-          if (respuesta.ok) {
-            var copia = respuesta.clone();
-            caches.open(CACHE).then(function (cache) {
-              cache.put(solicitud, copia);
-            });
-          }
-          return respuesta;
-        });
+        return fetch(solicitud)
+          .then(function (respuesta) {
+            if (respuesta.ok) {
+              var copia = respuesta.clone();
+              caches.open(CACHE).then(function (cache) {
+                cache.put(solicitud, copia);
+              });
+            }
+            return respuesta;
+          })
+          .catch(function () {
+            return respuestaDeReserva();
+          });
       })
     );
     return;
