@@ -314,6 +314,18 @@ def reporte_con_participantes_factory(reporte_factory, participacion_factory):
 
 
 @pytest.fixture
+def seccion_s08_id():
+    """The real S-08 ("croquis/evidencia") `seccion.id` used by
+    `reportes.adjuntos.SECCION_DE_ADJUNTOS` (backlog #11, design D7,
+    tasks.md 1.5). Every sample definition in
+    `media/tipos_reporte/definiciones/` has `secciones: []`, so this fixture
+    is the interim, test-only resolution of design.md's open question
+    (mirrors `definicion_valida`'s hardcoded section ids) — Phase 2/3/5
+    tests import this instead of hardcoding the string a second time."""
+    return "s-08-croquis-evidencia"
+
+
+@pytest.fixture
 def cliente_autenticado(client, usuario_factory):
     """A Django test client already logged in as a fresh Usuario
     (`client.force_login` — authentication itself is #2's tested concern,

@@ -201,6 +201,67 @@ class CambioDeValor(models.Model):
         return f"Cambio de {self.identificador_de_campo} en Reporte #{self.reporte_id}"
 
 
+class CategoriaDeAdjunto(models.TextChoices):
+    """`Adjunto.categoria` (backlog #11, design D1) — hardcoded to S-08
+    ("croquis/evidencia"); no other section currently accepts attachments."""
+
+    CROQUIS = "croquis", "Croquis"
+    EVIDENCIA = "evidencia", "Evidencia"
+
+
+class Adjunto(models.Model):
+    """One uploaded file for a `Reporte`'s S-08 section (backlog #11, spec
+    `adjuntos-reporte` "Standalone Adjunto Model", design D1). Deliberately
+    independent of `TipoDeDato`/`ValorDeReporte` — `TipoDeDato`'s closed
+    catalog has no file/image type (design's Approach), so an attachment is
+    its own row, never a `ValorDeReporte` write.
+
+    `archivo` is a plain `FileField`, not `ImageField` (design D1
+    rationale): `ImageField.to_python` runs `PIL.Image.open` on every
+    upload, and Pillow cannot decode HEIC without `pillow-heif`, so the
+    spec-mandated HEIC/HEIF allowlist entry would be rejected by Django
+    before `reportes.adjuntos.validar_adjunto` (Phase 2) ever ran. No
+    explicit `storage=` — it inherits `STORAGES["default"]`
+    (`config.storage.VercelBlobStorage`), exactly like
+    `TipoDeReporte.logo`/`plantilla`. `max_length=500` for the same reason
+    documented on `TipoDeReporte.plantilla`: a full Vercel Blob public URL
+    is stored as the file name, and Django's 100-char default truncates it.
+
+    No `unique` constraint and no count cap: the spec forbids a maximum
+    attachment count, and the same photo may legitimately be attached
+    twice. `Meta.ordering` is `("fecha_subida", "id")` — deterministic, and
+    it is what fixes which attachments win the 4 Excel embedding slots
+    (Phase 5, design D5)."""
+
+    reporte = models.ForeignKey(
+        Reporte, on_delete=models.CASCADE, related_name="adjuntos"
+    )
+    seccion_id = models.CharField(max_length=200)
+    categoria = models.CharField(
+        max_length=20, choices=CategoriaDeAdjunto.choices
+    )
+    archivo = models.FileField(
+        upload_to="reportes/adjuntos/", max_length=500
+    )
+    nombre_original = models.CharField(max_length=255)
+    formato_original = models.CharField(max_length=100)
+    tamano_bytes = models.PositiveIntegerField()
+    autor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="adjuntos_subidos",
+    )
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Adjunto"
+        verbose_name_plural = "Adjuntos"
+        ordering = ("fecha_subida", "id")
+
+    def __str__(self):
+        return f"{self.nombre_original} (Reporte #{self.reporte_id})"
+
+
 class Generacion(models.Model):
     """One audit row per successful `.xlsx` generation (backlog #7, spec
     `generacion-documento`, design D3). Unbounded — creator or invited
