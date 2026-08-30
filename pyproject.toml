@@ -12,6 +12,7 @@ dependencies = [
     "openpyxl>=3.1,<4",
     "Pillow>=11.3,<13",
     "sentry-sdk>=2.0,<3",
+    "vercel_blob>=0.4,<1",
 ]
 
 [tool.vercel]

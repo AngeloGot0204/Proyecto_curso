@@ -53,26 +53,34 @@ def test_a6_no_build_step_or_code_runs_migrate():
         assert "MigrationExecutor" not in text, py_file
 
 
-def test_a7_no_code_consumes_blob_token():
+def test_a7_blob_consumption_scoped_to_storage_module():
     """
-    Spec: Vercel Blob provisioned but unconsumed — no application code
-    consumes the token in this item (Automatable, narrowed).
+    Spec: Vercel Blob is now consumed (backlog #14 follow-up: production's
+    read-only filesystem cannot persist uploads, so config/storage.py wraps
+    the vercel_blob client) — but ONLY from that one module, never scattered
+    across the app.
     """
+    allowed = {REPO_ROOT / "config" / "storage.py"}
+
     for py_file in _iter_python_files():
+        if py_file in allowed:
+            continue
         text = py_file.read_text(encoding="utf-8")
-        assert "BLOB_READ_WRITE_TOKEN" not in text, py_file
         assert "vercel_blob" not in text, py_file
         assert "blob.vercel-storage.com" not in text, py_file
+        if py_file.name != "settings.py":
+            # settings.py legitimately reads the env var name to pick a
+            # storage backend, without importing the blob client itself.
+            assert "BLOB_READ_WRITE_TOKEN" not in text, py_file
 
     import config.settings as settings_module
 
-    # STORAGES now exists (WhiteNoise's staticfiles backend, item #2 fix),
-    # but "default" -- where a Blob-consuming override would go -- must
-    # still be the plain filesystem backend, never a Blob storage class.
-    assert (
-        settings_module.STORAGES["default"]["BACKEND"]
-        == "django.core.files.storage.FileSystemStorage"
-    ), "settings module must not override the default file-storage backend"
+    # The default backend now switches to Blob storage in production (not
+    # DEBUG), and stays FileSystemStorage locally/in tests.
+    assert settings_module.STORAGES["default"]["BACKEND"] in (
+        "django.core.files.storage.FileSystemStorage",
+        "config.storage.VercelBlobStorage",
+    ), "settings module must only ever select one of these two backends"
 
 
 def test_a9_env_ignored_and_example_has_no_real_secrets():
