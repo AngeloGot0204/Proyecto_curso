@@ -29,51 +29,51 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: Admin-Role Decorator — `usuarios/decorators.py` (PR1)
 
-- [ ] 1.1 (RED) `usuarios/tests/test_decorators.py::test_solo_administradores_permite_administrador`: admin user (`rol=ADMINISTRADOR`) hits a dummy view wrapped by `solo_administradores` → 200, view body executes (spec "Administrator reaches the list view").
-- [ ] 1.2 (RED) `test_solo_administradores_bloquea_no_administrador_403`: authenticated non-admin → `PermissionDenied`, view body does not execute (spec "Non-administrator is blocked with 403").
-- [ ] 1.3 (RED) `test_solo_administradores_anonimo_redirige_antes_de_leer_rol`: `RequestFactory` + `AnonymousUser`, no DB → 302 to `LOGIN_URL`, `es_administrador` never accessed (design D1, spec "Anonymous user is redirected").
-- [ ] 1.4 (GREEN) Create `usuarios/decorators.py::solo_administradores` per design D1's exact shape: `login_required` applied outermost, wrapping a `PermissionDenied` check on `request.user.es_administrador`.
-- [ ] 1.5 Run 1.1-1.3, confirm all pass.
-- [ ] 1.6 (REFACTOR) Confirm `functools.wraps` is used and no per-view inline duplicate guard exists.
+- [x] 1.1 (RED) `usuarios/tests/test_decorators.py::test_solo_administradores_permite_administrador`: admin user (`rol=ADMINISTRADOR`) hits a dummy view wrapped by `solo_administradores` → 200, view body executes (spec "Administrator reaches the list view").
+- [x] 1.2 (RED) `test_solo_administradores_bloquea_no_administrador_403`: authenticated non-admin → `PermissionDenied`, view body does not execute (spec "Non-administrator is blocked with 403").
+- [x] 1.3 (RED) `test_solo_administradores_anonimo_redirige_antes_de_leer_rol`: `RequestFactory` + `AnonymousUser`, no DB → 302 to `LOGIN_URL`, `es_administrador` never accessed (design D1, spec "Anonymous user is redirected").
+- [x] 1.4 (GREEN) Create `usuarios/decorators.py::solo_administradores` per design D1's exact shape: `login_required` applied outermost, wrapping a `PermissionDenied` check on `request.user.es_administrador`.
+- [x] 1.5 Run 1.1-1.3, confirm all pass.
+- [x] 1.6 (REFACTOR) Confirm `functools.wraps` is used and no per-view inline duplicate guard exists.
 
 ## Phase 2: Pure List Helpers — `tipos_reporte/listado.py` (PR1)
 
-- [ ] 2.1 (RED) `tipos_reporte/tests/test_listado.py::test_tipos_administrables_ordena_por_nombre_y_id`: 3 tipos out of alpha order plus a name tie → ordered `("nombre", "id")` (design D3).
-- [ ] 2.2 (RED) `test_tipos_administrables_select_related_definicion_activa`: no extra query when accessing `definicion_activa` (design D3, mirrors #12).
-- [ ] 2.3 (RED) `test_aplicar_busqueda_por_nombre`, `test_aplicar_busqueda_por_codigo`: `?q=` matches the corresponding field (spec "List supports search").
-- [ ] 2.4 (RED) `test_aplicar_busqueda_ignora_acentos`: `q="auditoria"` matches a tipo named `"Auditoría"` (design D3).
-- [ ] 2.5 (RED) `test_aplicar_busqueda_q_vacio_es_no_op`.
-- [ ] 2.6 (GREEN) Create `tipos_reporte/listado.py`: `_sin_acentos` duplicated verbatim with a comment naming its twin `reportes/listado.py` (design D3's documented deviation — `tipos_reporte` must not import `reportes`); `tipos_administrables()` with `.select_related("definicion_activa").order_by("nombre", "id")`; `aplicar_busqueda(qs, q)`.
-- [ ] 2.7 Run 2.1-2.5, confirm all pass.
-- [ ] 2.8 (REFACTOR) Confirm `tipos_reporte/listado.py` has no `reportes` import and no `django.http`/`request` import.
+- [x] 2.1 (RED) `tipos_reporte/tests/test_listado.py::test_tipos_administrables_ordena_por_nombre_y_id`: 3 tipos out of alpha order plus a name tie → ordered `("nombre", "id")` (design D3).
+- [x] 2.2 (RED) `test_tipos_administrables_select_related_definicion_activa`: no extra query when accessing `definicion_activa` (design D3, mirrors #12).
+- [x] 2.3 (RED) `test_aplicar_busqueda_por_nombre`, `test_aplicar_busqueda_por_codigo`: `?q=` matches the corresponding field (spec "List supports search").
+- [x] 2.4 (RED) `test_aplicar_busqueda_ignora_acentos`: `q="auditoria"` matches a tipo named `"Auditoría"` (design D3).
+- [x] 2.5 (RED) `test_aplicar_busqueda_q_vacio_es_no_op`.
+- [x] 2.6 (GREEN) Create `tipos_reporte/listado.py`: `_sin_acentos` duplicated verbatim with a comment naming its twin `reportes/listado.py` (design D3's documented deviation — `tipos_reporte` must not import `reportes`); `tipos_administrables()` with `.select_related("definicion_activa").order_by("nombre", "id")`; `aplicar_busqueda(qs, q)`.
+- [x] 2.7 Run 2.1-2.5, confirm all pass.
+- [x] 2.8 (REFACTOR) Confirm `tipos_reporte/listado.py` has no `reportes` import and no `django.http`/`request` import.
 
 ## Phase 3: List/Detail/Activate/Desactivate Views + URLs + Templates (PR1)
 
-- [ ] 3.1 (RED-support) Add `administrador_factory`, `definicion_factory` to `tipos_reporte/tests/conftest.py` (design File Changes table).
-- [ ] 3.2 (RED) `test_vistas.py::test_lista_anonimo_redirige_login`.
-- [ ] 3.3 (RED) `test_lista_no_administrador_403_sin_datos`: 403, no tipo `codigo` in body (spec "Non-administrator is blocked with 403").
-- [ ] 3.4 (RED) `test_lista_pagina_1_tiene_20_y_pagina_2_tiene_1`: 21 tipos.
-- [ ] 3.5 (RED) `test_lista_page_param_invalido_no_falla`: `?page=abc`/`?page=999` → 200.
-- [ ] 3.6 (RED) `test_lista_busqueda_por_q`.
-- [ ] 3.7 (RED) `test_detalle_muestra_definicion_activa_e_historicas` (spec "Detail View").
-- [ ] 3.8 (RED) `test_detalle_no_administrador_403`.
-- [ ] 3.9 (RED) `test_activar_definicion_exito_mensaje_success_y_estado_activa` (spec "Activation succeeds through the new screen").
-- [ ] 3.10 (RED) `test_activar_definicion_falla_muestra_todos_los_problemas_y_permanece_borrador` (spec "Activation failure surfaces every problem").
-- [ ] 3.11 (RED) `test_activar_definicion_get_405` (design D6 `require_POST`).
-- [ ] 3.12 (RED) `test_desactivar_tipo_exito_limpia_definicion_activa_y_version_sin_cambios` (spec "Desactivation succeeds through the new screen").
-- [ ] 3.13 (RED) `test_desactivar_get_405`.
-- [ ] 3.14 (GREEN) Create `tipos_reporte/views.py`: `TAMANO_DE_PAGINA = 20`; `lista`, `detalle`, `activar_definicion_vista`, `desactivar_tipo_vista` — all `@solo_administradores`; the two mutating views also `@require_POST`, then PRG + `messages` back to `detalle` (design D6).
-- [ ] 3.15 (GREEN) Create `tipos_reporte/urls.py`: `tipos_lista`, `tipos_detalle`, `tipos_definicion_activar`, `tipos_desactivar` (design Interfaces table).
-- [ ] 3.16 (GREEN) Modify `config/urls.py`: `path("tipos-reporte/", include("tipos_reporte.urls"))`.
-- [ ] 3.17 (GREEN) Create `tipos_reporte/templates/tipos_reporte/lista.html`: search form, table, `{% querystring %}` pagination.
-- [ ] 3.18 (GREEN) Create `tipos_reporte/templates/tipos_reporte/detalle.html`: tipo fields, definición history, activate/desactivate POST forms with CSRF.
-- [ ] 3.19 Run 3.2-3.13, confirm all pass.
-- [ ] 3.20 (REFACTOR) Confirm all 4 PR1 routes carry `solo_administradores` and no `?next=`/user-supplied redirect target exists anywhere (Threat Matrix "Routing").
+- [x] 3.1 (RED-support) Add `administrador_factory`, `definicion_factory` to `tipos_reporte/tests/conftest.py` (design File Changes table).
+- [x] 3.2 (RED) `test_vistas.py::test_lista_anonimo_redirige_login`.
+- [x] 3.3 (RED) `test_lista_no_administrador_403_sin_datos`: 403, no tipo `codigo` in body (spec "Non-administrator is blocked with 403").
+- [x] 3.4 (RED) `test_lista_pagina_1_tiene_20_y_pagina_2_tiene_1`: 21 tipos.
+- [x] 3.5 (RED) `test_lista_page_param_invalido_no_falla`: `?page=abc`/`?page=999` → 200.
+- [x] 3.6 (RED) `test_lista_busqueda_por_q`.
+- [x] 3.7 (RED) `test_detalle_muestra_definicion_activa_e_historicas` (spec "Detail View").
+- [x] 3.8 (RED) `test_detalle_no_administrador_403`.
+- [x] 3.9 (RED) `test_activar_definicion_exito_mensaje_success_y_estado_activa` (spec "Activation succeeds through the new screen").
+- [x] 3.10 (RED) `test_activar_definicion_falla_muestra_todos_los_problemas_y_permanece_borrador` (spec "Activation failure surfaces every problem").
+- [x] 3.11 (RED) `test_activar_definicion_get_405` (design D6 `require_POST`).
+- [x] 3.12 (RED) `test_desactivar_tipo_exito_limpia_definicion_activa_y_version_sin_cambios` (spec "Desactivation succeeds through the new screen").
+- [x] 3.13 (RED) `test_desactivar_get_405`.
+- [x] 3.14 (GREEN) Create `tipos_reporte/views.py`: `TAMANO_DE_PAGINA = 20`; `lista`, `detalle`, `activar_definicion_vista`, `desactivar_tipo_vista` — all `@solo_administradores`; the two mutating views also `@require_POST`, then PRG + `messages` back to `detalle` (design D6).
+- [x] 3.15 (GREEN) Create `tipos_reporte/urls.py`: `tipos_lista`, `tipos_detalle`, `tipos_definicion_activar`, `tipos_desactivar` (design Interfaces table).
+- [x] 3.16 (GREEN) Modify `config/urls.py`: `path("tipos-reporte/", include("tipos_reporte.urls"))`.
+- [x] 3.17 (GREEN) Create `tipos_reporte/templates/tipos_reporte/lista.html`: search form, table, `{% querystring %}` pagination.
+- [x] 3.18 (GREEN) Create `tipos_reporte/templates/tipos_reporte/detalle.html`: tipo fields, definición history, activate/desactivate POST forms with CSRF.
+- [x] 3.19 Run 3.2-3.13, confirm all pass.
+- [x] 3.20 (REFACTOR) Confirm all 4 PR1 routes carry `solo_administradores` and no `?next=`/user-supplied redirect target exists anywhere (Threat Matrix "Routing").
 
 ## Phase 4: PR1 Verification
 
-- [ ] 4.1 Run `pytest tipos_reporte/ usuarios/ -q`, confirm no regressions.
-- [ ] 4.2 Confirm no delete action/route exists in PR1's templates/urls (spec "Delete UI Explicitly Out of Scope").
+- [x] 4.1 Run `pytest tipos_reporte/ usuarios/ -q`, confirm no regressions.
+- [x] 4.2 Confirm no delete action/route exists in PR1's templates/urls (spec "Delete UI Explicitly Out of Scope").
 
 ## Phase 5: Shared YAML Helper Extraction — `tipos_reporte/validacion.py` (PR2)
 

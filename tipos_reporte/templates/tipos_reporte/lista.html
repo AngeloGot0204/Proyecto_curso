@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Tipos de reporte{% endblock %}
+
+{% block content %}
+<h1>Tipos de reporte</h1>
+
+<form method="get" action="{% url 'tipos_lista' %}">
+    <label for="q">Buscar</label>
+    <input type="text" id="q" name="q" value="{{ q }}" placeholder="Nombre o código">
+    <button type="submit">Filtrar</button>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>Nombre</th>
+            <th>Código</th>
+            <th>Versión de formato</th>
+            <th>Definición activa</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for tipo in page_obj %}
+        <tr>
+            <td><a href="{% url 'tipos_detalle' tipo.id %}">{{ tipo.nombre }}</a></td>
+            <td>{{ tipo.codigo }}</td>
+            <td>{{ tipo.version_formato }}</td>
+            <td>
+                {% if tipo.definicion_activa %}
+                v{{ tipo.definicion_activa.version }}
+                {% else %}
+                Sin definición activa
+                {% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">No hay tipos de reporte registrados.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if page_obj.paginator.num_pages > 1 %}
+<nav aria-label="Paginación">
+    {% if page_obj.has_previous %}
+    <a href="{% querystring page=page_obj.previous_page_number %}">Anterior</a>
+    {% endif %}
+    <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="{% querystring page=page_obj.next_page_number %}">Siguiente</a>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

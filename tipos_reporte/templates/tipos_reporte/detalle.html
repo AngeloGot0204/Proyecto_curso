@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tipo.nombre }}{% endblock %}
+
+{% block content %}
+<h1>{{ tipo.nombre }}</h1>
+
+<dl>
+    <dt>Código</dt>
+    <dd>{{ tipo.codigo }}</dd>
+    <dt>Versión de formato</dt>
+    <dd>{{ tipo.version_formato }}</dd>
+    <dt>Logo</dt>
+    <dd>{% if tipo.logo %}<a href="{{ tipo.logo.url }}">{{ tipo.logo.name }}</a>{% else %}Sin logo{% endif %}</dd>
+    <dt>Plantilla</dt>
+    <dd><a href="{{ tipo.plantilla.url }}">{{ tipo.plantilla.name }}</a></dd>
+    <dt>Definición activa</dt>
+    <dd>
+        {% if tipo.definicion_activa %}
+        v{{ tipo.definicion_activa.version }}
+        {% else %}
+        Sin definición activa
+        {% endif %}
+    </dd>
+</dl>
+
+{% if tipo.definicion_activa %}
+<form method="post" action="{% url 'tipos_desactivar' tipo.id %}">
+    {% csrf_token %}
+    <button type="submit">Desactivar tipo de reporte</button>
+</form>
+{% endif %}
+
+<h2>Definiciones</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Estado</th>
+            <th>Versión</th>
+            <th>Activada en</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for definicion in definiciones %}
+        <tr>
+            <td>{{ definicion.get_estado_display }}</td>
+            <td>{{ definicion.version|default:"—" }}</td>
+            <td>{{ definicion.activada_en|default:"—" }}</td>
+            <td>
+                {% if definicion.estado == "borrador" %}
+                <form method="post" action="{% url 'tipos_definicion_activar' definicion.id %}">
+                    {% csrf_token %}
+                    <button type="submit">Activar</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">Este tipo todavía no tiene ninguna definición.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
