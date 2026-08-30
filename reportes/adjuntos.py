@@ -28,7 +28,7 @@ TAMANO_MAXIMO_BYTES = 8 * 1024 * 1024
 # hardcoded to S-08 "croquis/evidencia"). Interim test-only resolution of
 # design.md's open question — see `seccion_s08_id` in
 # `reportes/tests/conftest.py` (tasks.md 1.5).
-SECCION_DE_ADJUNTOS = "s-08-croquis-evidencia"
+SECCION_DE_ADJUNTOS = "resultados"
 
 
 def validar_adjunto(archivo) -> str | None:
