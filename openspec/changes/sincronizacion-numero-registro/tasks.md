@@ -63,9 +63,9 @@ Chain strategy: stacked-to-main
 ## Phase 4: Manual Verification (No Automated JS Coverage — Documented Limitation)
 
 - [ ] 4.1 DevTools script step 1: fetch submit path — single `fetch` POST then `document` GET of next step; `borradores` row for previous step is gone.
-- [ ] 4.2 DevTools script step 2-4: Network ▸ Offline submit → `pendiente` banner + `intentos:1`; Reintentar while offline → `intentos:2`; Reintentar after reconnect → success, row deleted.
+- [x] 4.2 DevTools script step 2-4: Network ▸ Offline submit → `pendiente` banner + `intentos:1`; Reintentar while offline → `intentos:2`; Reintentar after reconnect → success, row deleted. Verified live in production (2026-08-30): banner appeared, counter advanced on repeated offline submits/retries, success and step advance confirmed after reconnect + retry.
 - [ ] 4.3 DevTools script step 5: stop dev server → `fallo` state; restart, Reintentar → success.
-- [ ] 4.4 DevTools script step 6: clear `sessionid` cookie mid-draft, submit → final URL `/login/`, row `fallo` with `valores` intact; re-login → banner restores; Reintentar succeeds.
+- [x] 4.4 DevTools script step 6: clear `sessionid` cookie mid-draft, submit → final URL `/login/`, row `fallo` with `valores` intact; re-login → banner restores; Reintentar succeeds. Verified live in production (2026-08-30): session cookie cleared, submit redirected to /login/, banner "No se pudo subir" persisted with draft intact across re-login, Reintentar succeeded and advanced to next step.
 - [ ] 4.5 DevTools script step 7: inject a `data-nuevo-reporte` form, confirm `nuevos[codigoTipo].idLocal` persists across a failed POST and a page reload, and a fresh UUID is generated only after success clears the row.
 - [ ] 4.6 DevTools script step 8: double-click start under Slow 3G throttling → exactly one `Reporte` row in Django admin, one `numero_registro`.
 
