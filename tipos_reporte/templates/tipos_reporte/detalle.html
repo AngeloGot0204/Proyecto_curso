@@ -24,6 +24,8 @@
     </dd>
 </dl>
 
+<p><a href="{% url 'tipos_editar' tipo.id %}">Editar</a></p>
+
 {% if tipo.definicion_activa %}
 <form method="post" action="{% url 'tipos_desactivar' tipo.id %}">
     {% csrf_token %}
@@ -32,6 +34,8 @@
 {% endif %}
 
 <h2>Definiciones</h2>
+
+<p><a href="{% url 'tipos_definicion_crear' tipo.id %}">Nueva definición</a></p>
 <table>
     <thead>
         <tr>
@@ -49,6 +53,7 @@
             <td>{{ definicion.activada_en|default:"—" }}</td>
             <td>
                 {% if definicion.estado == "borrador" %}
+                <a href="{% url 'tipos_definicion_editar' tipo.id definicion.id %}">Editar</a>
                 <form method="post" action="{% url 'tipos_definicion_activar' definicion.id %}">
                     {% csrf_token %}
                     <button type="submit">Activar</button>

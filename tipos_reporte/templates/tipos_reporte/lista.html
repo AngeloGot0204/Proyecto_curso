@@ -5,6 +5,8 @@
 {% block content %}
 <h1>Tipos de reporte</h1>
 
+<p><a href="{% url 'tipos_crear' %}">Nuevo tipo de reporte</a></p>
+
 <form method="get" action="{% url 'tipos_lista' %}">
     <label for="q">Buscar</label>
     <input type="text" id="q" name="q" value="{{ q }}" placeholder="Nombre o código">
