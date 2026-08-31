@@ -790,6 +790,26 @@ def test_plantilla_sin_anclas_declaradas_no_incrusta_nada(
     assert hoja._images == []
 
 
+def test_intercambiar_logo_logo_vacio_deja_imagen_de_plantilla_intacta():
+    """8.1 RED (backlog #13, S-14; spec "Generation with no logo leaves the
+    template default untouched"): a unit-level regression test, calling
+    `_intercambiar_logo` directly with an empty/falsy `logo` — must leave
+    `hoja._images` completely untouched (same list, same single original
+    image), never removing or swapping anything (design D8)."""
+    import openpyxl
+    from openpyxl.drawing.image import Image as ImagenOpenpyxl
+
+    from tipos_reporte.generador import _intercambiar_logo
+
+    hoja = openpyxl.Workbook().active
+    imagen_original = ImagenOpenpyxl.__new__(ImagenOpenpyxl)
+    hoja._images = [imagen_original]
+
+    _intercambiar_logo(hoja, None)
+
+    assert hoja._images == [imagen_original]
+
+
 @pytest.mark.django_db
 def test_adjunto_no_decodificable_se_omite_sin_interrumpir_la_generacion(
     tipo_de_reporte_factory, plantilla_xlsx, definicion_valida, valores_completos

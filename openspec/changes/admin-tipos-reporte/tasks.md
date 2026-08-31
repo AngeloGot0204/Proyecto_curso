@@ -77,53 +77,53 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: Shared YAML Helper Extraction — `tipos_reporte/validacion.py` (PR2)
 
-- [ ] 5.1 (RED) `tipos_reporte/tests/test_formularios.py::test_analizar_definicion_subida_mapping_valido_retorna_texto_y_dict`.
-- [ ] 5.2 (RED) `test_analizar_definicion_subida_no_utf8_lanza_validation_error_archivo_yaml`.
-- [ ] 5.3 (RED) `test_analizar_definicion_subida_yaml_inseguro_python_object_apply_rechazado` (`!!python/object/apply`, Threat Matrix "Untrusted deserialization").
-- [ ] 5.4 (RED) `test_analizar_definicion_subida_raiz_lista_rechazada`.
-- [ ] 5.5 (RED) `test_analizar_definicion_subida_raiz_escalar_rechazada`.
-- [ ] 5.6 (RED) `test_analizar_definicion_subida_no_representable_como_json_fecha_nativa_rechazada`.
-- [ ] 5.7 (GREEN) Add `tipos_reporte/validacion.py::analizar_definicion_subida(archivo) -> tuple[str, dict]` — body moved verbatim from `admin.py:64-92` (design D2: same four checks, same four Spanish messages), raising `ValidationError` keyed `"archivo_yaml"`.
-- [ ] 5.8 (GREEN) Update `tipos_reporte/admin.py::DefinicionDeTipoForm.clean()` to call `analizar_definicion_subida(archivo)` in place of the inline checks (design D2's one-line call site); keep both `@admin.register(...)` lines for now.
-- [ ] 5.9 Run 5.1-5.6, confirm pass; run existing `tipos_reporte/tests/test_admin.py`, confirm all 14 tests still green.
-- [ ] 5.10 (REFACTOR) Confirm no duplicated YAML-parsing logic remains in `admin.py::DefinicionDeTipoForm.clean()`.
+- [x] 5.1 (RED) `tipos_reporte/tests/test_formularios.py::test_analizar_definicion_subida_mapping_valido_retorna_texto_y_dict`.
+- [x] 5.2 (RED) `test_analizar_definicion_subida_no_utf8_lanza_validation_error_archivo_yaml`.
+- [x] 5.3 (RED) `test_analizar_definicion_subida_yaml_inseguro_python_object_apply_rechazado` (`!!python/object/apply`, Threat Matrix "Untrusted deserialization").
+- [x] 5.4 (RED) `test_analizar_definicion_subida_raiz_lista_rechazada`.
+- [x] 5.5 (RED) `test_analizar_definicion_subida_raiz_escalar_rechazada`.
+- [x] 5.6 (RED) `test_analizar_definicion_subida_no_representable_como_json_fecha_nativa_rechazada`.
+- [x] 5.7 (GREEN) Add `tipos_reporte/validacion.py::analizar_definicion_subida(archivo) -> tuple[str, dict]` — body moved verbatim from `admin.py:64-92` (design D2: same four checks, same four Spanish messages), raising `ValidationError` keyed `"archivo_yaml"`.
+- [x] 5.8 (GREEN) Update `tipos_reporte/admin.py::DefinicionDeTipoForm.clean()` to call `analizar_definicion_subida(archivo)` in place of the inline checks (design D2's one-line call site); keep both `@admin.register(...)` lines for now.
+- [x] 5.9 Run 5.1-5.6, confirm pass; run existing `tipos_reporte/tests/test_admin.py`, confirm all 14 tests still green.
+- [x] 5.10 (REFACTOR) Confirm no duplicated YAML-parsing logic remains in `admin.py::DefinicionDeTipoForm.clean()`.
 
 ## Phase 6: Create/Edit Forms — `tipos_reporte/forms.py` (PR2)
 
-- [ ] 6.1 (RED) `test_formularios.py::test_tipo_de_reporte_form_plantilla_disabled_true_con_definicion_activa` (design D4).
-- [ ] 6.2 (RED) `test_tipo_de_reporte_form_plantilla_editable_sin_definicion_activa` (spec "Plantilla is editable when no definition is active").
-- [ ] 6.3 (RED) `test_tipo_de_reporte_form_plantilla_posteada_en_tipo_activo_no_persiste`: hand-crafted POST does not persist a changed `plantilla` (design D4, spec "Plantilla is read-only when a definition is active").
-- [ ] 6.4 (RED) `test_definicion_de_tipo_form_yaml_valido_crea_borrador_con_yaml_fuente_y_estructura_derivados` (spec "Administrator uploads a new definición draft").
-- [ ] 6.5 (RED) `test_definicion_de_tipo_form_campos_estado_version_activada_en_ausentes_de_form_fields` (design D5, spec "not administrator-editable").
-- [ ] 6.6 (GREEN) Create `tipos_reporte/forms.py::TipoDeReporteForm` — fields `nombre`, `codigo`, `version_formato`, `logo`, `plantilla`; `__init__` sets `self.fields["plantilla"].disabled = True` when `instance.definicion_activa_id is not None` (design D4).
-- [ ] 6.7 (GREEN) Add `DefinicionDeTipoForm` to `forms.py` — `fields = ("archivo_yaml",)` (design D5); `clean()` calls `analizar_definicion_subida` and assigns `self.instance.yaml_fuente`/`self.instance.estructura`.
-- [ ] 6.8 Run 6.1-6.5, confirm all pass.
-- [ ] 6.9 (REFACTOR) Confirm `forms.py` imports `analizar_definicion_subida` from `tipos_reporte.validacion` — no reimplementation.
+- [x] 6.1 (RED) `test_formularios.py::test_tipo_de_reporte_form_plantilla_disabled_true_con_definicion_activa` (design D4).
+- [x] 6.2 (RED) `test_tipo_de_reporte_form_plantilla_editable_sin_definicion_activa` (spec "Plantilla is editable when no definition is active").
+- [x] 6.3 (RED) `test_tipo_de_reporte_form_plantilla_posteada_en_tipo_activo_no_persiste`: hand-crafted POST does not persist a changed `plantilla` (design D4, spec "Plantilla is read-only when a definition is active").
+- [x] 6.4 (RED) `test_definicion_de_tipo_form_yaml_valido_crea_borrador_con_yaml_fuente_y_estructura_derivados` (spec "Administrator uploads a new definición draft").
+- [x] 6.5 (RED) `test_definicion_de_tipo_form_campos_estado_version_activada_en_ausentes_de_form_fields` (design D5, spec "not administrator-editable").
+- [x] 6.6 (GREEN) Create `tipos_reporte/forms.py::TipoDeReporteForm` — fields `nombre`, `codigo`, `version_formato`, `logo`, `plantilla`; `__init__` sets `self.fields["plantilla"].disabled = True` when `instance.definicion_activa_id is not None` (design D4).
+- [x] 6.7 (GREEN) Add `DefinicionDeTipoForm` to `forms.py` — `fields = ("archivo_yaml",)` (design D5); `clean()` calls `analizar_definicion_subida` and assigns `self.instance.yaml_fuente`/`self.instance.estructura`.
+- [x] 6.8 Run 6.1-6.5, confirm all pass.
+- [x] 6.9 (REFACTOR) Confirm `forms.py` imports `analizar_definicion_subida` from `tipos_reporte.validacion` — no reimplementation.
 
 ## Phase 7: Create/Edit Views + Templates (PR2)
 
-- [ ] 7.1 (RED) `test_vistas.py::test_crear_tipo_administrador_exito_sin_definicion_activa` (spec "Administrator creates a new TipoDeReporte").
-- [ ] 7.2 (RED) `test_crear_tipo_no_administrador_403`.
-- [ ] 7.3 (RED) `test_editar_tipo_sin_reupload_logo_mantiene_logo_existente` (spec headline scenario "Editing without re-uploading keeps the existing logo").
-- [ ] 7.4 (RED) `test_editar_tipo_plantilla_solo_lectura_cuando_definicion_activa_no_persiste_cambio`.
-- [ ] 7.5 (RED) `test_crear_definicion_yaml_valido_crea_borrador_bajo_tipo_de_url`.
-- [ ] 7.6 (RED) `test_editar_definicion_borrador_permite_edicion`.
-- [ ] 7.7 (RED) `test_editar_definicion_no_borrador_404` (design D5, edit restricted to `borrador`).
-- [ ] 7.8 (RED) `test_crear_o_editar_plantilla_oversize_es_aceptada`: file larger than `Adjunto`'s size ceiling is accepted (design D8, spec "Oversized plantilla is accepted").
-- [ ] 7.9 (GREEN) Add `crear_tipo`, `editar_tipo`, `crear_definicion`, `editar_definicion` to `tipos_reporte/views.py` — all `@solo_administradores`; `editar_definicion` returns 404 for non-`borrador` rows (design D5).
-- [ ] 7.10 (GREEN) Add `tipos_crear`, `tipos_editar`, `tipos_definicion_crear`, `tipos_definicion_editar` routes (GET+POST) to `tipos_reporte/urls.py` (design Interfaces table).
-- [ ] 7.11 (GREEN) Create `tipos_reporte/templates/tipos_reporte/formulario_tipo.html` — `enctype="multipart/form-data"`.
-- [ ] 7.12 (GREEN) Create `tipos_reporte/templates/tipos_reporte/formulario_definicion.html` — `enctype="multipart/form-data"`.
-- [ ] 7.13 Run 7.1-7.8, confirm all pass.
-- [ ] 7.14 (REFACTOR) Confirm `nuevo/` does not collide with `<int:tipo_id>/` (design's routing note) and no delete form/route exists in either new template.
+- [x] 7.1 (RED) `test_vistas.py::test_crear_tipo_administrador_exito_sin_definicion_activa` (spec "Administrator creates a new TipoDeReporte").
+- [x] 7.2 (RED) `test_crear_tipo_no_administrador_403`.
+- [x] 7.3 (RED) `test_editar_tipo_sin_reupload_logo_mantiene_logo_existente` (spec headline scenario "Editing without re-uploading keeps the existing logo").
+- [x] 7.4 (RED) `test_editar_tipo_plantilla_solo_lectura_cuando_definicion_activa_no_persiste_cambio`.
+- [x] 7.5 (RED) `test_crear_definicion_yaml_valido_crea_borrador_bajo_tipo_de_url`.
+- [x] 7.6 (RED) `test_editar_definicion_borrador_permite_edicion`.
+- [x] 7.7 (RED) `test_editar_definicion_no_borrador_404` (design D5, edit restricted to `borrador`).
+- [x] 7.8 (RED) `test_crear_o_editar_plantilla_oversize_es_aceptada`: file larger than `Adjunto`'s size ceiling is accepted (design D8, spec "Oversized plantilla is accepted").
+- [x] 7.9 (GREEN) Add `crear_tipo`, `editar_tipo`, `crear_definicion`, `editar_definicion` to `tipos_reporte/views.py` — all `@solo_administradores`; `editar_definicion` returns 404 for non-`borrador` rows (design D5).
+- [x] 7.10 (GREEN) Add `tipos_crear`, `tipos_editar`, `tipos_definicion_crear`, `tipos_definicion_editar` routes (GET+POST) to `tipos_reporte/urls.py` (design Interfaces table).
+- [x] 7.11 (GREEN) Create `tipos_reporte/templates/tipos_reporte/formulario_tipo.html` — `enctype="multipart/form-data"`.
+- [x] 7.12 (GREEN) Create `tipos_reporte/templates/tipos_reporte/formulario_definicion.html` — `enctype="multipart/form-data"`.
+- [x] 7.13 Run 7.1-7.8, confirm all pass.
+- [x] 7.14 (REFACTOR) Confirm `nuevo/` does not collide with `<int:tipo_id>/` (design's routing note) and no delete form/route exists in either new template.
 
 ## Phase 8: Admin Deregistration + Regression + Full Suite (PR2)
 
-- [ ] 8.1 (RED) `tipos_reporte/tests/test_generador.py::test_intercambiar_logo_logo_vacio_deja_imagen_de_plantilla_intacta`: empty `TipoDeReporte.logo` leaves `hoja._images` untouched (spec "Generation with no logo leaves the template default untouched").
-- [ ] 8.2 (RED) `test_vistas.py::test_admin_registry_no_contiene_tipo_de_reporte_ni_definicion_de_tipo`: both models absent from `admin.site._registry` (spec "Admin registration removed once new create/edit screen exists").
-- [ ] 8.3 (GREEN) Remove the two `@admin.register(...)` decorator lines (`DefinicionDeTipo`, `TipoDeReporte`) from `tipos_reporte/admin.py` (design D7) — keep the `ModelAdmin`/form classes and their existing tests unchanged.
-- [ ] 8.4 (GREEN) Update `admin.py`'s module docstring recording the classes are retained deliberately as a one-line-revert rollback path and that `tipos_reporte/urls.py` is now the live surface (design D7).
-- [ ] 8.5 Run 8.1-8.2, confirm pass; run existing `tipos_reporte/tests/test_admin.py` unmodified, confirm all 14 tests still green (design D7's guarantee).
-- [ ] 8.6 Run full `pytest tipos_reporte/ usuarios/ -q`, confirm no regressions across PR1+PR2.
-- [ ] 8.7 Confirm no delete action/route exists anywhere in the new screen, either PR (spec "Delete UI Explicitly Out of Scope").
-- [ ] 8.8 Confirm every applicable Threat Matrix row has a corresponding RED test already in place: "Routing" (3.2-3.13, 7.1-7.2 auth/method matrix), "Untrusted deserialization" (5.3); no new threat-matrix rows apply beyond those already covered by design.
+- [x] 8.1 (RED) `tipos_reporte/tests/test_generador.py::test_intercambiar_logo_logo_vacio_deja_imagen_de_plantilla_intacta`: empty `TipoDeReporte.logo` leaves `hoja._images` untouched (spec "Generation with no logo leaves the template default untouched").
+- [x] 8.2 (RED) `test_vistas.py::test_admin_registry_no_contiene_tipo_de_reporte_ni_definicion_de_tipo`: both models absent from `admin.site._registry` (spec "Admin registration removed once new create/edit screen exists").
+- [x] 8.3 (GREEN) Remove the two `@admin.register(...)` decorator lines (`DefinicionDeTipo`, `TipoDeReporte`) from `tipos_reporte/admin.py` (design D7) — keep the `ModelAdmin`/form classes and their existing tests unchanged.
+- [x] 8.4 (GREEN) Update `admin.py`'s module docstring recording the classes are retained deliberately as a one-line-revert rollback path and that `tipos_reporte/urls.py` is now the live surface (design D7).
+- [x] 8.5 Run 8.1-8.2, confirm pass; run existing `tipos_reporte/tests/test_admin.py` unmodified, confirm all 14 tests still green (design D7's guarantee).
+- [x] 8.6 Run full `pytest tipos_reporte/ usuarios/ -q`, confirm no regressions across PR1+PR2. (Confirmed with the full `tipos_reporte/ usuarios/ reportes/` suite together, clean test DB: 349 passed, 0 failed, 0 errors.)
+- [x] 8.7 Confirm no delete action/route exists anywhere in the new screen, either PR (spec "Delete UI Explicitly Out of Scope").
+- [x] 8.8 Confirm every applicable Threat Matrix row has a corresponding RED test already in place: "Routing" (3.2-3.13, 7.1-7.2 auth/method matrix), "Untrusted deserialization" (5.3); no new threat-matrix rows apply beyond those already covered by design.

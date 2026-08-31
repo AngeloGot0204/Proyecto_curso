@@ -265,3 +265,230 @@ def test_desactivar_get_405(client, administrador_factory, tipo_de_reporte_facto
     response = client.get(reverse("tipos_desactivar", args=[tipo.id]))
 
     assert response.status_code == 405
+
+
+# ---------------------------------------------------------------------------
+# tipos_crear (PR2, design D4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_crear_tipo_administrador_exito_sin_definicion_activa(
+    client, administrador_factory
+):
+    """Spec 'Administrator creates a new TipoDeReporte'."""
+    admin = administrador_factory(username="crear-tipo-exito-admin")
+    client.force_login(admin)
+
+    response = client.post(
+        reverse("tipos_crear"),
+        data={
+            "nombre": "Nuevo tipo",
+            "codigo": "crear-tipo-exito-codigo",
+            "version_formato": "",
+            "plantilla": SimpleUploadedFile("p.xlsx", b"contenido-irrelevante"),
+        },
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    tipo = TipoDeReporte.objects.get(codigo="crear-tipo-exito-codigo")
+    assert tipo.definicion_activa_id is None
+
+
+@pytest.mark.django_db
+def test_crear_tipo_no_administrador_403(client, usuario_factory):
+    no_admin = usuario_factory(username="crear-tipo-no-admin", rol=Rol.USUARIO)
+    client.force_login(no_admin)
+
+    response = client.get(reverse("tipos_crear"))
+
+    assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# tipos_editar (PR2, design D4, D8)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_editar_tipo_sin_reupload_logo_mantiene_logo_existente(
+    client, administrador_factory, tipo_de_reporte_factory
+):
+    """Spec headline scenario 'Editing without re-uploading keeps the
+    existing logo'."""
+    from PIL import Image
+    import io
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (1, 1), color="red").save(buffer, format="PNG")
+    buffer.seek(0)
+    admin = administrador_factory(username="editar-logo-admin")
+    tipo = tipo_de_reporte_factory(
+        nombre="Con logo",
+        codigo="editar-logo-mantiene",
+        logo=SimpleUploadedFile("logo.png", buffer.read(), content_type="image/png"),
+    )
+    logo_original = tipo.logo.name
+    client.force_login(admin)
+
+    response = client.post(
+        reverse("tipos_editar", args=[tipo.id]),
+        data={
+            "nombre": tipo.nombre,
+            "codigo": tipo.codigo,
+            "version_formato": tipo.version_formato,
+            "plantilla": SimpleUploadedFile("p2.xlsx", b"contenido-irrelevante"),
+        },
+        follow=True,
+    )
+
+    tipo.refresh_from_db()
+    assert response.status_code == 200
+    assert tipo.logo.name == logo_original
+
+
+@pytest.mark.django_db
+def test_editar_tipo_plantilla_solo_lectura_cuando_definicion_activa_no_persiste_cambio(
+    client, administrador_factory, tipo_de_reporte_factory, definicion_factory
+):
+    admin = administrador_factory(username="editar-plantilla-readonly-admin")
+    tipo = tipo_de_reporte_factory(
+        nombre="Con activa", codigo="editar-plantilla-readonly"
+    )
+    activa = definicion_factory(
+        tipo=tipo, estado=Estado.ACTIVA, version=1, activada_en=timezone.now()
+    )
+    TipoDeReporte.objects.filter(pk=tipo.pk).update(definicion_activa=activa)
+    tipo.refresh_from_db()
+    plantilla_original = tipo.plantilla.name
+    client.force_login(admin)
+
+    response = client.post(
+        reverse("tipos_editar", args=[tipo.id]),
+        data={
+            "nombre": tipo.nombre,
+            "codigo": tipo.codigo,
+            "version_formato": tipo.version_formato,
+            "plantilla": SimpleUploadedFile("nueva.xlsx", b"contenido-nuevo"),
+        },
+        follow=True,
+    )
+
+    tipo.refresh_from_db()
+    assert response.status_code == 200
+    assert tipo.plantilla.name == plantilla_original
+
+
+# ---------------------------------------------------------------------------
+# tipos_definicion_crear / tipos_definicion_editar (PR2, design D5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_crear_definicion_yaml_valido_crea_borrador_bajo_tipo_de_url(
+    client, administrador_factory, tipo_de_reporte_factory
+):
+    admin = administrador_factory(username="crear-definicion-admin")
+    tipo = tipo_de_reporte_factory(
+        nombre="Para definiciones", codigo="crear-definicion-tipo"
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        reverse("tipos_definicion_crear", args=[tipo.id]),
+        data={
+            "archivo_yaml": SimpleUploadedFile(
+                "d.yaml", b"secciones: []", content_type="application/x-yaml"
+            )
+        },
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    definicion = DefinicionDeTipo.objects.get(tipo=tipo)
+    assert definicion.estado == Estado.BORRADOR
+    assert definicion.estructura == {"secciones": []}
+
+
+@pytest.mark.django_db
+def test_editar_definicion_borrador_permite_edicion(
+    client, administrador_factory, tipo_de_reporte_factory, definicion_factory
+):
+    admin = administrador_factory(username="editar-definicion-borrador-admin")
+    tipo = tipo_de_reporte_factory(
+        nombre="Editar borrador", codigo="editar-definicion-borrador"
+    )
+    definicion = definicion_factory(tipo=tipo)
+    client.force_login(admin)
+
+    response = client.get(
+        reverse("tipos_definicion_editar", args=[tipo.id, definicion.id])
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_editar_definicion_no_borrador_404(
+    client, administrador_factory, tipo_de_reporte_factory, definicion_factory
+):
+    """Design D5: edit is restricted to `borrador` rows — `models.py`'s
+    `CONGELADOS` guard makes non-borrador rows immutable."""
+    admin = administrador_factory(username="editar-definicion-404-admin")
+    tipo = tipo_de_reporte_factory(
+        nombre="Editar no borrador", codigo="editar-definicion-no-borrador"
+    )
+    definicion = definicion_factory(
+        tipo=tipo, estado=Estado.HISTORICA, version=1, activada_en=timezone.now()
+    )
+    client.force_login(admin)
+
+    response = client.get(
+        reverse("tipos_definicion_editar", args=[tipo.id, definicion.id])
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_crear_o_editar_plantilla_oversize_es_aceptada(
+    client, administrador_factory
+):
+    """Design D8, spec 'Oversized plantilla is accepted': a `plantilla`
+    file larger than `Adjunto`'s size ceiling must not be rejected for
+    size."""
+    from reportes.adjuntos import TAMANO_MAXIMO_BYTES
+
+    admin = administrador_factory(username="crear-tipo-oversize-admin")
+    client.force_login(admin)
+    contenido_grande = b"0" * (TAMANO_MAXIMO_BYTES + 1)
+
+    response = client.post(
+        reverse("tipos_crear"),
+        data={
+            "nombre": "Oversize",
+            "codigo": "crear-tipo-oversize-codigo",
+            "version_formato": "",
+            "plantilla": SimpleUploadedFile("grande.xlsx", contenido_grande),
+        },
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    assert TipoDeReporte.objects.filter(codigo="crear-tipo-oversize-codigo").exists()
+
+
+# ---------------------------------------------------------------------------
+# Admin deregistration (PR2, design D7)
+# ---------------------------------------------------------------------------
+
+
+def test_admin_registry_no_contiene_tipo_de_reporte_ni_definicion_de_tipo():
+    """8.2 RED: `TipoDeReporte`/`DefinicionDeTipo` absent from
+    `admin.site._registry` (spec "Admin registration removed once new
+    create/edit screen exists")."""
+    from django.contrib import admin as django_admin
+
+    assert TipoDeReporte not in django_admin.site._registry
+    assert DefinicionDeTipo not in django_admin.site._registry
