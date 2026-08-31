@@ -115,11 +115,15 @@ def test_analizar_definicion_subida_no_representable_como_json_fecha_nativa_rech
 
 
 @pytest.mark.django_db
-def test_tipo_de_reporte_form_plantilla_disabled_true_con_definicion_activa(
+def test_tipo_de_reporte_form_plantilla_excluida_con_definicion_activa(
     tipo_de_reporte_factory, definicion_factory
 ):
-    """6.1 RED: `plantilla.disabled` is True once `definicion_activa_id` is
-    set (design D4)."""
+    """6.1 RED: `plantilla` is excluded from the form once
+    `definicion_activa_id` is set (design D4, revised 2026-08-30 — a
+    disabled FileField still re-validates its bound initial value via
+    `storage.size(name)` on every clean(), which crashes when DEBUG's
+    FileSystemStorage tries to resolve a production Blob URL as a local
+    path; exclusion avoids that revalidation entirely)."""
     from tipos_reporte.forms import TipoDeReporteForm
     from tipos_reporte.models import Estado
 
@@ -136,7 +140,8 @@ def test_tipo_de_reporte_form_plantilla_disabled_true_con_definicion_activa(
 
     form = TipoDeReporteForm(instance=tipo)
 
-    assert form.fields["plantilla"].disabled is True
+    assert "plantilla" not in form.fields
+    assert form.plantilla_bloqueada is True
 
 
 @pytest.mark.django_db

@@ -8,6 +8,12 @@
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     {{ form.as_p }}
+    {% if form.plantilla_bloqueada %}
+    <p>
+        Plantilla (no editable, hay una definición activa):
+        <a href="{{ tipo.plantilla.url }}">{{ tipo.plantilla.name }}</a>
+    </p>
+    {% endif %}
     <button type="submit">Guardar</button>
 </form>
 {% endblock %}
