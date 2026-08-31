@@ -116,17 +116,22 @@ with the mandatory `id` tiebreaker. Search folds accents over `nombre` and
 `codigo` in Python, same `TipoDeReporte`-is-tiny rationale and same tripwire
 as #12's D4.
 
-### D4 — `plantilla` read-only via `disabled=True`
+### D4 — `plantilla` read-only via field exclusion (revised 2026-08-30)
 
 | Option | Tradeoff |
 |---|---|
 | Reject a changed `plantilla` in `clean()` | Spec forbids it: "MUST render `plantilla` as read-only (not merely reject a changed value after the fact)" |
-| `del self.fields["plantilla"]` | The field disappears entirely; the admin cannot even see which template is bound |
-| **Chosen**: `self.fields["plantilla"].disabled = True` when `instance.definicion_activa_id is not None` | Django renders the `disabled` attribute *and* `BaseForm._clean_fields` substitutes the initial value for any POSTed one, so a hand-crafted POST cannot persist a change |
+| `self.fields["plantilla"].disabled = True` (original choice, **reverted**) | Django renders the `disabled` attribute *and* `BaseForm._clean_fields` substitutes the initial value for any POSTed one — but a disabled `FileField` still re-runs `clean()`/`to_python()` on its bound *initial* value on every submit, which calls `storage.size(name)` on the CURRENT default storage. In `DEBUG` (`FileSystemStorage`), this crashed with an `OSError` when trying to resolve a production `VercelBlobStorage` URL as a local Windows path — caught during manual browser verification. |
+| **Chosen**: `del self.fields["plantilla"]` in `__init__` when `instance.definicion_activa_id is not None`, exposed via `form.plantilla_bloqueada` | `ModelForm.save()`/`construct_instance()` only ever touches fields present in `self.fields`, so excluding it achieves the identical "cannot persist a change" guarantee without ever re-validating the file. The template renders the current file as a plain read-only link (`{% if form.plantilla_bloqueada %}`) instead of the `ClearableFileInput` widget, so the admin can still see which template is bound. |
 
 This is the direct port of `TipoDeReporteAdmin.get_readonly_fields`'s
 `obj.definicion_activa_id is not None` condition (`admin.py:149`) into form
-terms.
+terms. The original `disabled=True` choice is preserved above (struck
+through in spirit, not literally) for traceability — see
+`tipos_reporte/forms.py`'s module docstring for the full incident writeup
+and `tipos_reporte/tests/test_formularios.py::
+test_tipo_de_reporte_form_plantilla_excluida_con_definicion_activa` for the
+regression test.
 
 ### D5 — `DefinicionDeTipoForm` narrows `fields`; edit is borrador-only
 
