@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Inicio{% endblock %}
+
+{% block barra %}
+<header class="barra-pantalla">
+    <h1 class="barra-pantalla__titulo">Hola, {{ request.user.username }}</h1>
+    {% include "_chip_conexion.html" %}
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="inicio__conteos">
+    {% for conteo in conteos %}
+    <a href="{% url 'reportes_mis' %}?estado={{ conteo.id }}" class="inicio__conteo">
+        <span class="inicio__conteo-numero mono">{{ conteo.cantidad }}</span>
+        <span class="inicio__conteo-titulo">{{ conteo.titulo }}</span>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="acciones">
+    <a href="{% url 'reportes_seleccion_tipo' %}" class="acciones__primario">+ Nuevo reporte</a>
+    <a href="{% url 'reportes_mis' %}" class="acciones__secundario">Ver mis reportes →</a>
+</div>
+
+{% if request.user.es_administrador %}
+<section>
+    <h2 class="mono">Administración</h2>
+    <div class="acciones">
+        <a href="{% url 'usuarios_lista' %}" class="acciones__secundario">Usuarios</a>
+        <a href="{% url 'tipos_lista' %}" class="acciones__secundario">Tipos de reporte</a>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

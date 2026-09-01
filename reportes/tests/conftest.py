@@ -314,6 +314,19 @@ def reporte_con_participantes_factory(reporte_factory, participacion_factory):
 
 
 @pytest.fixture
+def seccion_s08_id():
+    """The real S-08 ("croquis/evidencia") `seccion.id` used by
+    `reportes.adjuntos.SECCION_DE_ADJUNTOS` (backlog #11, design D7).
+    Resolved against the production `instalacion-resinas` template: its
+    "CROQUIS DE ZONA DE TRABAJO" block lives inside the RESULTADOS block
+    (template cell B53), matching the wizard's `resultados` section id
+    exactly — confirmed by inspecting the real deployed .xlsx (2026-08-30).
+    Phase 2/3/5 tests import this instead of hardcoding the string a second
+    time."""
+    return "resultados"
+
+
+@pytest.fixture
 def cliente_autenticado(client, usuario_factory):
     """A Django test client already logged in as a fresh Usuario
     (`client.force_login` — authentication itself is #2's tested concern,

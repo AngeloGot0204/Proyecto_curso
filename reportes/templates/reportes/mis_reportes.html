@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Mis reportes{% endblock %}
+
+{% block extra_head %}
+{# Change `vista-sincronizacion-pendientes`, task 5.2 (design D5) — Dexie #}
+{# read-only badge count; degrades to hidden (no-op) if Dexie/offline-db.js #}
+{# fail to load, mirroring every other offline script's guard clause. #}
+<script src="https://unpkg.com/dexie@3/dist/dexie.js" crossorigin="anonymous"></script>
+<script src="{% static 'reportes/offline-db.js' %}"></script>
+<script src="{% static 'reportes/pendientes-badge.js' %}" defer></script>
+{% endblock %}
+
+{% block barra %}
+<header class="barra-pantalla">
+    <h1 class="barra-pantalla__titulo">Mis reportes</h1>
+    {% include "_chip_conexion.html" %}
+    <a class="chip chip--borde" href="{% url 'reportes_sincronizacion' %}" data-badge-pendientes hidden>0</a>
+    <span class="barra-pantalla__avatar" aria-hidden="true">{{ request.user.username|slice:":1"|upper }}</span>
+</header>
+{% endblock %}
+
+{% block content %}
+<form method="get" action="{% url 'reportes_mis' %}" class="filtros">
+    <div class="filtros__campo filtros__campo--buscar">
+        <label for="q">Buscar</label>
+        <input type="text" id="q" name="q" value="{{ q }}" placeholder="Tipo o creador">
+    </div>
+
+    <div class="filtros__campo">
+        <label for="relacion">Relación</label>
+        <select id="relacion" name="relacion">
+            {% for valor in relaciones %}
+            <option value="{{ valor }}" {% if relacion == valor %}selected{% endif %}>
+                {% if valor == "creados" %}Creados por mí
+                {% elif valor == "compartidos" %}Compartidos conmigo
+                {% else %}Todos{% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filtros__campo">
+        <label for="estado">Estado</label>
+        <select id="estado" name="estado">
+            <option value="" {% if not estado %}selected{% endif %}>Todos</option>
+            {% for valor, etiqueta in buckets %}
+            <option value="{{ valor }}" {% if estado == valor %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <button type="submit" class="acciones__primario filtros__boton">Filtrar</button>
+</form>
+
+{% for grupo in grupos %}
+<details class="lista" {% if grupo.tarjetas %}open{% endif %}>
+    <summary class="lista__titulo">
+        {{ grupo.titulo }}
+        <span class="chip chip--borde-gris">{{ grupo.tarjetas|length }}</span>
+    </summary>
+    <ul class="lista__items">
+        {% for tarjeta in grupo.tarjetas %}
+        <li class="lista__tarjeta">
+            <div class="lista__tarjeta-fila-principal">
+                <a class="lista__enlace" href="{% url 'reportes_revision' tarjeta.reporte.id %}">{{ tarjeta.reporte.tipo.nombre }}</a>
+                <span class="chip {% if grupo.id == 'terminado' %}chip--solido{% else %}chip--borde{% endif %}">{{ tarjeta.avance }}% avance</span>
+            </div>
+            <div class="lista__tarjeta-fila-meta">
+                <span class="lista__meta mono">{{ tarjeta.reporte.creador.username }}</span>
+                <span class="lista__meta-separador" aria-hidden="true">·</span>
+                {% if tarjeta.numero_registro %}
+                <span class="lista__meta mono">N.º {{ tarjeta.numero_registro }}</span>
+                {% else %}
+                <span class="chip chip--borde-gris">local</span>
+                {% endif %}
+                <span class="lista__meta-separador" aria-hidden="true">·</span>
+                <span class="lista__meta mono">{{ tarjeta.reporte.fecha_creacion }}</span>
+
+                {% if tarjeta.reporte.creador_id == request.user.id %}
+                <span class="lista__tarjeta-acciones">
+                    <details class="lista__compartir">
+                        <summary class="lista__eliminar" aria-label="Compartir reporte">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="18" cy="5" r="3"></circle>
+                                <circle cx="6" cy="12" r="3"></circle>
+                                <circle cx="18" cy="19" r="3"></circle>
+                                <line x1="8.6" y1="10.6" x2="15.4" y2="6.4"></line>
+                                <line x1="8.6" y1="13.4" x2="15.4" y2="17.6"></line>
+                            </svg>
+                        </summary>
+                        <form method="post" action="{% url 'reportes_invitar' tarjeta.reporte.id %}" class="lista__compartir-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="mis">
+                            <input type="text" name="username" placeholder="Nombre de usuario" required>
+                            <button type="submit" class="acciones__secundario">Compartir</button>
+                        </form>
+                    </details>
+                    <form method="post" action="{% url 'reportes_eliminar' tarjeta.reporte.id %}" onsubmit="return confirm('¿Eliminar este reporte? No vas a poder deshacerlo desde la app.')">
+                        {% csrf_token %}
+                        <button type="submit" class="lista__eliminar" aria-label="Eliminar reporte">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                        </button>
+                    </form>
+                </span>
+                {% endif %}
+            </div>
+        </li>
+        {% empty %}
+        <li class="lista__vacio">Sin reportes en este grupo.</li>
+        {% endfor %}
+    </ul>
+</details>
+{% endfor %}
+
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="acciones" aria-label="Paginación">
+    {% if page_obj.has_previous %}
+    <a class="acciones__secundario" href="{% querystring page=page_obj.previous_page_number %}">Anterior</a>
+    {% endif %}
+    <span class="mono">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="acciones__secundario" href="{% querystring page=page_obj.next_page_number %}">Siguiente</a>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

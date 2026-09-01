@@ -30,6 +30,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('usuarios.urls')),
     path('reportes/', include('reportes.urls')),
+    path('tipos-reporte/', include('tipos_reporte.urls')),
 ]
 
 # Code-review fix: without this, uploaded files (TipoDeReporte.logo,

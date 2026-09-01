@@ -9,7 +9,7 @@
  * CACHE below.
  */
 
-var CACHE = "reportes-offline-v1";
+var CACHE = "reportes-offline-v20";
 
 self.addEventListener("install", function (evento) {
   self.skipWaiting();
@@ -68,7 +68,14 @@ self.addEventListener("fetch", function (evento) {
     return;
   }
 
-  var esNavegacionDePaso = solicitud.mode === "navigate" && /\/reportes\/\d+\/paso\/[^/]+\/?$/.test(url.pathname);
+  // Change `vista-sincronizacion-pendientes`, task 6.2 (design D7): the
+  // S-15 aggregated screen is a server-rendered shell too — without this
+  // branch it would fall through to the pass-through default and 503
+  // offline instead of serving its last cached HTML.
+  var esNavegacionDePaso = solicitud.mode === "navigate" && (
+    /\/reportes\/\d+\/paso\/[^/]+\/?$/.test(url.pathname) ||
+    url.pathname === "/reportes/sincronizacion/"
+  );
   var esEstatico = url.pathname.indexOf("/static/") === 0 || url.origin !== self.location.origin;
 
   // Last-resort fallback: the Fetch API requires event.respondWith() to

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Tipos de reporte{% endblock %}
+
+{% block barra %}
+<header class="barra-pantalla">
+    <h1 class="barra-pantalla__titulo">Tipos de reporte</h1>
+</header>
+{% endblock %}
+
+{% block content %}
+
+        <div class="escritorio__contenido">
+            <div>
+                <div class="acciones">
+                    <a href="{% url 'tipos_crear' %}" class="acciones__primario">Nuevo tipo de reporte</a>
+                </div>
+
+                <form method="get" action="{% url 'tipos_lista' %}" class="filtros">
+                    <div class="filtros__campo filtros__campo--buscar">
+                        <label for="q">Buscar</label>
+                        <input type="text" id="q" name="q" value="{{ q }}" placeholder="Nombre o código">
+                    </div>
+                    <button type="submit" class="acciones__secundario filtros__boton">Filtrar</button>
+                </form>
+            </div>
+
+            <div>
+                <table class="tabla">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Código</th>
+                            <th>Versión de formato</th>
+                            <th>Definición activa</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tipo in page_obj %}
+                        <tr>
+                            <td><a href="{% url 'tipos_detalle' tipo.id %}">{{ tipo.nombre }}</a></td>
+                            <td class="mono">{{ tipo.codigo }}</td>
+                            <td>{{ tipo.version_formato }}</td>
+                            <td>
+                                {% if tipo.definicion_activa %}
+                                <span class="chip chip--solido">v{{ tipo.definicion_activa.version }}</span>
+                                {% else %}
+                                <span class="chip chip--borde-gris">Sin definición activa</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4">No hay tipos de reporte registrados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                <nav class="acciones" aria-label="Paginación">
+                    {% if page_obj.has_previous %}
+                    <a class="acciones__secundario" href="{% querystring page=page_obj.previous_page_number %}">Anterior</a>
+                    {% endif %}
+                    <span class="mono">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                    {% if page_obj.has_next %}
+                    <a class="acciones__secundario" href="{% querystring page=page_obj.next_page_number %}">Siguiente</a>
+                    {% endif %}
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+{% endblock %}

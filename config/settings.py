@@ -192,6 +192,12 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# Visual retrofit (backlog #15, design D2): exposes the repo-root `static/`
+# directory (tokens.css, components.css, self-hosted IBM Plex Mono .woff2)
+# to `{% static %}`/`collectstatic` via `AppDirectoriesFinder`'s sibling
+# `FileSystemFinder`. Without this, those paths 404 in production.
+STATICFILES_DIRS = [BASE_DIR / "static"]
+
 # Media storage for uploaded templates/logos (tipos_reporte, backlog #3,
 # design decision D10). Vercel's serverless functions run on a read-only
 # filesystem, so production must use Vercel Blob (config/storage.py); local

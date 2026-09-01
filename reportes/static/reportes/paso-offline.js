@@ -51,6 +51,12 @@
     if (isNaN(servidorMs)) {
         servidorMs = 0;
     }
+    // Change `vista-sincronizacion-pendientes`, Phase 2 (design's D4) —
+    // captured once at parse time from the rendered `data-*` attrs so the
+    // aggregated S-15 screen can display tipo/fecha with zero network
+    // requests; persisted on every draft write below.
+    var tipoNombre = form.getAttribute("data-tipo-nombre") || "";
+    var fechaReporte = form.getAttribute("data-fecha-reporte") || "";
 
     var temporizadorDebounce = null;
 
@@ -88,6 +94,8 @@
             estado: estado,
             intentos: 0,
             ultimoError: null,
+            tipoNombre: tipoNombre,
+            fechaReporte: fechaReporte,
         };
         return db.borradores.put(fila);
     }
@@ -144,6 +152,8 @@
                 estado: estado,
                 intentos: previos + 1,
                 ultimoError: ultimoError,
+                tipoNombre: tipoNombre,
+                fechaReporte: fechaReporte,
             };
             return db.borradores.put(fila).catch(function () {
                 // Dexie write failure still shows the banner from the
@@ -154,28 +164,29 @@
         });
     }
 
-    function manejarRespuesta(respuesta) {
-        var urlFinal = new URL(respuesta.url, window.location.href);
-        if (urlFinal.pathname === "/login/") {
-            // Session expired mid-draft — redirect to login without
-            // discarding the local draft (upload-queue spec's "Draft
-            // Survives Session Expiry").
-            return marcarComo("fallo", "sesion_expirada").then(function () {
-                location.assign(respuesta.url);
-            });
+    function obtenerCsrfToken() {
+        var campo = form.elements.csrfmiddlewaretoken;
+        return campo ? campo.value : "";
+    }
+
+    function manejarResultadoEnvio(salida) {
+        // Submission mechanics (fetch/CSRF/redirect classification/Dexie
+        // reconciliation) now live in `window.reportesEnvioPaso.enviar`
+        // (change `vista-sincronizacion-pendientes`, design's D2); this
+        // caller keeps the exact same UI/navigation policy it always had.
+        if (salida.resultado === "ok" || salida.resultado === "sesion_expirada") {
+            limpiarBanner();
+            location.assign(salida.url);
+            return;
         }
-        if (respuesta.ok || respuesta.redirected) {
-            return db.borradores.delete([reporteId, seccionId]).catch(function () {
-                // Deletion failure never blocks navigation to the next step.
-            }).then(function () {
-                limpiarBanner();
-                location.assign(respuesta.url);
-            });
-        }
-        if (respuesta.status >= 400) {
-            return marcarComo("fallo", "http_" + respuesta.status);
-        }
-        return marcarComo("fallo", "respuesta_inesperada");
+        // "pendiente" | "fallo" — the helper already wrote the updated row
+        // (intentos incremented); re-read it so the banner shows the
+        // current count, matching pre-extraction behavior.
+        db.borradores.get([reporteId, seccionId]).then(function (fila) {
+            if (fila) {
+                mostrarBanner(fila);
+            }
+        });
     }
 
     function intentarEnvio() {
@@ -187,27 +198,15 @@
             marcarComo("pendiente", "sin_conexion");
             return;
         }
-        var datosEnvio = new FormData(form);
-        escribirBorrador("enviando")
-            .catch(function () {
-                // Any Dexie rejection still lets the submit proceed —
-                // offline storage never blocks the user (design's explicit
-                // contract).
+        window.reportesEnvioPaso
+            .enviar({
+                url: form.action,
+                valores: serializarFormulario(),
+                reporteId: reporteId,
+                seccionId: seccionId,
+                csrfToken: obtenerCsrfToken(),
             })
-            .then(function () {
-                return fetch(form.action, {
-                    method: "POST",
-                    body: datosEnvio,
-                    credentials: "same-origin",
-                    redirect: "follow",
-                });
-            })
-            .then(manejarRespuesta)
-            .catch(function () {
-                // Network error (offline mid-request, DNS failure, server
-                // unreachable, etc.) — never a silent retry (ADR-0004/S-15).
-                marcarComo("pendiente", "error_de_red");
-            });
+            .then(manejarResultadoEnvio);
     }
 
     form.addEventListener("submit", function (evento) {

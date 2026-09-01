@@ -164,3 +164,46 @@ def tipo_de_reporte_factory(db):
         return TipoDeReporte.objects.create(**defaults)
 
     return _create
+
+
+@pytest.fixture
+def administrador_factory(db):
+    """Create a Usuario with `rol=Rol.ADMINISTRADOR` (backlog #13, S-14;
+    design D1's `solo_administradores` gate), overridable by kwargs. App-
+    local convention, mirrors `usuario_factory` above/`usuarios/tests/
+    conftest.py`."""
+    from usuarios.models import Rol, Usuario
+
+    def _create(**kwargs):
+        defaults = {
+            "username": "administrador_test",
+            "password": "irrelevant-not-hashed-for-this-fixture",
+            "rol": Rol.ADMINISTRADOR,
+        }
+        defaults.update(kwargs)
+        return Usuario.objects.create(**defaults)
+
+    return _create
+
+
+@pytest.fixture
+def definicion_factory(db):
+    """Create a `DefinicionDeTipo` with sensible defaults, overridable by
+    kwargs (backlog #13, S-14). Mirrors `test_activacion.py`'s local
+    `_crear_borrador` helper. `tipo` is required — the caller must pass one
+    (e.g. from `tipo_de_reporte_factory`)."""
+    from tipos_reporte.models import DefinicionDeTipo, Estado
+
+    def _create(**kwargs):
+        defaults = {
+            "archivo_yaml": SimpleUploadedFile(
+                "definicion.yaml", b"secciones: []"
+            ),
+            "yaml_fuente": "secciones: []",
+            "estructura": {"secciones": []},
+            "estado": Estado.BORRADOR,
+        }
+        defaults.update(kwargs)
+        return DefinicionDeTipo.objects.create(**defaults)
+
+    return _create

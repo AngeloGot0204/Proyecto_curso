@@ -36,6 +36,7 @@ from tipos_reporte.validacion import (
     analizar_yaml_seguro,
     validar_contra_plantilla,
     validar_definicion,
+    validar_estructura,
 )
 
 
@@ -244,6 +245,102 @@ def test_resultado_de_validacion_es_inmutable():
         resultado.problemas = (
             ProblemaDeDefinicion(regla="x", ubicacion="y", mensaje="z"),
         )
+
+
+# --- R7: attachment anchor-slot validation (backlog #11, design D6) --------
+#
+# R7 reuses `_es_celda_valida` over `estructura["adjuntos"][*]["celda"]` and
+# rejects more than 4 declared slots — but does NOT apply R6's merged-anchor
+# rule: a floating image anchors to a cell corner, it isn't written into the
+# cell, so a merged non-anchor cell is a legitimate embedding target.
+
+
+def test_ancla_de_adjunto_mal_formada_es_rechazada(definicion_valida):
+    """Task 5.1 RED: a malformed `celda` in a declared attachment anchor
+    slot must be reported as `ancla-de-adjunto-mal-formada` (mirrors R3's
+    `celda-mal-formada`, but under R7's own stable `regla` id)."""
+    definicion = definicion_valida()
+    definicion["adjuntos"] = [{"celda": "1A"}]
+
+    problemas = validar_estructura(definicion)
+
+    assert "ancla-de-adjunto-mal-formada" in _reglas(problemas)
+
+
+def test_ancla_de_adjunto_bien_formada_pasa(definicion_valida):
+    """Positive counterpart: a well-formed `celda` in a declared slot raises
+    no R7 problem."""
+    definicion = definicion_valida()
+    definicion["adjuntos"] = [{"celda": "B40"}]
+
+    problemas = validar_estructura(definicion)
+
+    assert "ancla-de-adjunto-mal-formada" not in _reglas(problemas)
+    assert "anclas-de-adjunto-excedidas" not in _reglas(problemas)
+
+
+def test_mas_de_cuatro_anclas_de_adjuntos_es_rechazado(definicion_valida):
+    """Task 5.2 RED: more than 4 declared attachment anchor slots must be
+    reported as `anclas-de-adjunto-excedidas` (design-confirmed 4-slot
+    cap)."""
+    definicion = definicion_valida()
+    definicion["adjuntos"] = [
+        {"celda": "B40"},
+        {"celda": "B60"},
+        {"celda": "B80"},
+        {"celda": "B100"},
+        {"celda": "B120"},
+    ]
+
+    problemas = validar_estructura(definicion)
+
+    assert "anclas-de-adjunto-excedidas" in _reglas(problemas)
+
+
+def test_cuatro_anclas_de_adjuntos_exactas_pasa(definicion_valida):
+    """Positive counterpart: exactly 4 declared slots is within the cap."""
+    definicion = definicion_valida()
+    definicion["adjuntos"] = [
+        {"celda": "B40"},
+        {"celda": "B60"},
+        {"celda": "B80"},
+        {"celda": "B100"},
+    ]
+
+    problemas = validar_estructura(definicion)
+
+    assert "anclas-de-adjunto-excedidas" not in _reglas(problemas)
+
+
+def test_sin_adjuntos_declarados_no_reporta_problemas_de_r7(definicion_valida):
+    """No `adjuntos` key at all must raise no R7 problem — mirrors the spec
+    scenario "Template without declared anchor slots skips embedding
+    entirely" at the validation layer."""
+    definicion = definicion_valida()
+
+    problemas = validar_estructura(definicion)
+
+    assert "ancla-de-adjunto-mal-formada" not in _reglas(problemas)
+    assert "anclas-de-adjunto-excedidas" not in _reglas(problemas)
+
+
+def test_r7_no_aplica_la_regla_de_ancla_de_rango_combinado(
+    definicion_valida, plantilla_xlsx
+):
+    """Design D6: R7 does not reuse R6's merged-anchor-cell rule — a
+    non-anchor cell of a merged range is a legitimate attachment slot
+    target, since a floating image anchors to a cell corner and is never
+    written into the cell. Asserted against `validar_contra_plantilla`
+    directly, since R6 only exists there, and confirming it never even
+    inspects `estructura["adjuntos"]`."""
+    definicion = definicion_valida()
+    definicion["adjuntos"] = [{"celda": "N12"}]  # N12 is a non-anchor cell
+    destino = plantilla_xlsx(nombre_hoja="REPORTE", rangos=("M12:P12",))
+
+    with open(destino, "rb") as plantilla:
+        problemas = validar_contra_plantilla(definicion, plantilla)
+
+    assert "celda-no-es-ancla" not in _reglas(problemas)
 
 
 # --- Threat Matrix: untrusted deserialization (YAML) ------------------------

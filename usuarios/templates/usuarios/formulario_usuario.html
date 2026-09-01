@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}{% if usuario %}Editar {{ usuario.username }}{% else %}Nuevo usuario{% endif %}{% endblock %}
+
+{% block barra %}
+<header class="barra-pantalla">
+    <a class="barra-pantalla__volver" href="{% url 'usuarios_lista' %}" aria-label="Volver a Usuarios">←</a>
+    <h1 class="barra-pantalla__titulo">{% if usuario %}Editar {{ usuario.username }}{% else %}Nuevo usuario{% endif %}</h1>
+</header>
+{% endblock %}
+
+{% block content %}
+
+<form method="post" class="form-basica">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+    <div class="aviso">
+        {% for error in form.non_field_errors %}
+        <p>{{ error }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% for field in form %}
+    <div class="campo{% if field.errors %} campo--error{% endif %}">
+        <label class="campo__etiqueta" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}
+        <span class="campo__ayuda">{{ field.help_text }}</span>
+        {% endif %}
+        {{ field.errors }}
+    </div>
+    {% endfor %}
+
+    <div class="acciones">
+        <button type="submit" class="acciones__primario">Guardar</button>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,1486 @@
+/*
+ * Component classes (change `retrofit-visual-design2`, backlog #15;
+ * design D3). BEM-lite blocks (`bloque__elemento--modificador`), one file
+ * section per DESIGN2 §4 component, styling native controls as descendants
+ * so `{{ campo }}`/`{{ form.as_p }}` keep rendering Django's default
+ * widgets untouched. Sections are added incrementally per consuming PR
+ * (design D5) — PR1a ships only the four blocks its own screens
+ * (base.html, login.html) consume: §chip, §campo, §aviso, §acciones.
+ *
+ * Error state is border-weight only, never color (D6): `[aria-invalid]`,
+ * `ul.errorlist`, `.campo--error` all resolve to the same 2px ink border.
+ */
+
+/* === §chip — chip de estado ============================================ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-1);
+  padding: 2px var(--gap-2);
+  border-radius: 999px;
+  font-size: var(--mono-chip);
+  letter-spacing: var(--ls-chip);
+  text-transform: uppercase;
+  line-height: 1.6;
+}
+
+.chip--solido {
+  background: var(--color-tinta);
+  color: var(--color-superficie);
+}
+
+.chip--borde {
+  background: var(--color-superficie);
+  color: var(--color-tinta);
+  border: var(--borde) solid var(--color-linea);
+}
+
+.chip--borde-gris {
+  background: var(--color-bloqueado-fondo);
+  color: var(--color-bloqueado-texto);
+  border: var(--borde) solid var(--color-linea);
+}
+
+.chip--ambar {
+  background: var(--color-ambar-fondo);
+  color: var(--color-ambar-texto);
+  border: var(--borde) solid var(--color-ambar-borde-suave);
+}
+
+/* === §campo — campo de formulario ====================================== */
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  margin-bottom: var(--gap-3);
+  min-width: 0;
+}
+
+/* Un ClearableFileInput sin retocar imprime "Currently: <url>" con la URL
+   completa como texto plano — sin esto, una URL larga sin espacios (p.ej.
+   un blob de Vercel) empuja `.pagina` más ancho que el viewport en mobile. */
+.campo a {
+  overflow-wrap: anywhere;
+}
+
+.campo__etiqueta {
+  font-size: var(--txt-etiqueta);
+  font-weight: 600;
+  color: var(--color-tinta);
+}
+
+.campo__ayuda {
+  font-family: var(--fuente-mono);
+  font-size: var(--mono-meta);
+  color: var(--color-tinta-mono);
+}
+
+.campo input,
+.campo select,
+.campo textarea,
+.form-basica input,
+.form-basica select,
+.form-basica textarea {
+  min-height: var(--alto-campo);
+  padding: 0 var(--gap-3);
+  border: var(--borde) solid var(--color-linea);
+  border-radius: 4px;
+  background: var(--color-superficie);
+  color: var(--color-tinta);
+  font: inherit;
+  font-size: var(--txt-valor);
+}
+
+.campo textarea,
+.form-basica textarea {
+  min-height: calc(var(--alto-campo) * 2);
+  padding-top: var(--gap-2);
+}
+
+.campo input[aria-invalid="true"],
+.campo select[aria-invalid="true"],
+.campo textarea[aria-invalid="true"],
+.campo--error input,
+.campo--error select,
+.campo--error textarea,
+.form-basica input[aria-invalid="true"],
+.form-basica select[aria-invalid="true"],
+.form-basica textarea[aria-invalid="true"] {
+  border-width: var(--borde-error);
+  border-color: var(--color-tinta);
+}
+
+.campo ul.errorlist,
+.form-basica ul.errorlist {
+  list-style: none;
+  margin: var(--gap-1) 0 0;
+  padding: 0;
+  color: var(--color-tinta);
+  font-size: var(--mono-meta);
+  font-family: var(--fuente-mono);
+}
+
+.campo ul.errorlist,
+.form-basica ul.errorlist {
+  border-left: var(--borde-error) solid var(--color-tinta);
+  padding-left: var(--gap-2);
+}
+
+/* === §filtros — barra de filtros de "Mis reportes" (S-02) =============== */
+/* Reemplaza el uso genérico de `.form-basica` en la barra de búsqueda/
+   filtros: agrupa cada control con su etiqueta arriba, en fila en
+   escritorio y apilado en mobile, con el botón "Filtrar" alineado al
+   final de la fila. */
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--gap-3);
+  margin-bottom: var(--gap-4);
+  padding: var(--gap-3);
+  background: var(--color-superficie);
+  border: var(--borde) solid var(--color-linea);
+  border-radius: 6px;
+}
+
+.filtros__campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.filtros__campo label {
+  font-size: var(--mono-meta);
+  font-family: var(--fuente-mono);
+  font-weight: 600;
+  color: var(--color-tinta-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-chip);
+}
+
+.filtros__campo input,
+.filtros__campo select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: var(--alto-campo);
+  padding: 0 var(--gap-3);
+  border: var(--borde) solid var(--color-linea);
+  border-radius: 4px;
+  background: var(--color-superficie);
+  color: var(--color-tinta);
+  font: inherit;
+  font-size: var(--txt-valor);
+}
+
+.filtros__campo--buscar {
+  flex: 1 1 220px;
+}
+
+.filtros__boton {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .filtros {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filtros__campo--buscar {
+    flex: 1 1 auto;
+  }
+}
+
+/* === §aviso — tarjeta de aviso ========================================= */
+
+.aviso {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  padding: var(--gap-3) var(--gap-4);
+  border: var(--borde) solid var(--color-ambar-borde-suave);
+  border-radius: 6px;
+  background: var(--color-ambar-fondo);
+  color: var(--color-ambar-texto);
+  font-size: var(--txt-tarjeta);
+}
+
+/* Mensajes flash de Django (`{{ message.tags }}` — error/warning/success/
+   info/debug, base.html): antes salían todos exactamente iguales (mismo
+   `.aviso` ámbar sin distinguir tipo). `.messages` resetea el `<ul>`
+   default del navegador (viñeta + indent) que nunca tuvo estilos propios;
+   cada variante usa una etiqueta en mayúsculas para leerse como un
+   anuncio, no como texto suelto. Error sigue D6 — peso de borde, nunca
+   color — nunca rojo. */
+/* Toast flotante, no banner en el flujo del documento (design: no debe
+   empujar el contenido ni la barra al aparecer). Esquina inferior derecha
+   tanto en escritorio como en mobile. `flex-direction: column-reverse` +
+   `bottom` fijo: un toast nuevo aparece pegado a la esquina y empuja a
+   los anteriores hacia arriba, en vez de reacomodar todo hacia abajo.
+   `position: fixed` + z-index por encima del sidebar (`z-index: 20` en
+   mobile, `10` en escritorio, `components.css` §escritorio) para que
+   nunca quede tapado. */
+.messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: fixed;
+  bottom: var(--gap-4);
+  right: var(--gap-4);
+  z-index: 100;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--gap-2);
+  width: 360px;
+  max-width: calc(100vw - var(--gap-4) * 2);
+}
+
+.messages .aviso {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  position: relative;
+  padding-right: calc(var(--gap-4) + 20px);
+  animation: toast-entrada 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messages .aviso {
+    animation: none;
+  }
+}
+
+@keyframes toast-entrada {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.messages .aviso__cerrar {
+  position: absolute;
+  top: var(--gap-2);
+  right: var(--gap-2);
+  background: none;
+  border: none;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  font-size: 16px;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.messages .aviso__cerrar:hover {
+  opacity: 1;
+}
+
+.aviso::before {
+  font-family: var(--fuente-mono);
+  font-size: var(--mono-meta);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--ls-chip);
+}
+
+.aviso--error {
+  border-width: var(--borde-error);
+  border-color: var(--color-tinta);
+  background: var(--color-superficie);
+  color: var(--color-tinta);
+}
+
+.aviso--error::before {
+  content: "Error";
+  color: var(--color-tinta);
+}
+
+.aviso--warning::before {
+  content: "Atención";
+  color: var(--color-ambar-texto);
+}
+
+.aviso--success {
+  border-color: var(--color-linea);
+  background: var(--color-superficie);
+  color: var(--color-tinta);
+}
+
+.aviso--success::before {
+  content: "Listo";
+  color: var(--color-tinta-mono);
+}
+
+.aviso--info,
+.aviso--debug {
+  border-color: var(--color-linea);
+  background: var(--color-linea-interna);
+  color: var(--color-tinta-2);
+}
+
+/* === §acciones — barra de acciones ===================================== */
+
+.acciones {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  flex-wrap: wrap;
+}
+
+.acciones__primario,
+.acciones__secundario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--alto-boton);
+  padding: 0 var(--gap-4);
+  border-radius: 4px;
+  font: inherit;
+  font-size: var(--txt-valor);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.acciones__primario {
+  border: none;
+  background: var(--color-tinta);
+  color: var(--color-superficie);
+}
+
+.acciones__primario:disabled {
+  background: var(--color-bloqueado-fondo);
+  color: var(--color-bloqueado-texto);
+  cursor: not-allowed;
+}
+
+.acciones__secundario {
+  border: var(--borde) solid var(--color-linea);
+  background: var(--color-superficie);
+  color: var(--color-tinta);
+}
+
+/* Disabled-reason reveal (D6, PR3 task 4.7; relocated to `participantes.html`
+ * by change `cierre-en-participantes`). `.acciones__razon` markup is always
+ * present next to `.acciones__primario` (`participantes.html`) — this
+ * pure-CSS sibling combinator alone decides visibility, so the reason text
+ * for a blocked primary action never depends on new template conditionals
+ * beyond the pre-existing `puede_generar` check. */
+
+.acciones__razon {
+  display: none;
+  flex-basis: 100%;
+  text-align: right;
+  font-family: var(--fuente-mono);
+  font-size: var(--mono-chip);
+  color: var(--color-tinta-mono);
+}
+
+.acciones__primario:disabled ~ .acciones__razon {
+  display: block;
+}
+
+/* === §tabla — tabla de secciones (solo lectura) ======================== */
+/* PR1b (tasks.md Phase 2, task 2.6). Native <table> kept — Django loops
+ * unchanged; styling only. Row height follows DESIGN2 §3 (`--alto-fila`
+ * >=48px) via cell padding. */
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--txt-valor);
+}
+
+@media (max-width: 768px) {
+  .tabla {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    /* Sombra sutil en el borde derecho — sin indicio visual, una tabla
+       recortada por overflow-x parece simplemente cortada, no "hay más
+       columnas, deslizá". */
+    background:
+      linear-gradient(to right, var(--color-superficie) 30%, transparent) left,
+      linear-gradient(to right, transparent, var(--color-superficie) 70%) right,
+      linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent) left,
+      linear-gradient(to left, rgba(0, 0, 0, 0.08), transparent) right;
+    background-repeat: no-repeat;
+    background-size: 24px 100%, 24px 100%, 8px 100%, 8px 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
+}
+
+.tabla th {
+  text-align: left;
+  padding: var(--gap-2) var(--gap-3);
+  font-size: var(--mono-meta);
+  font-family: var(--fuente-mono);
+  font-weight: 600;
+  color: var(--color-tinta-mono);
+  border-bottom: var(--borde) solid var(--color-linea);
+}
+
+.tabla td {
+  padding: var(--gap-2) var(--gap-3);
+  min-height: var(--alto-fila);
+  border-bottom: var(--borde) solid var(--color-linea-interna);
+  vertical-align: middle;
+}
+
+.tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* === §escritorio — grilla de escritorio S-14 =========================== */
+/* PR1b (tasks.md Phase 2, task 2.6; DESIGN2 §3 "Escritorio S-14": sidebar
+ * 232px, `316px minmax(0,1fr)` inner grid, 28px gap). Originally scoped to
+ * the 4 tipos_reporte admin templates only.
+ *
+ * Sidebar nav (Usuarios/Reportes/Pendientes) change: base.html now wraps
+ * every authenticated screen in `.escritorio` + `partials/sidebar.html`
+ * (see templates/base.html), so this grid applies globally to logged-in
+ * pages, not just tipos_reporte. `.escritorio--sin-sidebar` is the
+ * anonymous-user variant (login screen) — same shell, no sidebar column,
+ * so `.escritorio__principal`'s spacing stays consistent everywhere.
+ * Below `--punto-quiebre-movil` the sidebar collapses into a horizontal
+ * top bar (mobile-first responsive requirement). */
+
+.escritorio {
+  display: grid;
+  grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  gap: var(--gap-4);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.escritorio__sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar);
+  align-self: start;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.escritorio--sin-sidebar {
+  display: block;
+}
+
+/* El sidebar es `position: fixed` (fuera del flujo), así que ya no ocupa
+   su celda del grid — sin esto, `.escritorio__cuerpo` (único hijo que
+   sigue en flujo) se autoubicaría en la columna 1, tapada debajo del
+   sidebar fijo. */
+.escritorio > .escritorio__cuerpo {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.escritorio__sidebar {
+  background: var(--color-tinta);
+  color: var(--color-superficie);
+  padding: var(--gap-4) var(--gap-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.escritorio__marca {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+}
+
+.escritorio__logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: var(--color-tinta-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fuente-mono);
+  font-size: var(--mono-meta);
+  flex-shrink: 0;
+}
+
+.escritorio__marca-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.escritorio__marca-nombre {
+  font-size: var(--txt-etiqueta);
+  font-weight: 600;
+  color: var(--color-superficie);
+}
+
+.escritorio__marca-subtitulo {
+  font-size: var(--mono-meta);
+  color: var(--color-tinta-mono);
+}
+
+/* Pie del sidebar: avatar + email + rol, separado del nav por una línea
+ * divisoria. Oculto en mobile (@media max-width: 768px más abajo) — la
+ * barra horizontal colapsada no tiene espacio vertical para un bloque de
+ * dos líneas apiladas. */
+.escritorio__sidebar-pie {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  padding-top: var(--gap-3);
+  margin-top: auto;
+  border-top: var(--borde) solid var(--color-tinta-2);
+}
+
+.escritorio__sidebar-pie-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--mono-meta);
+}
+
+.escritorio__sidebar-pie-email {
+  color: var(--color-superficie);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.escritorio__sidebar-pie-rol {
+  color: var(--color-tinta-mono);
+}
+
+.escritorio__nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+}
+
+.escritorio__sidebar-salir-boton {
+  width: 100%;
+  background: transparent;
+  border: var(--borde) solid var(--color-tinta-2);
+  color: var(--color-superficie);
+  border-radius: 4px;
+  padding: var(--gap-2) var(--gap-3);
+  font: inherit;
+  font-size: var(--mono-meta);
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.escritorio__sidebar-salir-boton:hover {
+  background: var(--color-tinta-2);
+  border-color: var(--color-superficie);
+}
+
+@media (max-width: 768px) {
+  .escritorio__sidebar-salir {
+    flex-shrink: 0;
+  }
+
+  .escritorio__sidebar-salir-boton {
+    width: auto;
+    white-space: nowrap;
+  }
+}
+
+.escritorio__nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  padding: var(--gap-2);
+  border-radius: 4px;
+  color: var(--color-superficie);
+  text-decoration: none;
+  font-size: var(--txt-etiqueta);
+}
+
+.escritorio__nav-icono {
+  flex-shrink: 0;
+  color: var(--color-tinta-mono);
+}
+
+.escritorio__nav-item--actual .escritorio__nav-icono {
+  color: var(--color-superficie);
+}
+
+/* Etiqueta de sección, no un link — separa "Administración" del resto sin
+   otra línea divisoria más (el pie ya tiene la suya). Oculto en mobile: la
+   barra colapsada no tiene alto para un renglón extra de solo texto. */
+.escritorio__nav-separador {
+  padding: var(--gap-2) var(--gap-2) 0;
+  margin-top: var(--gap-1);
+  font-size: var(--mono-meta);
+  font-family: var(--fuente-mono);
+  color: var(--color-tinta-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-chip);
+}
+
+.escritorio__nav-item--actual {
+  background: var(--color-tinta-2);
+  font-weight: 600;
+}
+
+.escritorio__nav-item--inactivo {
+  color: var(--color-tinta-mono);
+}
+
+.escritorio__principal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+  min-width: 0;
+}
+
+/* Every direct child is a column-flex item, so each one needs its own
+   `min-width: 0` too (the browser default `min-width: auto` on a flex
+   item still resists shrinking below its content's intrinsic width even
+   in column flow) — otherwise a single wide child (a filter row, a long
+   card) forces this whole column, and the page, wider than the
+   viewport. */
+.escritorio__principal > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.escritorio__contenido {
+  display: grid;
+  grid-template-columns: 316px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .escritorio__contenido {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Colapso del sidebar en mobile. Deliberadamente ubicado DESPUÉS de todas
+ * las reglas no condicionales de `.escritorio*` de arriba: en CSS, misma
+ * especificidad, gana la última declarada — un `@media` que quede antes
+ * en el archivo pierde contra una regla incondicional posterior, aunque
+ * la media query siga aplicando. Este bloque debe seguir siendo el
+ * último en tocar estos selectores. */
+@media (max-width: 768px) {
+  .escritorio {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-3);
+  }
+
+  .escritorio:not(.escritorio--sin-sidebar) {
+    padding-top: var(--alto-barra);
+  }
+
+  .escritorio__sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    max-height: none;
+    overflow-y: visible;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--gap-2) var(--gap-3);
+    padding: var(--gap-2) var(--gap-3);
+    overflow-x: auto;
+    min-height: var(--alto-barra);
+    z-index: 20;
+  }
+
+  .escritorio__marca {
+    flex-shrink: 0;
+  }
+
+  .escritorio__nav-separador {
+    display: none;
+  }
+
+  .escritorio__nav {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    gap: var(--gap-2);
+    overflow-x: visible;
+    min-width: 0;
+  }
+
+  .escritorio__nav-item {
+    white-space: nowrap;
+  }
+
+  /* Con la barra fija a una sola fila (`nowrap` + `overflow-x: auto`
+     arriba), "Salir" ya no puede saltar a su propia línea como en el
+     diseño original con wrap — se queda en la fila y no se encoge. */
+  .escritorio__sidebar-salir {
+    flex-shrink: 0;
+  }
+
+  .escritorio__marca-texto {
+    display: none;
+  }
+
+  .escritorio__sidebar-pie {
+    display: none;
+  }
+}
+
+/* === §barra-pantalla — barra de pantalla =============================== */
+/* PR2 (tasks.md Phase 3, task 3.8; DESIGN2 §4 "Barra de pantalla"). Fixed
+ * order: volver · título · indicador · conexión · avatar. The live chip de
+ * conexión (D7 superseded by change `chip-conexion-en-vivo`; design's
+ * "ADR/decision deviation flagged") reuses the existing `.chip`/
+ * `.chip--borde`/`.chip--borde-gris` classes — `.barra-pantalla__conexion`
+ * below is a layout-only modifier, no new visual language.
+ * `.barra-pantalla__volver` is optional per screen (S-02, the root screen,
+ * has none). */
+
+/* Vive fuera de `.pagina` (`.escritorio__cuerpo > barra + .pagina`,
+   base.html) — a propósito: así llega de punta a punta del área de
+   contenido (desde el sidebar hasta el borde de la ventana) en vez de
+   quedar encerrada en el `max-width: 960px` centrado de `.pagina`, y no
+   se corre de lugar cuando aparece un mensaje flash (que vive dentro de
+   `.pagina`, después de la barra). */
+.barra-pantalla {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  min-height: var(--alto-barra);
+  padding: var(--gap-3) var(--pad-lateral);
+  margin-bottom: var(--gap-3);
+  background: var(--color-superficie);
+  border-bottom: var(--borde) solid var(--color-linea);
+}
+
+.barra-pantalla__volver {
+  flex-shrink: 0;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--color-tinta);
+  text-decoration: none;
+}
+
+.barra-pantalla__titulo {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--txt-titulo);
+  font-weight: 600;
+}
+
+.barra-pantalla__indicador {
+  flex-shrink: 0;
+  font-family: var(--fuente-mono);
+  font-size: var(--mono-paso);
+  color: var(--color-tinta-mono);
+}
+
+.barra-pantalla__conexion {
+  flex-shrink: 0;
+}
+
+.barra-pantalla__avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--color-tinta);
+  color: var(--color-superficie);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--txt-etiqueta);
+  font-weight: 600;
+}
+
+/* Distinct from `.barra-pantalla__avatar`: the sidebar footer sits on the
+   sidebar's own dark background, so it needs inverted (light) colors to
+   stay visible — reusing the dark-on-light avatar would blend into the
+   black sidebar. Also avoids the two classes colliding in DOM-order
+   assertions across `.barra-pantalla` and `.escritorio__sidebar`. */
+.escritorio__sidebar-pie-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--color-superficie);
+  color: var(--color-tinta);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--txt-etiqueta);
+  font-weight: 600;
+}
+
+/* === §pasos — indicador de pasos ======================================== */
+/* PR2 (task 3.8; DESIGN2 §4 "Indicador de pasos"). Squares: active 12px
+ * solid, pending 8px with a border. `paso_item.es_actual` is the only signal the
+ * view provides (no per-step "completado" flag), so the completed/pending
+ * DESIGN2 distinction is not reproduced here — reasonable extrapolation,
+ * documented in apply-progress. */
+
+.pasos {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-3);
+  margin: 0 0 var(--gap-3);
+  padding: 0;
+}
+
+.pasos__item {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-1);
+}
+
+.pasos__marca {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  border: var(--borde) solid var(--color-linea);
+  background: transparent;
+}
+
+.pasos__item--activo .pasos__marca {
+  width: 12px;
+  height: 12px;
+  border: none;
+  background: var(--color-tinta);
+}
+
+.pasos__etiqueta {
+  font-size: var(--txt-etiqueta);
+  color: var(--color-tinta-2);
+}
+
+.pasos__etiqueta--activo {
+  font-weight: 600;
+  color: var(--color-tinta);
+}
+
+/* === §checklist — checklist por rol (móvil) ============================= */
+/* PR2 (task 3.8; DESIGN2 §4 "Checklist por rol"). Wraps the generic
+ * `{% for campo in form %}` field loop — no per-role Sí/No cell structure
+ * exists server-side (design D3: styling native controls as descendants),
+ * so this is the rhythm/list container around `.campo` items, not a
+ * pixel-perfect reproduction of the per-role table. `.fila-horas` groups a
+ * `rango-hora-inicio-fin` item's `_inicio`/`_fin` pair side-by-side
+ * (DESIGN2 §6.b "Fila de horas"). */
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  margin: var(--gap-3) 0;
+}
+
+.fila-horas {
+  display: inline-flex;
+  flex-direction: column;
+  width: calc(50% - var(--gap-2) / 2);
+  vertical-align: top;
+}
+
+.fila-horas + .fila-horas {
+  margin-left: var(--gap-2);
+}
+
+.checklist__item input[data-rango] {
+  font-family: var(--fuente-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* === §lista — lista de tarjetas (S-02) ================================== */
+/* PR2 (task 3.9; DESIGN2 §3 "listas de tarjetas 12px"). `mis_reportes.html`
+ * groups ("Creados por mí" / "Compartidos conmigo") each render as a card
+ * list rather than the previous native `<table>` — mobile-first per this
+ * PR's title. */
+
+.lista {
+  margin: 0 0 var(--gap-4);
+}
+
+/* Grupos desplegables (En progreso / Listos para generar / Terminados):
+   `<details>` nativo, sin JS — abre por defecto solo si tiene tarjetas
+   (ver `{% if grupo.tarjetas %}open{% endif %}` en mis_reportes.html). */
+.lista__titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  margin: 0 0 var(--gap-2);
+  font-size: var(--txt-titulo);
+  cursor: pointer;
+  list-style: none;
+}
+
+.lista__titulo::-webkit-details-marker {
+  display: none;
+}
+
+.lista__titulo::before {
+  content: "▸";
+  display: inline-block;
+  font-size: .7em;
+  color: var(--color-tinta-mono);
+  transition: transform .15s ease;
+}
+
+.lista[open] > .lista__titulo::before {
+  transform: rotate(90deg);
+}
+
+.lista__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.lista__tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  min-width: 0;
+  min-height: var(--alto-fila);
+  padding: var(--pad-lista);
+  box-sizing: border-box;
+  border: var(--borde) solid var(--color-linea);
+  border-radius: 6px;
+  background: var(--color-superficie);
+}
+
+.lista__tarjeta-fila-principal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-2);
+  min-width: 0;
+}
+
+.lista__tarjeta-fila-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-2);
+  min-width: 0;
+}
+
+.lista__meta-separador {
+  flex-shrink: 0;
+  color: var(--color-linea);
+}
+
+.lista__tarjeta-acciones {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-1);
+  margin-left: auto;
+}
+
+.lista__enlace {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-tinta);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lista__meta {
+  flex-shrink: 0;
+  color: var(--color-tinta-mono);
+  font-size: var(--mono-meta);
+}
+
+.lista__eliminar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--color-tinta-mono);
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.lista__eliminar:hover {
+  background: var(--color-linea-interna);
+  color: var(--color-tinta);
+}
+
+/* `<summary>` markers vary by browser; hide the default disclosure
+   triangle so the icon button looks identical to the eliminar button
+   next to it. */
+.lista__eliminar::-webkit-details-marker {
+  display: none;
+}
+
+.lista__compartir {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.lista__compartir-form {
+  position: absolute;
+  top: calc(100% + var(--gap-1));
+  right: 0;
+  z-index: 1;
+  display: flex;
+  gap: var(--gap-2);
+  padding: var(--gap-2);
+  background: var(--color-superficie);
+  border: var(--borde) solid var(--color-linea);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(20, 19, 15, .15);
+  white-space: nowrap;
+}
+
+.lista__compartir-form input[type="text"] {
+  width: 160px;
+}
+
+.lista__vacio {
+  color: var(--color-tinta-2);
+  font-size: var(--txt-tarjeta);
+}
+
+/* === §adjuntos — grilla de adjuntos (S-08) =============================== */
+/* PR2 (task 3.11; DESIGN2 §6.b "Adjuntos (S-08)"). 2-column grid, 104px
+ * thumbnail + name/peso/local in mono. Applies to the already-uploaded,
+ * read-only `adjuntos.html` listing — the JS-driven upload widget in
+ * `paso.html`'s resultados section (`adjuntos.js`) is untouched (D7). */
+
+.adjuntos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-3);
+}
+
+.adjuntos__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-2);
+  padding: var(--gap-2);
+  border: var(--borde) solid var(--color-linea);
+  border-radius: 6px;
+  background: var(--color-superficie);
+}
+
+.adjuntos__miniatura {
+  flex-shrink: 0;
+  width: 104px;
+  height: 104px;
+  border-radius: 4px;
+  background: var(--color-linea-interna);
+}
+
+.adjuntos__info {
+  min-width: 0;
+}
+
+.adjuntos__nombre {
+  margin: 0 0 var(--gap-1);
+  font-size: var(--txt-tarjeta);
+  overflow-wrap: break-word;
+}
+
+.adjuntos__meta {
+  margin: 0;
+  color: var(--color-tinta-mono);
+  font-size: var(--mono-meta);
+}
+
+.adjuntos__descarga {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--color-tinta);
+}
+
+.adjuntos__eliminar {
+  flex-shrink: 0;
+}
+
+.adjuntos__vacio {
+  grid-column: 1 / -1;
+  color: var(--color-tinta-2);
+  font-size: var(--txt-tarjeta);
+}
+
+/* 2 columnas fijas dejaban ~40px de ancho para el nombre del archivo en
+   mobile — `overflow-wrap: break-word` con tan poco espacio parte hasta
+   palabras cortas letra por letra. Una columna + "Descargar" cayendo a su
+   propia línea le da al nombre el ancho completo de la tarjeta. */
+@media (max-width: 768px) {
+  .adjuntos {
+    grid-template-columns: 1fr;
+  }
+
+  .adjuntos__item {
+    flex-wrap: wrap;
+  }
+
+  .adjuntos__descarga {
+    margin-left: 0;
+    flex-basis: 100%;
+    text-align: right;
+  }
+
+  .adjuntos__eliminar {
+    margin-left: auto;
+  }
+}
+
+/* === §login — pantalla S-01 ============================================ */
+
+.login {
+  max-width: 360px;
+  margin: 15vh auto 0;
+  padding: var(--gap-4);
+  border: var(--borde) solid var(--color-linea);
+  border-radius: 6px;
+  background: var(--color-superficie);
+}
+
+.login__titulo {
+  font-size: var(--txt-login);
+  font-weight: 600;
+  margin: 0 0 var(--gap-4);
+}
+
+/* === §hoja — hoja modal (S-09) ========================================= */
+/* PR3 (tasks.md Phase 4, task 4.7; DESIGN2 §4 "Hoja modal (S-09)"). D7
+ * forbids new JS, so no open/close toggle or `velo` overlay is added:
+ * `revision.html` renders `.hoja` inline as a static sheet card (border-top
+ * 2px negro, decorative `.hoja__tirador`, encabezado with a mono/chip
+ * count, scrollable `.hoja__cuerpo`, own `.hoja__pie` action bar) rather
+ * than a real overlay that would require runtime state — documented
+ * deviation, apply-progress. */
+
+.hoja {
+  border-top: var(--borde-error) solid var(--color-tinta);
+  border-radius: 8px 8px 0 0;
+  background: var(--color-superficie);
+  margin-bottom: var(--gap-4);
+  overflow: hidden;
+}
+
+.hoja__tirador {
+  width: 44px;
+  height: 4px;
+  margin: var(--gap-2) auto;
+  border-radius: 999px;
+  background: var(--color-linea);
+}
+
+.hoja__encabezado {
+  padding: 0 var(--pad-lateral) var(--gap-3);
+  border-bottom: var(--borde) solid var(--color-linea);
+}
+
+.hoja__cuerpo {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--gap-3) var(--pad-lateral);
+}
+
+.hoja__lista {
+  list-style: none;
+  margin: 0 0 var(--gap-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.hoja__lista:last-child {
+  margin-bottom: 0;
+}
+
+.hoja__item {
+  display: block;
+  padding: var(--gap-2) var(--gap-3);
+  border-radius: 6px;
+}
+
+.hoja__item a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.hoja__item--error {
+  border: var(--borde) solid var(--color-tinta);
+}
+
+.hoja__item--ambar {
+  border: var(--borde) solid var(--color-ambar-borde-suave);
+  background: var(--color-ambar-fondo);
+  color: var(--color-ambar-texto);
+}
+
+.hoja__pie {
+  padding: var(--gap-3) var(--pad-lateral);
+  border-top: var(--borde) solid var(--color-linea);
+}
+
+/* === JS-injected offline banners ======================================== */
+/* PR3 (task 4.7; design D7). `paso-offline.js` sets `data-borrador-banner`
+ * (`:295`) / `data-borrador-prompt` (`:223`) at runtime with no `class`
+ * attribute, so `paso-offline.js` is never edited — these attribute
+ * selectors reuse the exact same visual language as `.aviso` (ámbar). */
+
+[data-borrador-banner],
+[data-borrador-prompt] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  padding: var(--gap-3) var(--gap-4);
+  margin-bottom: var(--gap-3);
+  border: var(--borde) solid var(--color-ambar-borde-suave);
+  border-radius: 6px;
+  background: var(--color-ambar-fondo);
+  color: var(--color-ambar-texto);
+  font-size: var(--txt-tarjeta);
+}
+
+/* === §tipo-detalle — detalle de tipo de reporte ========================= */
+/* Definiciones es la sección que importa (activar/editar); los datos del
+   tipo (código, plantilla, logo) son referencia rara vez tocada — el peso
+   visual entre ambas secciones debe reflejar esa diferencia, no solo el
+   orden. */
+
+.tipo-detalle__seccion {
+  margin-bottom: var(--gap-4);
+}
+
+.tipo-detalle__seccion--principal {
+  padding: var(--gap-4);
+  border: var(--borde) solid var(--color-linea);
+  border-left: 3px solid var(--color-tinta);
+  border-radius: 8px;
+  background: var(--color-superficie);
+}
+
+.tipo-detalle__seccion--principal h2 {
+  margin: 0;
+}
+
+.tipo-detalle__seccion--secundaria {
+  padding: var(--gap-3) 0 0;
+}
+
+.tipo-detalle__seccion--secundaria h2 {
+  margin: 0 0 var(--gap-3);
+  font-size: var(--txt-etiqueta);
+  color: var(--color-tinta-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-chip);
+}
+
+.tipo-detalle__encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-3);
+  margin-bottom: var(--gap-3);
+  flex-wrap: wrap;
+}
+
+.tipo-detalle__metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-3) var(--gap-4);
+  margin-bottom: var(--gap-3);
+}
+
+@media (max-width: 768px) {
+  .tipo-detalle__metadata {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* === §historial — timeline de cambios (participantes.html) ============= */
+/* Reemplaza la tabla plana de 30 filas (una por campo, mismo autor/fecha
+   repetidos línea tras línea sin agrupar) por una línea de tiempo vertical
+   agrupada por sesión de edición (`_agrupar_cambios_en_sesiones`, views.py:
+   ráfagas del mismo autor separadas por más de 5 minutos son sesiones
+   distintas). Cada sesión colapsa/expande — solo la más reciente arranca
+   abierta — así 30 cambios no son un muro de texto. */
+
+.historial {
+  list-style: none;
+  margin: 0 0 0 var(--gap-2);
+  padding: 0;
+  border-left: var(--borde) solid var(--color-linea);
+}
+
+.historial__sesion {
+  position: relative;
+  padding-left: var(--gap-4);
+  margin-left: -1px;
+}
+
+.historial__sesion:not(:last-child) {
+  padding-bottom: var(--gap-3);
+}
+
+.historial__punto {
+  position: absolute;
+  left: calc(-5px - var(--gap-4));
+  top: 8px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-tinta);
+  border: 2px solid var(--color-superficie);
+}
+
+.historial__resumen {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  cursor: pointer;
+  list-style: none;
+  flex-wrap: wrap;
+}
+
+.historial__resumen::-webkit-details-marker {
+  display: none;
+}
+
+.historial__avatar {
+  width: 24px;
+  height: 24px;
+  font-size: var(--mono-meta);
+}
+
+.historial__autor {
+  font-weight: 600;
+}
+
+.historial__fecha {
+  color: var(--color-tinta-mono);
+  font-size: var(--mono-meta);
+}
+
+.historial__items {
+  list-style: none;
+  margin: var(--gap-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+}
+
+.historial__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-2);
+  flex-wrap: wrap;
+  padding: var(--gap-1) 0;
+}
+
+.historial__valor-anterior {
+  font-size: var(--txt-tarjeta);
+  color: var(--color-tinta-mono);
+}
+
+.historial__valor-anterior--vacio {
+  font-style: italic;
+}
+
+.historial__vacio {
+  color: var(--color-tinta-2);
+  font-size: var(--txt-tarjeta);
+  padding: var(--gap-2) 0;
+}
+
+/* === §inicio — pantalla de bienvenida post-login ======================= */
+/* 3 accesos directos con conteo (en progreso/listo/terminado), cada uno
+   enlaza a "Mis reportes" pre-filtrado por ese estado — mismos buckets
+   que `mis_reportes.html` ya usa (`listado.BUCKETS`), nunca un cálculo
+   propio que pueda desincronizarse. */
+
+.inicio__conteos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap-3);
+  margin-bottom: var(--gap-4);
+}
+
+.inicio__conteo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  padding: var(--gap-4) var(--gap-3);
+  border: var(--borde) solid var(--color-linea);
+  border-radius: 8px;
+  background: var(--color-superficie);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .15s ease;
+}
+
+.inicio__conteo:hover {
+  border-color: var(--color-tinta);
+}
+
+.inicio__conteo-numero {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-tinta);
+}
+
+.inicio__conteo-titulo {
+  font-size: var(--txt-etiqueta);
+  color: var(--color-tinta-mono);
+}
+
+@media (max-width: 768px) {
+  .inicio__conteos {
+    grid-template-columns: 1fr;
+  }
+}

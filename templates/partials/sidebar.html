@@ -1,0 +1,109 @@
+{% comment %}
+Sidebar de navegación principal, compartido por todas las pantallas
+autenticadas (reportes/ y tipos_reporte/). Reusa el patrón
+`.escritorio__sidebar` / `.escritorio__nav` que antes vivía solo, inline y
+duplicado, en las 4 plantillas de tipos_reporte (design D5 "Escritorio
+S-14"). Se incluye una única vez desde base.html.
+
+Cada ítem lleva un ícono (mismo estilo SVG inline 16x16 stroke=currentColor
+ya usado en `.lista__eliminar` de otras pantallas) — antes era texto plano
+sin ningún apoyo visual. Los ítems de administración (Usuarios, Tipos de
+reporte) solo se muestran a `request.user.es_administrador`: antes
+"Usuarios" aparecía para cualquier persona logueada aunque la vista
+detrás sea `@solo_administradores` y le devolviera 403 al tocarlo.
+
+Estructura (S-14 mockup): marca/subtítulo arriba, nav en el medio, y un pie
+con avatar + email + rol, separado del nav por una línea divisoria
+(`.escritorio__sidebar-pie`, mismo patrón de iniciales que
+`.barra-pantalla__avatar` en mis_reportes.html). En mobile (<=768px) el pie
+se oculta: la barra horizontal colapsada no tiene espacio para un bloque de
+dos líneas apiladas, y el avatar/email ya no son la info más útil en ese
+contexto (ver `.escritorio__sidebar-pie` en components.css).
+{% endcomment %}
+<nav class="escritorio__sidebar" aria-label="Navegación principal">
+    <div class="escritorio__marca">
+        <span class="escritorio__logo mono">GC</span>
+        <div class="escritorio__marca-texto">
+            <span class="escritorio__marca-nombre mono">Reportes de campo</span>
+            <span class="escritorio__marca-subtitulo">administración</span>
+        </div>
+    </div>
+    <ul class="escritorio__nav">
+        <li>
+            <a
+                class="escritorio__nav-item{% if request.resolver_match.url_name == 'inicio' %} escritorio__nav-item--actual{% endif %}"
+                href="{% url 'inicio' %}"
+            >
+                <svg class="escritorio__nav-icono" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 10.5 12 3l9 7.5"></path>
+                    <path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"></path>
+                </svg>
+                Inicio
+            </a>
+        </li>
+        <li>
+            <a
+                class="escritorio__nav-item{% if request.resolver_match.url_name == 'reportes_mis' %} escritorio__nav-item--actual{% endif %}"
+                href="{% url 'reportes_mis' %}"
+            >
+                <svg class="escritorio__nav-icono" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"></path>
+                    <path d="M14 3v6h6"></path>
+                    <line x1="9" y1="13" x2="15" y2="13"></line>
+                    <line x1="9" y1="17" x2="15" y2="17"></line>
+                </svg>
+                Mis reportes
+            </a>
+        </li>
+        <li>
+            <a
+                class="escritorio__nav-item{% if request.resolver_match.url_name == 'reportes_seleccion_tipo' or request.resolver_match.url_name == 'reportes_nuevo' %} escritorio__nav-item--actual{% endif %}"
+                href="{% url 'reportes_seleccion_tipo' %}"
+            >
+                <svg class="escritorio__nav-icono" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Nuevo reporte
+            </a>
+        </li>
+        {% if request.user.es_administrador %}
+        <li class="escritorio__nav-separador" role="presentation">Administración</li>
+        <li>
+            <a
+                class="escritorio__nav-item{% if request.resolver_match.url_name == 'usuarios_lista' %} escritorio__nav-item--actual{% endif %}"
+                href="{% url 'usuarios_lista' %}"
+            >
+                <svg class="escritorio__nav-icono" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 21v-1a8 8 0 0 1 16 0v1"></path>
+                </svg>
+                Usuarios
+            </a>
+        </li>
+        <li>
+            <a
+                class="escritorio__nav-item{% if 'tipos_' in request.resolver_match.url_name %} escritorio__nav-item--actual{% endif %}"
+                href="{% url 'tipos_lista' %}"
+            >
+                <svg class="escritorio__nav-icono" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 4a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v3H4Z"></path>
+                    <path d="M4 9h18l-1.5 10a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1Z"></path>
+                </svg>
+                Tipos de reporte
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+    <div class="escritorio__sidebar-pie">
+        <span class="escritorio__sidebar-pie-avatar" aria-hidden="true">{{ request.user.username|slice:":1"|upper }}</span>
+        <div class="escritorio__sidebar-pie-texto mono">
+            <span class="escritorio__sidebar-pie-email">{{ request.user.email|default:request.user.username }}</span>
+            <span class="escritorio__sidebar-pie-rol">{{ request.user.get_rol_display|default:"" }}</span>
+        </div>
+    </div>
+    <form method="post" action="{% url 'logout' %}" class="escritorio__sidebar-salir">
+        {% csrf_token %}
+        <button type="submit" class="escritorio__sidebar-salir-boton">Cerrar sesión</button>
+    </form>
+</nav>

@@ -46,6 +46,18 @@ def test_login_rejected_for_inactive_account(client, db):
 
 
 @pytest.mark.django_db
+def test_authenticated_user_hitting_login_is_redirected_not_shown_form(
+    client, usuario_activo
+):
+    client.login(username="usuario_activo", password="clave-valida-123")
+
+    response = client.get(reverse("login"))
+
+    assert response.status_code == 302
+    assert response.url == reverse(settings.LOGIN_REDIRECT_URL)
+
+
+@pytest.mark.django_db
 def test_logout_ends_session_and_redirects_protected_view_to_login(client, usuario_activo):
     client.login(username="usuario_activo", password="clave-valida-123")
     client.post(reverse("logout"))
@@ -53,6 +65,27 @@ def test_logout_ends_session_and_redirects_protected_view_to_login(client, usuar
     response = client.get(reverse("inicio"))
     assert response.status_code == 302
     assert reverse("login") in response.url
+
+
+@pytest.mark.django_db
+def test_inicio_renderiza_pantalla_de_bienvenida(client, usuario_activo):
+    client.login(username="usuario_activo", password="clave-valida-123")
+
+    response = client.get(reverse("inicio"))
+
+    assert response.status_code == 200
+    assert "usuarios/inicio.html" in [t.name for t in response.templates]
+    assert usuario_activo.username in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_inicio_sin_reportes_muestra_los_3_conteos_en_cero(client, usuario_activo):
+    client.login(username="usuario_activo", password="clave-valida-123")
+
+    response = client.get(reverse("inicio"))
+
+    conteos = {c["id"]: c["cantidad"] for c in response.context["conteos"]}
+    assert conteos == {"en_progreso": 0, "listo_para_generar": 0, "terminado": 0}
 
 
 @pytest.mark.django_db

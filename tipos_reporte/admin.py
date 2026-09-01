@@ -12,18 +12,29 @@ when deciding whether to offer the changelist's bulk `delete_selected`
 action, so an object-sensitive override alone would let that bulk action
 slip past a protected row — `delete_selected` is removed from `actions`
 entirely rather than trusted to the object-level check.
-"""
 
-import json
+Deregistered (backlog #13, S-14, design D7): `DefinicionDeTipoAdmin` and
+`TipoDeReporteAdmin` are no longer wired to Django admin via
+`@admin.register(...)` — `tipos_reporte/urls.py`'s dedicated create/edit/
+activate/desactivate screen is now the live management surface for both
+models. Both classes (and their forms) are DELIBERATELY retained here,
+unregistered, as a one-line-per-model revert rollback path (proposal's
+Rollback Plan): re-adding `@admin.register(DefinicionDeTipo)`/
+`@admin.register(TipoDeReporte)` above each class restores Django admin
+access immediately, with zero other changes. `tipos_reporte/tests/
+test_admin.py`'s existing tests construct these `ModelAdmin` classes
+directly against a fresh `AdminSite()`, so they keep passing unmodified —
+none of them assert on `admin.site._registry`. Retiring these classes for
+good is a follow-up, not part of this change (design D7).
+"""
 
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
-from yaml import YAMLError
 
 from tipos_reporte.models import DefinicionDeTipo, TipoDeReporte
 from tipos_reporte.servicios import activar_definicion, desactivar_tipo
-from tipos_reporte.validacion import analizar_yaml_seguro
+from tipos_reporte.validacion import analizar_definicion_subida
 
 DEFINICION_CAMPOS_DE_SOLO_LECTURA = ("estado", "version", "activada_en")
 TIPO_CAMPOS_DE_SOLO_LECTURA = ("definicion_activa",)
@@ -61,42 +72,15 @@ class DefinicionDeTipoForm(forms.ModelForm):
                 {"archivo_yaml": "Este campo es obligatorio."}
             )
 
-        archivo.seek(0)
-        try:
-            texto = archivo.read().decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise ValidationError(
-                {"archivo_yaml": f"El archivo no es texto UTF-8 válido: {error}"}
-            )
-        archivo.seek(0)
-
-        try:
-            estructura = analizar_yaml_seguro(texto)
-        except YAMLError as error:
-            raise ValidationError({"archivo_yaml": f"YAML inválido: {error}"})
-
-        if not isinstance(estructura, dict):
-            raise ValidationError(
-                {"archivo_yaml": "El documento debe ser un mapeo en su raíz."}
-            )
-        try:
-            json.dumps(estructura)
-        except (TypeError, ValueError):
-            raise ValidationError(
-                {
-                    "archivo_yaml": (
-                        "El documento no es representable como JSON "
-                        "(por ejemplo, contiene una fecha nativa de YAML)."
-                    )
-                }
-            )
-
-        cleaned["yaml_fuente"] = texto
-        cleaned["estructura"] = estructura
+        # Shared with the new `tipos_reporte/forms.py::DefinicionDeTipoForm`
+        # (backlog #13, S-14, design D2) — the single deserialization/
+        # structural-validation entry point, no duplicated logic here.
+        cleaned["yaml_fuente"], cleaned["estructura"] = analizar_definicion_subida(
+            archivo
+        )
         return cleaned
 
 
-@admin.register(DefinicionDeTipo)
 class DefinicionDeTipoAdmin(admin.ModelAdmin):
     form = DefinicionDeTipoForm
     list_display = ("tipo", "version", "estado", "activada_en")
@@ -133,7 +117,6 @@ class DefinicionDeTipoAdmin(admin.ModelAdmin):
                     )
 
 
-@admin.register(TipoDeReporte)
 class TipoDeReporteAdmin(admin.ModelAdmin):
     list_display = ("nombre", "codigo", "activo", "definicion_activa")
     readonly_fields = TIPO_CAMPOS_DE_SOLO_LECTURA

@@ -18,12 +18,15 @@ the default loader, because the latter constructs arbitrary Python objects
 from attacker-controlled input.
 """
 
+import json
 from dataclasses import dataclass
 
 import yaml
+from django.core.exceptions import ValidationError
 from openpyxl import load_workbook
 from openpyxl.utils.cell import coordinate_from_string
 from openpyxl.utils.exceptions import CellCoordinatesException
+from yaml import YAMLError
 
 from tipos_reporte.models import TipoDeDato
 
@@ -181,9 +184,50 @@ def _validar_colisiones_de_celda(nodos):
     return problemas
 
 
+_MAXIMO_DE_ANCLAS_DE_ADJUNTOS = 4
+
+
+def _validar_anclas_de_adjuntos(estructura: dict) -> list[ProblemaDeDefinicion]:
+    """R7 (backlog #11, design D6): validates the notation of every
+    declared attachment anchor slot (`estructura["adjuntos"][*]["celda"]`,
+    reusing `_es_celda_valida`, same as R3) and rejects more than
+    `_MAXIMO_DE_ANCLAS_DE_ADJUNTOS` declared slots.
+
+    Deliberately does NOT reuse R6's merged-anchor-cell rule
+    (`celda-no-es-ancla`) or `_validar_colisiones_de_celda`: a floating
+    image anchors to a cell CORNER, it is never written into the cell, so a
+    merged non-anchor cell — or a cell shared with a data field — is a
+    legitimate embedding target, not a collision (design D6)."""
+    adjuntos = estructura.get("adjuntos") or []
+    problemas = []
+    for i, slot in enumerate(adjuntos):
+        celda = slot.get("celda") if isinstance(slot, dict) else None
+        if not _es_celda_valida(celda):
+            problemas.append(
+                ProblemaDeDefinicion(
+                    regla="ancla-de-adjunto-mal-formada",
+                    ubicacion=f"adjuntos[{i}]",
+                    mensaje=f"'celda': '{celda}' no es una notación de celda válida.",
+                )
+            )
+    if len(adjuntos) > _MAXIMO_DE_ANCLAS_DE_ADJUNTOS:
+        problemas.append(
+            ProblemaDeDefinicion(
+                regla="anclas-de-adjunto-excedidas",
+                ubicacion="adjuntos",
+                mensaje=(
+                    f"Se declararon {len(adjuntos)} anclas de adjuntos; el "
+                    f"máximo permitido es {_MAXIMO_DE_ANCLAS_DE_ADJUNTOS}."
+                ),
+            )
+        )
+    return problemas
+
+
 def validar_estructura(estructura: dict) -> list[ProblemaDeDefinicion]:
-    """Runs R1-R4 over the full definition and accumulates every problem
-    found (spec: "Exhaustive activation validation") — never returns early."""
+    """Runs R1-R4 and R7 over the full definition and accumulates every
+    problem found (spec: "Exhaustive activation validation") — never
+    returns early."""
     problemas: list[ProblemaDeDefinicion] = []
     nodos = list(_iterar_nodos(estructura))
 
@@ -193,6 +237,7 @@ def validar_estructura(estructura: dict) -> list[ProblemaDeDefinicion]:
         problemas.extend(_validar_notacion_de_celda(ubicacion, nodo))
 
     problemas.extend(_validar_colisiones_de_celda(nodos))
+    problemas.extend(_validar_anclas_de_adjuntos(estructura))
 
     return problemas
 
@@ -308,3 +353,49 @@ def analizar_yaml_seguro(texto: str):
     with the default loader, which constructs arbitrary Python objects from
     attacker-controlled input (e.g. a `!!python/object/apply` tag)."""
     return yaml.safe_load(texto)
+
+
+def analizar_definicion_subida(archivo) -> tuple[str, dict]:
+    """UTF-8 decode → `analizar_yaml_seguro` → dict-root check →
+    JSON-representability check, over an uploaded/stored definition file
+    (backlog #13, S-14; design D2). Returns `(yaml_fuente, estructura)`.
+    Raises Django's `ValidationError` keyed on `"archivo_yaml"` — the
+    `DefinicionDeTipo` MODEL field name, so the key is domain-level, not
+    form-level. Body moved verbatim from `admin.py::DefinicionDeTipoForm.
+    clean()` (same four checks, same four Spanish messages), minus the
+    `archivo is None` guard and the `cleaned[...]` assignments, which stay
+    at each call site. Raising `ValidationError` rather than returning
+    `ProblemaDeDefinicion`s is deliberate: this is a *fail-fast upload gate*
+    ("can this become a JSON document?"), not the accumulating activation
+    gate (R1-R7) `validar_definicion` runs above."""
+    archivo.seek(0)
+    try:
+        texto = archivo.read().decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValidationError(
+            {"archivo_yaml": f"El archivo no es texto UTF-8 válido: {error}"}
+        )
+    archivo.seek(0)
+
+    try:
+        estructura = analizar_yaml_seguro(texto)
+    except YAMLError as error:
+        raise ValidationError({"archivo_yaml": f"YAML inválido: {error}"})
+
+    if not isinstance(estructura, dict):
+        raise ValidationError(
+            {"archivo_yaml": "El documento debe ser un mapeo en su raíz."}
+        )
+    try:
+        json.dumps(estructura)
+    except (TypeError, ValueError):
+        raise ValidationError(
+            {
+                "archivo_yaml": (
+                    "El documento no es representable como JSON "
+                    "(por ejemplo, contiene una fecha nativa de YAML)."
+                )
+            }
+        )
+
+    return texto, estructura
