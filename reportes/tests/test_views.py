@@ -863,7 +863,7 @@ def test_cerrar_reporte_rechazado_si_no_puede_generar(
     reporte.refresh_from_db()
     assert reporte.estado == EstadoDeReporte.EN_PROGRESO
     assert response.status_code == 302
-    assert response.url == reverse("reportes_participantes", args=[reporte.id])
+    assert response.url == reverse("reportes_revision", args=[reporte.id])
 
 
 @pytest.mark.django_db

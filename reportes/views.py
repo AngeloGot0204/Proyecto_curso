@@ -353,7 +353,7 @@ def cerrar_reporte(request, reporte_id):
             request,
             "El reporte todavía tiene errores pendientes; no puede cerrarse.",
         )
-        return redirect("reportes_participantes", reporte_id=reporte.id)
+        return redirect("reportes_revision", reporte_id=reporte.id)
 
     with transaction.atomic():
         VistoBueno.objects.get_or_create(

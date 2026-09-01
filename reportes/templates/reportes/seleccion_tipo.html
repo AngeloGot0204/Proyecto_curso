@@ -6,6 +6,7 @@
 <header class="barra-pantalla">
     <a class="barra-pantalla__volver" href="{% url 'reportes_mis' %}" aria-label="Volver a Mis reportes">←</a>
     <h1 class="barra-pantalla__titulo">Nuevo reporte</h1>
+    {% include "_chip_conexion.html" %}
 </header>
 {% endblock %}
 
@@ -21,8 +22,9 @@
         {% for tipo in tipos %}
         <li class="lista__tarjeta">
             {% if tipo.activo %}
-            <form method="post" action="{% url 'reportes_nuevo' tipo.codigo %}">
+            <form method="post" action="{% url 'reportes_nuevo' tipo.codigo %}" class="js-nuevo-reporte">
                 {% csrf_token %}
+                <input type="hidden" name="id_local" class="js-id-local">
                 <button type="submit" class="acciones__primario">
                     {{ tipo.codigo }} — {{ tipo.definicion_activa.estructura.secciones|length }} secciones
                 </button>
@@ -47,4 +49,20 @@
         {% endfor %}
     </ul>
 </section>
+
+<script>
+document.querySelectorAll(".js-nuevo-reporte").forEach(function (form) {
+    form.addEventListener("submit", function () {
+        // id_local: same value on a double-click resubmit makes the
+        // server-side get_or_create() idempotent instead of creating a
+        // duplicate Reporte (spec `reporte-idempotent-creation`).
+        var campo = form.querySelector(".js-id-local");
+        if (!campo.value) {
+            campo.value = crypto.randomUUID();
+        }
+        var boton = form.querySelector("button[type=submit]");
+        boton.disabled = true;
+    });
+});
+</script>
 {% endblock %}
