@@ -1,5 +1,20 @@
 # Proposal: Move Report Closure (VistoBueno) From Revision To Participantes
 
+> **STATUS: ABANDONED / REVERTED — 2026-09-01.** `tasks.md` phases 3-7 were
+> marked `[x]` but the move was never applied to disk, or was applied and
+> later reverted (likely during the `feat/mejoras-ux-sesion` navigation
+> redesign, commit `db1c1d6`). Current code: the closure form still lives in
+> `revision.html` (disabled-attribute pattern, not hidden), `participantes.html`
+> has no closure form, and `cerrar_reporte`'s ineligible-branch redirect
+> still targets `reportes_revision`. Only the success-branch redirect to
+> `reportes_mis` (task 2.2) actually landed. **Do not archive this change —
+> it does not describe the running system.** The delta specs under
+> `specs/` in this folder are stale and MUST NOT be merged into
+> `openspec/specs/`. If this move is still wanted, re-open it as a fresh
+> change against current code; if not, delete this folder. BACKLOG.md #8
+> has been corrected to reflect that Revisión (S-09), not Participantes, owns
+> closure.
+
 ## Intent
 
 Realign implementation with the documented product design (DESIGN.md S-10)

@@ -1,5 +1,11 @@
 # Delta for Cierre Reporte
 
+> **STALE — NOT APPLIED. See `../../proposal.md` STATUS banner.** Current
+> code still has `revision.html` owning closure and `cerrar_reporte`'s
+> ineligible-branch redirect targets `reportes_revision`, not
+> `reportes_participantes`. Do not merge this delta into
+> `openspec/specs/cierre-reporte/spec.md`.
+
 ## MODIFIED Requirements
 
 ### Requirement: Creator-Only Closure

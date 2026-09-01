@@ -32,7 +32,8 @@ Implementar el modo offline con tres piezas:
 1. **Borrador local en IndexedDB**, con **Dexie.js** como capa sobre IndexedDB (decisión #6 de
    RESOLUCION-ADVERSARIAL.md). Cada cambio de campo persiste en el dispositivo, de forma que
    "Atrás" nunca pierde datos y el trabajo sobrevive al cierre de la aplicación.
-2. **Service worker**, construido con **Workbox** (decisión #6), que cachea el app shell y los
+2. **Service worker** **(corrección 2026-09-01: escrito a mano, sin dependencias — no Workbox;
+   ver `reportes/templates/reportes/sw.js`)**, que cachea el app shell y los
    recursos estáticos, permitiendo abrir y operar la aplicación sin señal cuando ya existe una
    sesión previa. Lo que se cachea para cada tipo de reporte es la **página del wizard ya
    renderizada en HTML por Django** (ADR-0001) — no una definición JSON/YAML que el navegador
@@ -56,7 +57,8 @@ un único despliegue (ADR-0001), este contrato es interno y no requiere versiona
 RESOLUCION-ADVERSARIAL.md).** El modo offline cubre la captura de datos propios sin señal; no
 cubre trabajar sin conexión sobre un reporte compartido mientras otro participante podría estar
 editándolo al mismo tiempo. Esa colaboración simultánea es **estrictamente online**: requiere
-conexión para conocer y respetar el bloqueo de edición descrito en la ADR-0006.
+conexión para conocer y respetar el bloqueo de edición descrito en la ADR-0006 **(nota 2026-09-01:
+ese bloqueo no está implementado — ver la corrección en ADR-0006)**.
 
 **Correlativo del reporte: generado por secuencia de base de datos (decisión #9 de
 RESOLUCION-ADVERSARIAL.md).** El número de registro oficial (`numero_registro`) que el servidor

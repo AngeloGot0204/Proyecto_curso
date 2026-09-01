@@ -143,3 +143,48 @@ The system MUST provide a Django view to list and download a report's attachment
 - GIVEN a `Reporte` with stored attachments
 - WHEN an authorized user requests the attachment list view
 - THEN the response includes each attachment's metadata and a download link
+
+### Requirement: Attachment Deletion by Creator or Uploader
+
+The system MUST provide a POST-only view letting someone undo a mistaken
+upload without a support request. Access MUST be scoped like every other
+mutating action on an accessible `Reporte`, plus a second, narrower check:
+only the `Reporte`'s creator or the `Adjunto`'s own `autor` may delete it.
+
+An invited participant MUST NOT be able to delete a file a *different*
+participant uploaded — this mirrors the "widen access to view, keep mutation
+narrow" pattern used by `cierre-reporte`. A denied request MUST 404 rather
+than reveal the attachment's existence.
+
+Deletion MUST be a hard delete of both the stored file and the `Adjunto`
+row — unlike `Reporte`, attachments carry no audit-trail requirement, so
+there is no soft-delete column to set.
+
+After deleting, the view MUST redirect back to the screen the request came
+from: the standalone attachment list when the request says so, otherwise the
+wizard's attachment step.
+
+#### Scenario: Uploader deletes their own attachment
+
+- GIVEN an `Adjunto` uploaded by invited participant B on a report created by A
+- WHEN B POSTs to the delete route for that attachment
+- THEN both the stored file and the `Adjunto` row are removed
+- AND a success flash message is shown
+
+#### Scenario: Creator deletes any attachment on their report
+
+- GIVEN an `Adjunto` uploaded by invited participant B on a report created by A
+- WHEN A POSTs to the delete route for that attachment
+- THEN the attachment is deleted
+
+#### Scenario: Participant cannot delete another participant's attachment
+
+- GIVEN an `Adjunto` uploaded by participant B on a report created by A, with participant C also invited
+- WHEN C POSTs to the delete route for that attachment
+- THEN the response is 404 and the `Adjunto` still exists
+
+#### Scenario: User without report access cannot delete
+
+- GIVEN an `Adjunto` on a report user D can neither create nor was invited to
+- WHEN D POSTs to the delete route
+- THEN the response is 404 and the `Adjunto` still exists

@@ -1,5 +1,9 @@
 # Delta for Colaboracion Reporte
 
+> **STALE — NOT APPLIED. See `../../proposal.md` STATUS banner.**
+> `participantes.html` has no closure form on disk. Do not merge this delta
+> into `openspec/specs/colaboracion-reporte/spec.md`.
+
 ## MODIFIED Requirements
 
 ### Requirement: Participants and History View

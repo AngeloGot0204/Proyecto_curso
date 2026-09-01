@@ -78,9 +78,16 @@ Logo institucional configurable, usuario/correo, contraseña, botón primario, n
 "solicita tu cuenta al administrador". Con sesión previa y sin señal permite entrar en
 modo offline con los datos cacheados.
 
-### S-02 Inicio · mis reportes
+### S-00 Inicio
+**(Agregada 2026-09-01, faltaba del inventario)** Landing post-login (`usuarios/views.py::inicio`,
+spec `listado-reportes` — "Replaces Placeholder Landing View"). Pantalla real de bienvenida/resumen,
+no un redirect ciego a "Mis reportes": muestra un conteo por grupo (**En progreso**, **Listos
+para generar**, **Terminados**) sobre los reportes accesibles del usuario, calculado con el mismo
+pipeline que S-02 usa (`agrupar_por_bucket`) para que nunca desincronice con esa lista.
+
+### S-02 Mis reportes
 Orden: (1) banner de pendientes de subir si hay cola, (2) buscador + filtros,
-(3) grupos **En progreso**, **Pendientes de otra parte**, **Listos para generar**.
+(3) grupos **En progreso**, **Listos para generar**, **Terminados**.
 Cada tarjeta: título (tipo — nivel/frente), etiqueta de estado, línea mono con
 N° de registro o `local`, % de avance y fecha. Acción primaria fija: **+ Nuevo reporte**.
 
@@ -117,16 +124,22 @@ formatos soportados visibles antes de adjuntar). Nota fija: las firmas se genera
 blanco en el Excel.
 
 ### S-09 Validación al cerrar
-Hoja modal con dos listas separadas:
+**(Corrección 2026-09-01: es pantalla completa, no modal — ver DESIGN2 L90-93.)** Dos listas
+separadas:
 - **Debes corregir** — cada ítem enlaza al campo exacto; el botón "Generar" queda deshabilitado.
 - **Advertencias** — ítems "No cumple" y datos atípicos; no bloquean.
 
-### S-10 Estado del reporte · participantes y visto bueno
-Lista de **participantes invitados** (usuario · secciones que completó · última edición),
-acción **"Compartir con…"** para invitar a otro usuario, avance por sección, acceso al
-**historial de cambios** (quién editó qué y cuándo) y botón **"Marcar como terminado"**
-(visto bueno) reservado al creador del reporte (`reporte.creado_por`). La generación del `.xlsx` se habilita
-recién después del visto bueno, no por completitud automática.
+Es también, hoy, la pantalla dueña del cierre: incluye el botón **"Marcar como terminado"**
+(visto bueno), reservado al creador del reporte (`reporte.creado_por`), deshabilitado mientras
+"Debes corregir" tenga ítems. La generación del `.xlsx` se habilita recién después del visto
+bueno, no por completitud automática.
+
+### S-10 Estado del reporte · participantes
+**(Corrección 2026-09-01: el cierre NO vive acá — vive en S-09. Este change,
+`cierre-en-participantes`, se propuso para moverlo aquí pero quedó abandonado/revertido; ver su
+`proposal.md`.)** Lista de **participantes invitados** (usuario · secciones que completó ·
+última edición), acción **"Compartir con…"** para invitar a otro usuario, avance por sección y
+acceso al **historial de cambios** (quién editó qué y cuándo).
 
 > **S-11 y S-12 eliminadas.** No hay vista previa del documento dentro de la app (ADR-0007).
 > La revisión ocurre en S-09 (validación) y volviendo por los pasos del wizard. Tras el visto

@@ -47,24 +47,24 @@ Chain strategy: feature-branch-chain
 
 ## Phase 4: Aggregated List + Retry (D2/D3/D8)
 
-- [ ] 4.1 Create `reportes/static/reportes/sincronizacion.js`: query `borradores.where("estado").anyOf("pendiente","fallo")` across all reports, sort by `actualizadoEn` desc, render rows (tipo/fecha/paso/estado chip) or empty state.
-- [ ] 4.2 Wire "Reintentar": build retry URL from the `__SECCION__` placeholder (D3), call `reportesEnvioPaso.enviar` with the row's stored `valores`; on `ok` delete row + re-render; on `fallo`/`pendiente` update row + re-render; on `sesion_expirada` navigate, keep row.
+- [x] 4.1 Create `reportes/static/reportes/sincronizacion.js`: query `borradores.where("estado").anyOf("pendiente","fallo")` across all reports, sort by `actualizadoEn` desc, render rows (tipo/fecha/paso/estado chip) or empty state.
+- [x] 4.2 Wire "Reintentar": build retry URL from the `__SECCION__` placeholder (D3), call `reportesEnvioPaso.enviar` with the row's stored `valores`; on `ok` delete row + re-render; on `fallo`/`pendiente` update row + re-render; on `sesion_expirada` navigate, keep row.
 - [ ] 4.3 Manual DevTools (Unit 3 harness): 2+ reports with pending/failed rows, verify full list, single-action-only rows, retry success/fail/expired-session paths, no duplicate `Reporte`.
 
 ## Phase 5: Entry Badge on Mis Reportes (D5)
 
-- [ ] 5.1 RED: `reportes/tests/test_views.py` — `mis_reportes.html` response contains a hidden badge link to `reportes_sincronizacion` and loads `offline-db.js`/`pendientes-badge.js`.
-- [ ] 5.2 GREEN: add hidden badge markup + script tags to `mis_reportes.html`.
-- [ ] 5.3 Create `reportes/static/reportes/pendientes-badge.js`: `borradores.where("estado").anyOf(...).count()`, reveal badge with count or keep hidden at 0.
+- [x] 5.1 RED: `reportes/tests/test_views.py` — `mis_reportes.html` response contains a hidden badge link to `reportes_sincronizacion` and loads `offline-db.js`/`pendientes-badge.js`.
+- [x] 5.2 GREEN: add hidden badge markup + script tags to `mis_reportes.html`.
+- [x] 5.3 Create `reportes/static/reportes/pendientes-badge.js`: `borradores.where("estado").anyOf(...).count()`, reveal badge with count or keep hidden at 0.
 - [ ] 5.4 Manual DevTools: 3 pending rows → badge shows "3"; 0 rows → badge hidden; click navigates to S-15 route.
 
 ## Phase 6: Service Worker (D7)
 
-- [ ] 6.1 RED: `reportes/tests/test_estatico.py` — `client.get("/sw.js")` body contains `/reportes/sincronizacion/` in the navigation branch and `CACHE = "reportes-offline-v7"`.
-- [ ] 6.2 GREEN: add the sincronizacion path to `esNavegacionDePaso`-equivalent branch (or a new navigate-match), bump `CACHE` to `v7` in `sw.js`.
+- [x] 6.1 RED: `reportes/tests/test_estatico.py` — `client.get("/sw.js")` body contains `/reportes/sincronizacion/` in the navigation branch and `CACHE = "reportes-offline-v20"`.
+- [x] 6.2 GREEN: add the sincronizacion path to `esNavegacionDePaso`-equivalent branch (or a new navigate-match), bump `CACHE` to `v20` in `sw.js`.
 - [ ] 6.3 Manual DevTools: load S-15 online once, go offline, reload — screen renders from cache per network-first-with-fallback contract.
 
 ## Phase 7: Full Suite + Docs
 
-- [ ] 7.1 Run `pytest` full suite; fix regressions.
-- [ ] 7.2 Update `BACKLOG.md` entry for S-15/backlog item to done, referencing this change.
+- [x] 7.1 Run `pytest` full suite; fix regressions. Result: 366 passed (whole repo excluding `test_views.py`) + 112 passed (`test_views.py`), no regressions attributable to this change.
+- [x] 7.2 Update `BACKLOG.md` entry for S-15/backlog item to done, referencing this change.

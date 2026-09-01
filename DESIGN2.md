@@ -79,18 +79,20 @@ inserta tarjeta ámbar y abre la observación (borde negro = requerida).
 Tres pesos: negro sólido (`completo`, `falló 2v` en ámbar sólido), borde negro (`mi turno`,
 `local`, `offline`), borde gris (`pend. otra parte`, `borrador`, `pendiente`).
 
-**Tarjeta de aviso.** Neutra: superficie blanca, borde `#d9d5cf`, texto 13 px. Ámbar: fondo
-`#fdf1dc`, borde `#e0bd7c`, título 14/600 + explicación 13 px.
+**Toast de aviso.** **(Corrección 2026-09-01: no es una tarjeta inline — es el toast flotante
+implementado en `static/js/toasts.js`/`components.css`.)** Aparece en la esquina inferior derecha,
+tres variantes (ERROR / ATENCIÓN / LISTO); ERROR no se auto-cierra (espera dismiss manual),
+las demás se auto-cierran a los 5 s.
 
 **Barra de acciones.** Secundario a la izquierda (borde negro, relleno negro al hover), primario a
 la derecha. El primario deshabilitado **siempre** lleva la razón en mono 10 px debajo, alineada a
 la derecha ("falta 1 campo obligatorio", "corregí los 3 errores primero", "faltan las secciones 4 y 5",
 "sin señal · se reintenta solo al reconectar").
 
-**Hoja modal (S-09).** Velo `rgba(20,19,15,0.5)` sobre la pantalla anterior atenuada, hoja anclada
-abajo con borde superior 2 px negro, tirador 44 × 4, encabezado blanco con conteo mono, cuerpo con
-scroll y barra de acciones propia. Errores en tarjeta de borde negro con `→` por fila (enlace al
-campo); advertencias en tarjeta ámbar sin acción.
+**Pantalla de validación (S-09).** **(Corrección 2026-09-01: no es un modal — es una pantalla
+completa propia, `revision.html`.)** Encabezado con conteo mono, cuerpo con scroll y barra de
+acciones propia. Errores en tarjeta de borde negro con `→` por fila (enlace al campo);
+advertencias en tarjeta ámbar sin acción.
 
 ## 5. Estados representados en el mockup
 
@@ -125,9 +127,10 @@ registrar se muestra como `--:--` en gris con ayuda "tocá para usar la hora act
 Término anterior al inicio es el **único error bloqueante** del paso: borde 2 px en la tarjeta y en
 el campo culpable, mensaje 13/600, y razón en la barra de acciones ("corregí la hora del ítem 03").
 
-**Adjuntos (S-08).** Grilla de 2 columnas: miniatura 104 px + nombre, peso y `local` en mono;
-la celda de agregar es un recuadro punteado negro de 152 px con `+`, rótulo y límites
-(máx. 5 · 5 MB c/u). El peso sin subir se comunica con tarjeta ámbar que aclara explícitamente
+**Adjuntos (S-08).** Grilla de 2 columnas: miniatura 104 px que muestra la foto real + nombre,
+peso y `local` en mono; la celda de agregar es un recuadro punteado negro de 152 px con `+`,
+rótulo y límite **(corrección 2026-09-01: 8 MB por archivo, sin tope de cantidad —
+`adjuntos.js`)**. El peso sin subir se comunica con tarjeta ámbar que aclara explícitamente
 que **no bloquea** generar el documento.
 
 ## 7. Pendiente

@@ -74,10 +74,10 @@ DESIGN2 §4 definition, including the touch-target ranges in DESIGN2 §3
 
 ### Requirement: Template Retrofit With No Behavior Change
 
-The 11 in-scope templates (`base.html`, `login.html`, `mis_reportes.html`,
-`paso.html`, `participantes.html`, `adjuntos.html`, `revision.html`, and the
-4 `tipos_reporte` templates) MUST reference `tokens.css` and `components.css`
-and apply the matching DESIGN2 component classes to their existing markup.
+Every template in the project MUST inherit the design system through
+`base.html` — which is the single place `tokens.css` and `components.css` are
+linked — and MUST apply the DESIGN2 component classes to its markup rather
+than declaring its own inline styling.
 These changes MUST NOT alter any view logic, URL, form field name, validation
 rule, or server-rendered data; only markup structure/classes and linked
 stylesheets MAY change.
@@ -99,6 +99,95 @@ stylesheets MAY change.
   `static/css/components.css`
 - AND no `<link>`/`<script>` tag references a third-party CDN font or
   stylesheet
+
+### Requirement: Shared Navigation Sidebar
+
+`base.html` MUST include one shared navigation sidebar partial
+(`templates/partials/sidebar.html`), rendered once for every authenticated
+screen. Screens MUST NOT declare their own inline navigation markup.
+
+The sidebar MUST contain, in order: a brand block, the primary navigation
+(Inicio, Mis reportes, Nuevo reporte), an administration group, a footer with
+the user's avatar initial, email and role, and a logout form.
+
+The administration group (Usuarios, Tipos de reporte) MUST render only when
+`request.user.es_administrador` is true. Showing it to everyone would offer
+links whose views answer 403 on click.
+
+The item matching the current route MUST be marked as current, resolved from
+`request.resolver_match.url_name`.
+
+Each item MUST carry an inline 16x16 `stroke="currentColor"` SVG icon,
+matching the icon convention already used elsewhere in the system, and marked
+`aria-hidden`.
+
+At viewports of 768px and below the sidebar collapses to a horizontal bar and
+the footer block MUST be hidden — the collapsed bar has no room for a stacked
+two-line block, and the avatar/email are not the most useful information in
+that context.
+
+#### Scenario: Sidebar renders once from base
+
+- GIVEN any authenticated screen is rendered
+- WHEN the response HTML is inspected
+- THEN exactly one `.escritorio__sidebar` element is present
+
+#### Scenario: Administration group is hidden for non-administrators
+
+- GIVEN an authenticated `Usuario` with `rol="usuario"`
+- WHEN any screen is rendered
+- THEN the sidebar shows no link to the user or report-type administration screens
+
+#### Scenario: Administration group is shown for administrators
+
+- GIVEN an authenticated `Usuario` with `rol="administrador"`
+- WHEN any screen is rendered
+- THEN the sidebar shows links to both administration screens
+
+#### Scenario: Current route is marked
+
+- GIVEN the user is on the "Mis reportes" screen
+- WHEN the sidebar is rendered
+- THEN that item carries the current-item modifier class and no other item does
+
+### Requirement: Flash Messages Render as Dismissible Toasts
+
+Django flash messages MUST render in `base.html` as a floating toast stack in
+the lower-right corner, one `.aviso` per message, carrying its level as a
+modifier class and `role="alert"`.
+
+Every toast MUST offer an explicit close control with an accessible label.
+
+Toasts whose level is NOT error MUST auto-dismiss after 5 seconds so they do
+not accumulate across a session. Error toasts MUST stay on screen until the
+user dismisses them — a mistake is worth reading twice.
+
+The driving script MUST be a vanilla IIFE that no-ops when the toast
+container is absent, touching only its own container and children.
+
+#### Scenario: Error toast persists
+
+- GIVEN a view adds an error-level flash message
+- WHEN the page renders and 5 seconds elapse
+- THEN the toast is still present
+
+#### Scenario: Success toast auto-dismisses
+
+- GIVEN a view adds a success-level flash message
+- WHEN the page renders and 5 seconds elapse
+- THEN the toast is removed from the DOM
+
+#### Scenario: Toast is manually dismissible
+
+- GIVEN any toast is on screen
+- WHEN the user activates its close control
+- THEN that toast is removed and the remaining toasts stay
+
+#### Scenario: Script no-ops without a container
+
+- GIVEN a page rendering no flash messages
+- WHEN the toast script runs
+- THEN it exits without error and modifies nothing
 
 ### Requirement: No Framework or Build Step
 
