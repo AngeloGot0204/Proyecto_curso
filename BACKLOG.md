@@ -15,7 +15,7 @@
 | 11 | Adjuntos (croquis/evidencia) | **✓ DONE** — `Adjunto`, compresión en dispositivo antes de subir, bloqueo solo del adjunto si formato no soportado, almacenamiento en Vercel Blob | #9 | — |
 | 12 | "Mis reportes" (S-02) | **✓ DONE** — Listado agrupado por estado (en progreso / listos para generar / terminados), con filtro adicional creados-por-mí/compartidos-conmigo, buscador. Cada tarjeta muestra % de avance y N° de registro (o chip `local` si aún no se asignó). Botón fijo "+ Nuevo reporte" que lleva a una pantalla de selección de tipo de reporte (S-03). Cada tarjeta propia ofrece eliminar el reporte (borrado lógico, solo el creador). Specs: `listado-reportes`, `seleccion-tipo-reporte` | #10 | — |
 | 13 | Administración de tipos de reporte (S-14) | **✓ DONE** — CRUD de `TipoDeReporte`, subida de logo con fallback, subida de plantilla y definición | #3 | Reglas de negocio del formato de reporte específico (si se agrega un tipo nuevo con checklist propio, ej. PPI Shotcrete) |
-| 14 | Observabilidad (Sentry) | **✓ DONE** — Captura de errores de generación y sincronización (ADR-0008) | #7 | — |
+| 14 | Observabilidad (Sentry) | **✓ DONE** — Captura de errores de generación y de excepciones no manejadas vía Sentry (ADR-0008); `SENTRY_DSN` opcional, sin PII. Spec: `observabilidad` | #7 | — |
 | 15 | ~~Retrofit visual (DESIGN2)~~ **✓ DONE** | Aplicar DESIGN2 visual language a todos los templates vía `base.html`, crear `tokens.css` + `components.css`, sidebar de navegación compartido, toasts de mensajes flash, self-hosted mono font, extender service worker cache; zero behavior change. Spec: `visual-design-system` | — | — |
 
 ## Cómo usar este backlog
