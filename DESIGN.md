@@ -38,15 +38,16 @@ No existe auto-registro. La contraseña inicial la entrega el administrador.
 
 | ID | Pantalla | Plataforma | Referencia wireframe |
 |---|---|---|---|
+| S-00 | Inicio · resumen por estado (landing post-login) | móvil + escritorio | — |
 | S-01 | Login | móvil + escritorio | 1a |
-| S-02 | Inicio · mis reportes + cola de subida | móvil | 1b |
+| S-02 | Mis reportes + cola de subida | móvil | 1b |
 | S-03 | Nuevo reporte · selección de tipo/plantilla | móvil | 1c |
 | S-04 | Paso 1 · Datos generales (~18 campos) | móvil | 1d |
 | S-05 | Paso 2 · Parámetros preliminares (7 ítems, Sí/No por rol) | móvil | 1e |
 | S-06 | Paso 3 · Proceso de instalación (11 ítems, horas + Δ manual) | móvil | 1f |
 | S-07 | Paso 4 · Ensayo de Pull Test (4 ítems) | móvil | 1g |
 | S-08 | Paso 5 · Resultados, observaciones y adjuntos | móvil | 1h |
-| S-09 | Validación al cerrar (errores vs. advertencias) | móvil, hoja modal | 1i |
+| S-09 | Validación al cerrar (errores vs. advertencias) y visto bueno | móvil | 1i |
 | S-10 | Estado del reporte · handoff entre roles | móvil | 1j |
 | S-13 | Admin · usuarios | escritorio | 1m |
 | S-14 | Admin · tipo de reporte + logo | escritorio | 1n |
@@ -79,9 +80,8 @@ Logo institucional configurable, usuario/correo, contraseña, botón primario, n
 modo offline con los datos cacheados.
 
 ### S-00 Inicio
-**(Agregada 2026-09-01, faltaba del inventario)** Landing post-login (`usuarios/views.py::inicio`,
-spec `listado-reportes` — "Replaces Placeholder Landing View"). Pantalla real de bienvenida/resumen,
-no un redirect ciego a "Mis reportes": muestra un conteo por grupo (**En progreso**, **Listos
+Landing post-login (`usuarios/views.py::inicio`, spec `listado-reportes`).
+Pantalla real de bienvenida/resumen, no un redirect a "Mis reportes": muestra un conteo por grupo (**En progreso**, **Listos
 para generar**, **Terminados**) sobre los reportes accesibles del usuario, calculado con el mismo
 pipeline que S-02 usa (`agrupar_por_bucket`) para que nunca desincronice con esa lista.
 
@@ -124,8 +124,7 @@ formatos soportados visibles antes de adjuntar). Nota fija: las firmas se genera
 blanco en el Excel.
 
 ### S-09 Validación al cerrar
-**(Corrección 2026-09-01: es pantalla completa, no modal — ver DESIGN2 L90-93.)** Dos listas
-separadas:
+Pantalla completa (no modal) con dos listas separadas:
 - **Debes corregir** — cada ítem enlaza al campo exacto; el botón "Generar" queda deshabilitado.
 - **Advertencias** — ítems "No cumple" y datos atípicos; no bloquean.
 
@@ -135,9 +134,7 @@ Es también, hoy, la pantalla dueña del cierre: incluye el botón **"Marcar com
 bueno, no por completitud automática.
 
 ### S-10 Estado del reporte · participantes
-**(Corrección 2026-09-01: el cierre NO vive acá — vive en S-09. Este change,
-`cierre-en-participantes`, se propuso para moverlo aquí pero quedó abandonado/revertido; ver su
-`proposal.md`.)** Lista de **participantes invitados** (usuario · secciones que completó ·
+El cierre **no** vive en esta pantalla: es de S-09. Lista de **participantes invitados** (usuario · secciones que completó ·
 última edición), acción **"Compartir con…"** para invitar a otro usuario, avance por sección y
 acceso al **historial de cambios** (quién editó qué y cuándo).
 

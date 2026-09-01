@@ -2,7 +2,28 @@
 
 ## Estado
 
-Aceptado
+Aceptado — con dos salvedades de implementación, ver abajo.
+
+## Estado de implementación
+
+Verificado contra el código el 2026-09-01.
+
+**En efecto:** el borrador local en IndexedDB (vía Dexie), el service worker
+que cachea la página del paso ya renderizada, y la cola de subida con
+reintento manual e idempotencia por `id_local`.
+
+**No se implementó como se decidió:**
+
+1. **Workbox.** El service worker está escrito a mano, sin dependencias
+   (`reportes/templates/reportes/sw.js`). Se sirve como template de Django para
+   que las URLs de los estáticos sigan siendo autoritativas entre entornos.
+2. **"Por sección de rol".** No existen roles por sección: ADR-0003 los
+   descartó y `ValorDeReporte` no lleva campo de rol. La sincronización es
+   **por sección del wizard**, y cualquier participante invitado edita
+   cualquier sección. El título de este ADR conserva la redacción original.
+
+Además, el bloqueo de edición simultánea que este ADR referencia (ADR-0006)
+nunca se construyó.
 
 ## Contexto
 
@@ -32,8 +53,7 @@ Implementar el modo offline con tres piezas:
 1. **Borrador local en IndexedDB**, con **Dexie.js** como capa sobre IndexedDB (decisión #6 de
    RESOLUCION-ADVERSARIAL.md). Cada cambio de campo persiste en el dispositivo, de forma que
    "Atrás" nunca pierde datos y el trabajo sobrevive al cierre de la aplicación.
-2. **Service worker** **(corrección 2026-09-01: escrito a mano, sin dependencias — no Workbox;
-   ver `reportes/templates/reportes/sw.js`)**, que cachea el app shell y los
+2. **Service worker**, construido con **Workbox** (decisión #6), que cachea el app shell y los
    recursos estáticos, permitiendo abrir y operar la aplicación sin señal cuando ya existe una
    sesión previa. Lo que se cachea para cada tipo de reporte es la **página del wizard ya
    renderizada en HTML por Django** (ADR-0001) — no una definición JSON/YAML que el navegador
@@ -57,8 +77,7 @@ un único despliegue (ADR-0001), este contrato es interno y no requiere versiona
 RESOLUCION-ADVERSARIAL.md).** El modo offline cubre la captura de datos propios sin señal; no
 cubre trabajar sin conexión sobre un reporte compartido mientras otro participante podría estar
 editándolo al mismo tiempo. Esa colaboración simultánea es **estrictamente online**: requiere
-conexión para conocer y respetar el bloqueo de edición descrito en la ADR-0006 **(nota 2026-09-01:
-ese bloqueo no está implementado — ver la corrección en ADR-0006)**.
+conexión para conocer y respetar el bloqueo de edición descrito en la ADR-0006.
 
 **Correlativo del reporte: generado por secuencia de base de datos (decisión #9 de
 RESOLUCION-ADVERSARIAL.md).** El número de registro oficial (`numero_registro`) que el servidor

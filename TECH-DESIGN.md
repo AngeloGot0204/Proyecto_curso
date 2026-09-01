@@ -73,9 +73,9 @@ sin ADR propia por no constituir una decisión con alternativas reales.
 | [ADR-0001](adrs/0001-arquitectura-de-componentes.md) | Aplicación Django monolítica con capa offline mínima en JavaScript | Aceptado |
 | [ADR-0002](adrs/0002-motor-de-generacion-de-excel.md) | Generar el `.xlsx` rellenando la plantilla original con openpyxl | Aceptado |
 | [ADR-0003](adrs/0003-modelo-de-datos-y-plantillas.md) | Tipos de reporte definidos por configuración declarativa y valores en almacenamiento genérico | Aceptado |
-| [ADR-0004](adrs/0004-estrategia-offline-y-sincronizacion.md) | Offline con IndexedDB, service worker y sincronización por sección de rol | Aceptado |
-| [ADR-0005](adrs/0005-autenticacion-y-sesion.md) | Autenticación con sesiones de Django y sesión tolerante al modo offline | Aceptado |
-| [ADR-0006](adrs/0006-colaboracion-permisos-y-cierre-del-reporte.md) | Colaboración por invitación explícita, edición abierta con registro de cambios y cierre manual | Aceptado |
+| [ADR-0004](adrs/0004-estrategia-offline-y-sincronizacion.md) | Offline con IndexedDB, service worker y sincronización por sección de rol | Aceptado, con salvedades |
+| [ADR-0005](adrs/0005-autenticacion-y-sesion.md) | Autenticación con sesiones de Django y sesión tolerante al modo offline | Aceptado, sin la mitad offline |
+| [ADR-0006](adrs/0006-colaboracion-permisos-y-cierre-del-reporte.md) | Colaboración por invitación explícita, edición abierta con registro de cambios y cierre manual | Aceptado, sin el bloqueo de edición |
 | [ADR-0007](adrs/0007-sin-vista-previa-en-la-aplicacion.md) | Sin vista previa del reporte dentro de la aplicación | Aceptado |
 | [ADR-0008](adrs/0008-resiliencia-y-observabilidad.md) | Fallo limpio en generación, validación anticipada de configuración y observabilidad con Sentry | Aceptado |
 | [ADR-0009](adrs/0009-despliegue-e-infraestructura.md) | Despliegue en Vercel, base de datos en Neon y almacenamiento en Vercel Blob | Aceptado |
@@ -130,7 +130,7 @@ S-14 exige que la imagen sea un dato de `TipoDeReporte` y no parte del código.
 
 ### Ciclo de vida del reporte
 
-**(Corrección 2026-09-01)** `Reporte.estado` solo persiste dos valores: `en_progreso` y
+`Reporte.estado` solo persiste dos valores: `en_progreso` y
 `terminado` (`EstadoDeReporte`). No existe un tercer valor de esquema para "completo" ni para
 "generado" — no hay campo que registre si ya se descargó el `.xlsx` (eso lo audita `Generacion`,
 una entidad aparte, no un estado del reporte).

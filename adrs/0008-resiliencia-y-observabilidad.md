@@ -15,9 +15,10 @@ ADR-0004 mediante cola, reintento manual e idempotencia por ID local.
 quedaron resueltos únicamente por eso — la idempotencia de la ADR-0004 evita duplicar un reporte
 por un reintento, pero no dice nada sobre dos personas editando el **mismo** reporte a la vez. Ese
 caso se resuelve con el bloqueo de edición "en edición por `<usuario>`" descrito en la ADR-0006
-(liberación manual o por 10 minutos de inactividad), no en la ADR-0004. **(Nota 2026-09-01: ese
-bloqueo nunca se implementó — ver la corrección en ADR-0006. Este caso de dos ediciones
-simultáneas sigue sin resolverse en el código, solo queda `CambioDeValor` como registro.)**
+(liberación manual o por 10 minutos de inactividad), no en la ADR-0004.
+
+> Ese bloqueo **nunca se implementó**, de modo que la edición simultánea sigue sin resolverse en
+> el código. Ver "Estado de implementación" en ADR-0006.
 
 Restan tres modos de fallo sin cubrir:
 

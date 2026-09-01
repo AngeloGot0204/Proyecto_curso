@@ -2,7 +2,23 @@
 
 ## Estado
 
-Aceptado
+Aceptado — la mitad offline nunca se implementó, ver abajo.
+
+## Estado de implementación
+
+Verificado contra el código el 2026-09-01.
+
+**En efecto:** autenticación por sesión de Django (`django.contrib.auth`),
+`SESSION_COOKIE_AGE` de 7 días, cuentas creadas por un administrador y sin
+auto-registro.
+
+**No se implementó:** la "sesión tolerante" offline. No existe caché de
+credenciales ni login sin conexión — autenticarse requiere red. Lo que sí es
+tolerante al offline es el trabajo **una vez logueado**: un paso completado sin
+señal queda en IndexedDB y, si la sesión expiró al sincronizar, se pide login
+de nuevo y el paso guardado se conserva, nunca se descarta.
+
+Queda como trabajo pendiente si el login offline llega a ser un requisito real.
 
 ## Contexto
 
@@ -26,13 +42,10 @@ Usar el **sistema de sesiones y autenticación integrado de Django** (cookie de 
 en `django.contrib.auth` para login, cambio y reseteo de contraseña, y en el admin de Django para
 la gestión de usuarios y roles.
 
-**(Corrección 2026-09-01: esta "sesión tolerante" no está implementada — no existe caché de
-credenciales ni login offline en el código.)** El login es el flujo estándar de Django
-(`django.contrib.auth`), sin variante offline: se necesita conexión para autenticarse. Lo que sí
-es offline-tolerante es el trabajo **una vez logueado**: un paso del formulario completado sin
-señal queda guardado en IndexedDB (ADR-0004) y, si la sesión expiró para cuando se sincroniza, se
-solicita iniciar sesión nuevamente y **el paso guardado localmente se conserva**, nunca se
-descarta — ver nota pendiente en memoria del equipo ("login offline pendiente").
+Para el modo offline se adopta una **sesión tolerante**: si el dispositivo tiene una sesión previa
+válida en caché, la aplicación abre y permite trabajar sobre los datos locales sin verificar
+credenciales. La validación real de la sesión ocurre **al sincronizar**; si ha expirado, se solicita
+iniciar sesión nuevamente y **el borrador local se conserva**, nunca se descarta.
 
 **Duración de la sesión (decisión #10 de RESOLUCION-ADVERSARIAL.md, corrige la contradicción
 señalada en la revisión adversarial):** la sesión dura **7 días** (`SESSION_COOKIE_AGE = 604800`),

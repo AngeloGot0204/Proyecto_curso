@@ -105,16 +105,14 @@ definición declarativa por tipo de reporte y almacenamiento genérico de valore
   genera como espacio en blanco para firmar en el documento descargado, igual que hoy.
 - No incluye edición del reporte una vez generado y descargado (para corregir habría que volver
   a completar el formulario o editar el archivo descargado fuera de la app).
-- **(Corrección, decisión #14 de RESOLUCION-ADVERSARIAL.md)** Sí existe una pantalla de historial y
-  búsqueda de reportes pasados propios: "Mis reportes" (S-02 del DESIGN) agrupa los reportes por
+- Sí existe una pantalla de historial y búsqueda de reportes pasados propios: "Mis reportes" (S-02 del DESIGN) agrupa los reportes por
   estado (en progreso, listos para generar, terminados) con buscador y filtros. Lo
   que **no** incluye esta versión son reportes de gestión ni analítica agregada sobre reportes
   pasados (comparativas, estadísticas entre reportes, exportables de gestión).
 - No incluye soporte multi-tenant / multi-empresa con branding distinto por cliente.
-- **(Corrección 2026-09-01)** La creación de nuevos tipos de reporte SÍ se hace desde la interfaz
-  web hoy (`tipos_reporte/views.py::crear_tipo`, pantalla S-14 de administración): un administrador
-  carga tipo, plantilla `.xlsx` y definición sin tocar código. No incluye self-service para
-  usuarios no administradores.
+- La creación de nuevos tipos de reporte se hace desde la interfaz web, en la pantalla de
+  administración (S-14): un administrador carga el tipo, su plantilla `.xlsx` y su definición sin
+  tocar código. No incluye self-service para usuarios no administradores.
 - No incluye integración automática con otros sistemas (ERP, sistemas de gestión de calidad,
   firma electrónica) para traer o enviar datos.
 - No incluye auto-registro de usuarios (las cuentas las crea únicamente el administrador).
@@ -176,8 +174,7 @@ definición declarativa por tipo de reporte y almacenamiento genérico de valore
 - El reporte **no se cierra automáticamente** al completarse los campos: la persona encargada de
   revisarlo da el visto bueno y lo marca como terminado. Ese acto habilita la generación del
   documento final.
-- **(Corrección 2026-09-01 — reemplaza la corrección #14 de RESOLUCION-ADVERSARIAL.md, que quedó
-  desactualizada frente al código)** El `Reporte` se crea **online**: el POST a "Nuevo reporte"
+- El `Reporte` se crea **online**: el POST a "Nuevo reporte"
   necesita conexión, y el número de registro oficial lo asigna el servidor en ese mismo momento
   (secuencia de BD sobre `numero_registro`), no "al sincronizar". No existe un estado
   `borrador local` previo a la creación del `Reporte` en el servidor.

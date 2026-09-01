@@ -2,7 +2,26 @@
 
 ## Estado
 
-Aceptado
+Aceptado — el bloqueo de edición simultánea fue rechazado en la práctica, ver abajo.
+
+## Estado de implementación
+
+Verificado contra el código el 2026-09-01.
+
+**En efecto:** colaboración por invitación explícita
+(`ParticipacionEnReporte`), edición abierta de cualquier sección por cualquier
+participante, registro de cambios con auditoría FIFO de 30 por reporte
+(`CambioDeValor`), y cierre manual reservado al creador (`VistoBueno`).
+
+**Rechazado de hecho:** el bloqueo "en edición por `<usuario>`" con liberación
+manual o por 10 minutos de inactividad. No existe en el código ningún campo,
+vista ni JavaScript que marque un reporte como en edición ni que lo ponga en
+solo lectura para el resto.
+
+Hoy dos participantes pueden editar el mismo campo a la vez sin aviso: gana la
+última escritura y `CambioDeValor` queda como único rastro para reconstruir qué
+pasó. Si se quiere el bloqueo, necesita spec y diseño propios — esta decisión
+no alcanza como respaldo.
 
 ## Contexto
 
@@ -58,14 +77,19 @@ terminado" de S-10 se habilita únicamente si el usuario actual es el **creador*
 Por ahora **no hay intervención de administrador** si el creador nunca da el visto bueno y el
 reporte queda completo sin cerrar — queda pendiente para una versión posterior.
 
-**Bloqueo de edición para uso simultáneo online (decisión #3 de RESOLUCION-ADVERSARIAL.md) —
-NO IMPLEMENTADO.** **(Nota 2026-09-01)** Esta ADR había decidido un bloqueo "en edición por
-`<usuario>`" con liberación manual o por 10 minutos de inactividad, pero nunca se construyó: no
-hay en el código ningún campo, vista ni JS que marque un reporte como "en edición" ni que lo
-ponga en solo lectura para otros participantes. Hoy dos participantes pueden editar el mismo campo
-a la vez sin aviso; solo queda el registro de cambios (`CambioDeValor`) para reconstruir qué pasó
-después. Esta misma decisión está repetida (y también sin construir) en ADR-0004 y ADR-0008 —
-si se sigue queriendo, requiere spec y diseño propios antes de implementarse.
+**Bloqueo de edición para uso simultáneo online (decisión #3 de RESOLUCION-ADVERSARIAL.md).** La
+edición abierta descrita arriba resuelve quién *puede* editar, pero no qué pasa si dos
+participantes editan **a la vez**. Al abrir un reporte para editar, éste queda marcado "en edición
+por `<usuario>`"; el resto de los participantes lo ven en **solo lectura** hasta que se libere:
+- **manualmente**, con el botón "dejar de editar" del usuario que lo tiene abierto, o
+- **automáticamente**, tras **10 minutos de inactividad** de ese usuario.
+
+Este bloqueo es un mecanismo exclusivamente **online**: la colaboración offline sobre un reporte
+ajeno no está soportada (ver ADR-0004). No sustituye al registro de cambios: sigue existiendo un
+historial de quién editó qué, el bloqueo sólo evita que dos personas pisen el mismo campo al mismo
+tiempo sin saberlo.
+
+> Este bloqueo **nunca se implementó**. Ver "Estado de implementación" al inicio de este ADR.
 
 ## Alternativas consideradas
 
