@@ -767,7 +767,7 @@ def test_sw_js_contiene_cache_v7(client):
     response = client.get("/sw.js")
     contenido = response.content.decode()
 
-    assert "reportes-offline-v20" in contenido
+    assert "reportes-offline-v21" in contenido
 
 
 @pytest.mark.django_db

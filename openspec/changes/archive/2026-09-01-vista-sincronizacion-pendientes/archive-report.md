@@ -73,8 +73,19 @@ leer de qué reporte se trata.
 **Requirements violados** (`openspec/specs/sincronizacion-pendientes/spec.md`):
 "Per-Row Display Metadata" y "Draft Write Captures Display Metadata".
 
-**Arreglo propuesto:** leer la fila existente y preservar los campos que el
-helper no gestiona, en vez de reemplazar el registro entero.
+**Arreglado el 2026-09-01.** Se agrega `fusionarEnBorrador()` en
+`envio-paso.js`: lee la fila previa y fusiona los campos gestionados sobre
+ella (`Object.assign`), en vez de reemplazar el registro. Los dos puntos de
+escritura pasan por ahí. La fusión deja el contrato abierto: un campo que
+agregue cualquier otro escritor en el futuro sobrevive sin que este helper
+tenga que enterarse.
+
+Cubierto por `test_envio_paso_js_preserva_campos_no_gestionados_del_borrador`
+(tripwire de fuente, porque el proyecto no tiene runner de JS) y verificado en
+navegador: tras un reintento fallido la fila conserva tipo y fecha.
+
+Se subió el cache del service worker a `v21` para que los clientes tomen el JS
+corregido en vez del cacheado.
 
 ---
 

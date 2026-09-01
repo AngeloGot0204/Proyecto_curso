@@ -217,5 +217,31 @@ def test_sw_js_cachea_sincronizacion_y_bumpea_v7(client):
     response = client.get("/sw.js")
     contenido = response.content.decode()
 
-    assert "reportes-offline-v20" in contenido
+    assert "reportes-offline-v21" in contenido
     assert "/reportes/sincronizacion/" in contenido
+
+
+def test_envio_paso_js_preserva_campos_no_gestionados_del_borrador():
+    """Spec `sincronizacion-pendientes` — "Per-Row Display Metadata" y "Draft
+    Write Captures Display Metadata".
+
+    `envio-paso.js` reescribe la fila de `borradores` en dos puntos
+    (`reconciliarEnEnvio` y `reconciliarResultado`). Dexie `put()` REEMPLAZA el
+    registro completo, de modo que un objeto literal borra todo campo que el
+    helper no conozca: `paso-offline.js` escribe `tipoNombre`/`fechaReporte` al
+    crear el borrador, y un reintento fallido los eliminaba, dejando la fila de
+    S-15 como "Reporte · <seccion>" sin tipo ni fecha.
+
+    Tripwire de fuente, no de comportamiento: este proyecto no tiene runner de
+    JS (Out of Scope de la spec `capa-offline`), así que se verifica que ambas
+    escrituras lean la fila previa y la fusionen en vez de reemplazarla."""
+    ruta = finders.find("reportes/envio-paso.js")
+    with open(ruta, "r", encoding="utf-8") as archivo:
+        contenido = archivo.read()
+
+    # Lee la fila existente antes de escribir, en vez de asumir sus campos.
+    assert "borradores.get(" in contenido
+    # Fusiona sobre lo previo: los campos no gestionados sobreviven.
+    assert "Object.assign(" in contenido
+    # Ninguna de las dos escrituras pasa un literal directo a put().
+    assert "put({" not in contenido
