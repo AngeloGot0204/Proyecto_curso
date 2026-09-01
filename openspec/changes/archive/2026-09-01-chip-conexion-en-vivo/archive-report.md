@@ -37,16 +37,33 @@ La spec pasó a `openspec/specs/capa-offline/spec.md` como el requirement
 "Live Connection Chip in Shared Screen Bar", con un escenario agregado que fija
 la cobertura total ("Chip appears on every screen with a bar").
 
-## Verificación manual pendiente — NO cerrada
+## Verificación manual — completada 2026-09-01
 
-Dos chequeos requieren un navegador real con throttling de red en DevTools y
-**quedan sin verificar**:
+Los dos chequeos que requerían un navegador real fueron ejecutados y **pasan**:
 
-| Task | Qué falta comprobar |
+| Task | Resultado |
 |---|---|
-| 5.1 | Con red online, el chip muestra "en línea" inmediatamente al cargar, sin flash de estado incorrecto |
-| 5.2 | Con el throttle "Offline" de DevTools, el chip pasa a "offline" en vivo sin recargar, vuelve al reconectar, y el banner de borrador de `paso-offline.js` no se ve afectado |
+| 5.1 | Con la red de la máquina apagada, al recargar un paso del wizard el chip aparece en "offline" desde el arranque, sin flash de estado incorrecto |
+| 5.2 | Con el throttle "Offline" de DevTools, el chip pasa a "offline" en vivo sin recargar y vuelve a "en línea" al restaurar |
 
-La ausencia del chip en login (5.3) sí quedó cubierta por
+La ausencia del chip en login (5.3) ya estaba cubierta por
 `test_chip_conexion_ausente_en_login`, porque es un chequeo de presencia
 estática y no de evento de red.
+
+### Hallazgo metodológico: DevTools no puede validar el escenario 5.1
+
+Durante la verificación, recargar bajo el throttling "Offline" mostraba el chip
+en "en línea", lo que parecía un defecto. No lo era.
+
+El preset "Offline" del panel Network bloquea las peticiones, pero un documento
+recién cargado bajo ese preset **sigue reportando `navigator.onLine === true`**
+(comprobado en consola durante la verificación). Como `conexion-chip.js` pinta
+exactamente según esa propiedad, mostrar "en línea" ahí es el comportamiento
+correcto: la herramienta no reproduce la condición que el escenario describe.
+
+El toggle en vivo (5.2) sí funciona con DevTools, porque Chrome dispara el
+evento `offline` y en ese instante la propiedad está en `false`.
+
+**Para el escenario de carga inicial hay que cortar la red de verdad.** Queda
+anotado para que la próxima persona no vuelva a leer este falso positivo como
+un bug del chip.

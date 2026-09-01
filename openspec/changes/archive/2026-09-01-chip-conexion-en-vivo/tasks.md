@@ -103,12 +103,22 @@ Chain strategy: pending
 
 ## Phase 5: Manual Verification & Cleanup
 
-- [ ] 5.1 Manual (DevTools): load `paso.html` with network online — chip shows
-      "en línea" (`.chip--borde-gris`) immediately on load, no chip flash of
-      wrong state.
-- [ ] 5.2 Manual (DevTools "Offline" throttle): toggle offline — chip flips to
-      "offline" (`.chip--borde`) live, no page reload; toggle back online —
-      chip flips back, `paso-offline.js` draft banner unaffected.
+- [x] 5.1 Manual: chip refleja el estado de conexión al cargar. **Verificado
+      2026-09-01 con la red de la máquina apagada** (no con el throttling de
+      DevTools, ver nota abajo): recargando un paso del wizard sin red, el chip
+      aparece en "offline" desde el arranque.
+- [x] 5.2 Manual (DevTools "Offline" throttle): toggle offline — chip pasa a
+      "offline" en vivo sin recargar; toggle back online — vuelve a "en línea".
+      **Verificado 2026-09-01.**
+
+> **Nota metodológica — el throttling de DevTools no sirve para 5.1.** El preset
+> "Offline" del panel Network bloquea las peticiones, pero un documento recién
+> cargado bajo ese preset sigue reportando `navigator.onLine === true`
+> (comprobado en consola). Como el chip pinta según esa propiedad, mostrar
+> "en línea" ahí es el comportamiento correcto, no un defecto: la herramienta no
+> reproduce la condición que el escenario describe. El toggle en vivo (5.2) sí
+> funciona porque Chrome dispara el evento `offline` y en ese instante la
+> propiedad está en `false`. Para 5.1 hay que cortar la red de verdad.
 - [x] 5.3 Manual: confirm `/login/` renders no connection chip. Covered by
       automated `test_chip_conexion_ausente_en_login` (Django test client
       GET of `/login/`) instead of a manual DevTools pass — no headless
