@@ -6,6 +6,7 @@
 <header class="barra-pantalla">
     <a class="barra-pantalla__volver" href="{% url 'tipos_lista' %}" aria-label="Volver a Tipos de reporte">←</a>
     <h1 class="barra-pantalla__titulo">{{ tipo.nombre }}</h1>
+    {% include "_chip_conexion.html" %}
 </header>
 {% endblock %}
 

@@ -6,6 +6,7 @@
 <header class="barra-pantalla">
     <a class="barra-pantalla__volver" href="{% url 'usuarios_lista' %}" aria-label="Volver a Usuarios">←</a>
     <h1 class="barra-pantalla__titulo">{% if usuario %}Editar {{ usuario.username }}{% else %}Nuevo usuario{% endif %}</h1>
+    {% include "_chip_conexion.html" %}
 </header>
 {% endblock %}
 
