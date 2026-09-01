@@ -155,6 +155,34 @@ Transport-security settings MUST derive from an explicit, fail-loud, strictly-pa
 - THEN Production and Preview MUST show exactly `True`
 - AND Development MUST show exactly `False`
 
+### Requirement: Explicitly Pinned Python Version
+
+The Python version MUST be pinned explicitly in a committed `.python-version`
+file, so development and production run the same interpreter and the choice is
+visible rather than derived.
+
+Without that file, Vercel resolves the version from `requires-python` in
+`pyproject.toml` by taking the **lower bound** of the range. That makes the
+deployed interpreter a side effect of how the range is written: lowering the
+floor to widen compatibility would silently move production to an older
+interpreter, with no diff that looks like a deployment change.
+
+Django 5.2 supports Python 3.10 through 3.14; this project runs 3.12. Changing
+it is a deliberate decision requiring its own verification, not an inherited
+consequence of a dependency range.
+
+#### Scenario: Version is pinned in the repository
+
+- GIVEN the repository
+- WHEN it is inspected
+- THEN a committed `.python-version` file names the exact deployed version
+
+#### Scenario: Build uses the pinned version
+
+- GIVEN a Vercel deployment
+- WHEN its build log is inspected
+- THEN the Python version it reports matches `.python-version`
+
 ### Requirement: Manual, Developer-Triggered Migrations
 
 Database schema changes MUST be applied to the Neon production branch by an explicit developer-run `manage.py migrate`. Migrations MUST NOT run inside a request handler and MUST NOT run as an automatic build step.

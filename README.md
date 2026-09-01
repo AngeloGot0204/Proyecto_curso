@@ -26,7 +26,7 @@ registrado con autor y fecha.
 
 ## Stack
 
-- **Django 5.2** (Python 3.12+), server-rendered, sin framework de frontend
+- **Django 5.2** sobre **Python 3.12**, server-rendered, sin framework de frontend
 - **PostgreSQL** (Neon en producción)
 - **openpyxl** para escribir sobre la plantilla `.xlsx` original
 - **JavaScript vanilla**, sin build step — IndexedDB (Dexie) y un service
@@ -36,7 +36,12 @@ registrado con autor y fecha.
 
 ## Levantar el proyecto
 
-Necesitás Python 3.12 o superior y una base PostgreSQL accesible.
+Necesitás **Python 3.12** y una base PostgreSQL accesible.
+
+La versión está fijada en `.python-version`. Vercel despliega con esa misma
+versión, así que desarrollar en otra abre la puerta a que algo funcione en tu
+máquina y falle en producción. Django 5.2 soporta de 3.10 a 3.14, pero lo que
+corre en producción hoy es 3.12.
 
 ```bash
 # 1. Entorno virtual
