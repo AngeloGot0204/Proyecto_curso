@@ -863,3 +863,48 @@ def test_claves_obligatorias_coincide_con_validar_completitud(definicion_valida)
         _validar_completitud(estructura, {})
 
     assert set(claves_obligatorias(estructura)) == set(excinfo.value.faltantes)
+
+
+# ---------------------------------------------------------------------------
+# Reparación del namespace de los dibujos (defecto reportado el 2026-09-01)
+# ---------------------------------------------------------------------------
+
+
+def test_reparar_dibujos_prefija_elementos_drawingml():
+    """openpyxl 3.1.5 serializa `avLst` y `prstDash` SIN el prefijo `a:`
+    dentro de `xl/drawings/drawingN.xml`.
+
+    Ese documento declara `xmlns=` apuntando al namespace
+    `spreadsheetDrawing`, así que un elemento sin prefijo cae en el namespace
+    equivocado: `prstGeom` exige `a:avLst` del namespace `drawingml/main`.
+    Excel considera el dibujo inválido, lo descarta entero y abre el archivo
+    con el diálogo "Parte quitada: /xl/drawings/drawing1.xml (Forma de
+    dibujo)" — el logo institucional desaparece del reporte entregado.
+
+    Reproducido con un `load_workbook` + `save` puro sobre la plantilla, sin
+    intervención de este proyecto: es un defecto de openpyxl, y se repara
+    después de guardar."""
+    from tipos_reporte.generador import _prefijar_drawingml
+
+    entrada = (
+        b'<a:prstGeom prst="rect"><avLst /></a:prstGeom>'
+        b'<a:ln><a:noFill /><prstDash val="solid" /></a:ln>'
+    )
+
+    salida = _prefijar_drawingml(entrada)
+
+    assert b"<a:avLst />" in salida
+    assert b'<a:prstDash val="solid" />' in salida
+    # No debe re-prefijar lo que ya estaba correcto.
+    assert b"<a:a:" not in salida
+
+
+def test_reparar_dibujos_no_toca_elementos_ya_prefijados():
+    """Idempotencia: pasar dos veces por la reparación no debe duplicar el
+    prefijo, para que sea seguro aplicarla sin conocer el estado previo."""
+    from tipos_reporte.generador import _prefijar_drawingml
+
+    una_vez = _prefijar_drawingml(b'<a:prstGeom><avLst /></a:prstGeom>')
+    dos_veces = _prefijar_drawingml(una_vez)
+
+    assert una_vez == dos_veces

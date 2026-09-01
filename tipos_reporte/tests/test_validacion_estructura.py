@@ -266,3 +266,34 @@ def test_problema_de_definicion_es_inmutable():
 
     with pytest.raises(Exception):
         problema.regla = "otra-regla"
+
+
+def test_mapa_de_celdas_no_ancla_soporta_rango_combinado_de_una_celda(tmp_path):
+    """Defecto encontrado el 2026-09-01 al autorar una plantilla nueva.
+
+    Excel admite combinar una sola celda (`B25:B25`). openpyxl guarda ese
+    rango con `coord == "B25"`, y `hoja["B25"]` devuelve un `Cell` suelto en
+    vez de la tupla de tuplas que devuelve un rango real. El doble `for`
+    reventaba con `TypeError: 'Cell' object is not iterable`, abortando la
+    activación con una traza cruda en vez del fallo limpio que exige
+    ADR-0008.
+
+    Un rango de una celda no aporta celdas no-ancla: la única que contiene
+    ES el ancla, así que no debe aparecer en el mapa."""
+    import openpyxl
+
+    from tipos_reporte.validacion import _mapa_de_celdas_no_ancla
+
+    ruta = tmp_path / "una-celda.xlsx"
+    wb = openpyxl.Workbook()
+    hoja = wb.active
+    hoja.merge_cells("B2:B2")
+    hoja.merge_cells("D4:F4")
+    wb.save(ruta)
+
+    hoja_leida = openpyxl.load_workbook(ruta).active
+    mapa = _mapa_de_celdas_no_ancla(hoja_leida)
+
+    assert "B2" not in mapa
+    assert mapa["E4"] == "D4"
+    assert mapa["F4"] == "D4"

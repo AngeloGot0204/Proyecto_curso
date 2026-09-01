@@ -14,6 +14,7 @@ This module implements every phase of the change's `tasks.md`: Phase 1
 """
 
 import logging
+import zipfile
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -219,6 +220,54 @@ def _exportar_solo_hoja_declarada(libro, nombre_hoja):
     libro.active = 0
 
 
+# openpyxl 3.1.5 serializa estos elementos SIN el prefijo `a:` dentro de
+# `xl/drawings/drawingN.xml`. Como ese documento declara `xmlns=` apuntando al
+# namespace `spreadsheetDrawing`, un elemento sin prefijo queda en el namespace
+# equivocado: `prstGeom` exige `a:avLst` del namespace `drawingml/main`. Excel
+# considera el dibujo inválido, lo descarta entero y abre el archivo con el
+# diálogo "Parte quitada: /xl/drawings/drawing1.xml (Forma de dibujo)",
+# perdiendo el logo institucional del reporte entregado.
+_ELEMENTOS_DRAWINGML = ("avLst", "prstDash")
+
+
+def _prefijar_drawingml(datos: bytes) -> bytes:
+    """Devuelve `datos` con los elementos de `_ELEMENTOS_DRAWINGML` prefijados
+    con `a:`.
+
+    Idempotente: busca la forma SIN prefijo (`<avLst`), que nunca coincide con
+    una ya corregida (`<a:avLst`), de modo que aplicarla dos veces no duplica
+    el prefijo."""
+    texto = datos.decode("utf-8")
+    for nombre in _ELEMENTOS_DRAWINGML:
+        texto = texto.replace(f"<{nombre}>", f"<a:{nombre}>")
+        texto = texto.replace(f"<{nombre} ", f"<a:{nombre} ")
+        texto = texto.replace(f"<{nombre}/>", f"<a:{nombre}/>")
+        texto = texto.replace(f"</{nombre}>", f"</a:{nombre}>")
+    return texto.encode("utf-8")
+
+
+def _reparar_dibujos(buffer: BytesIO) -> BytesIO:
+    """Reescribe el `.xlsx` de `buffer` corrigiendo el namespace de cada
+    `xl/drawings/drawingN.xml` (ver `_prefijar_drawingml`).
+
+    Se hace sobre los bytes ya guardados, y no sobre el modelo en memoria,
+    porque el defecto está en el serializador de openpyxl: cualquier arreglo
+    aguas arriba lo volvería a introducir al escribir. El resto de las partes
+    se copia sin tocar, conservando sus metadatos de compresión."""
+    origen = zipfile.ZipFile(buffer)
+    salida = BytesIO()
+    with zipfile.ZipFile(salida, "w", zipfile.ZIP_DEFLATED) as destino:
+        for info in origen.infolist():
+            datos = origen.read(info.filename)
+            if info.filename.startswith(
+                "xl/drawings/drawing"
+            ) and info.filename.endswith(".xml"):
+                datos = _prefijar_drawingml(datos)
+            destino.writestr(info, datos)
+    salida.seek(0)
+    return salida
+
+
 def generar_reporte(definicion, valores: dict, adjuntos=()):
     """Fill `definicion`'s template with `valores` and return the generated
     `.xlsx` bytes (design's Sequence, steps 1-8).
@@ -296,4 +345,4 @@ def generar_reporte(definicion, valores: dict, adjuntos=()):
     buffer = BytesIO()
     libro.save(buffer)
     buffer.seek(0)
-    return buffer
+    return _reparar_dibujos(buffer)
