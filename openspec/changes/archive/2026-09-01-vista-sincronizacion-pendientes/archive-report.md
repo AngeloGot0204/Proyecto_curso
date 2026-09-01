@@ -23,21 +23,99 @@ La spec pasó a `openspec/specs/sincronizacion-pendientes/spec.md`.
 Suite completa en verde: 366 tests (repo completo excluyendo `test_views.py`)
 más 112 en `test_views.py`. Ninguna regresión atribuible a este cambio.
 
-## Verificación manual pendiente — NO cerrada
+## Verificación manual — completada 2026-09-01
 
-Cinco chequeos de este change requieren un navegador real con throttling de red
-en DevTools. Este proyecto no tiene runner de JS (está declarado en el Out of
-Scope de la spec) y no se pueden simular desde la suite de Python, así que
-**quedan sin verificar y necesitan una pasada humana**:
+Los cinco chequeos que requerían un navegador real fueron ejecutados y **pasan**:
 
-| Task | Qué falta comprobar |
+| Task | Resultado |
 |---|---|
-| 1.4 | Enviar un paso online / offline / con sesión expirada y confirmar que el comportamiento es idéntico al previo a extraer `envio-paso.js` |
-| 2.4 | Inspeccionar una fila escrita en `borradores` y confirmar que lleva `tipoNombre` y `fechaReporte`, y que las filas legacy siguen siendo válidas |
-| 4.3 | Con 2+ reportes con filas pendientes/fallidas: lista completa, una sola acción por fila, y los caminos de reintento exitoso / fallido / sesión expirada sin duplicar `Reporte` |
-| 5.4 | 3 filas pendientes muestran badge "3"; 0 filas lo ocultan; el click navega a S-15 |
-| 6.3 | Cargar S-15 online una vez, pasar a offline y recargar: la pantalla se sirve desde cache |
+| 1.4 | Online guarda y navega; offline encola con banner "Sin conexión — pendiente de subir"; sesión expirada navega al login conservando el borrador |
+| 2.4 | La fila en `borradores` lleva `tipoNombre` y `fechaReporte` con valor real |
+| 4.3 | Lista con filas de 2 reportes distintos, una sola acción por fila; reintento exitoso borra la fila y el servidor confirma 20 valores guardados sin duplicar `Reporte`; reintento fallido conserva las filas |
+| 5.4 | Badge muestra "1" con una fila pendiente, desaparece al vaciarse la cola, y navega a S-15 |
+| 6.3 | Con S-15 ya visitada, offline + recarga sirve la pantalla desde cache |
 
-Se archiva igual porque el contrato de código está implementado y cubierto por
-la parte automatizable. Estos cinco puntos son verificación de comportamiento en
-navegador, no trabajo pendiente de implementación.
+Sub-caso no cubierto: 2.4 pide además confirmar que las filas **legacy**
+(escritas antes de este cambio) siguen siendo válidas. No había ninguna en la
+base local, así que ese punto queda sin comprobar.
+
+---
+
+## Defecto encontrado: metadatos perdidos al reintentar
+
+**Severidad: rompe dos requirements de la spec viva.**
+
+Al reintentar un envío que falla, la fila pierde `tipoNombre` y `fechaReporte`:
+
+```
+antes del reintento:  Reporte de Verificación de Instalación de Pernos con Resina
+                      Sept. 1, 2026, 5:40 p.m. · resultados
+
+después:              Reporte
+                      · resultados
+```
+
+**Causa.** `envio-paso.js` reescribe la fila con `db.borradores.put()` pasando
+un objeto literal que solo contiene los campos que ese helper conoce
+(`reporteId`, `seccionId`, `valores`, `actualizadoEn`, `estado`, `intentos`,
+`ultimoError`). Dexie reemplaza el registro completo, así que todo campo ausente
+del literal se borra. Ocurre en los dos puntos de escritura del helper:
+`reconciliarEnEnvio` y `reconciliarResultado`.
+
+**Por qué no se detectó antes.** `paso-offline.js` sí escribe los metadatos al
+crear el borrador, así que la primera vez la fila se ve bien. `envio-paso.js` se
+extrajo como helper compartido en la fase 1 de este cambio, y los metadatos se
+agregaron en la fase 2 — el helper nunca se enteró de esos dos campos. Además el
+camino feliz lo esconde: si el envío sale `ok` la fila se borra y la degradación
+nunca se ve. Solo aparece cuando falla, que es justo cuando el usuario necesita
+leer de qué reporte se trata.
+
+**Requirements violados** (`openspec/specs/sincronizacion-pendientes/spec.md`):
+"Per-Row Display Metadata" y "Draft Write Captures Display Metadata".
+
+**Arreglo propuesto:** leer la fila existente y preservar los campos que el
+helper no gestiona, en vez de reemplazar el registro entero.
+
+---
+
+## Hueco de navegación: S-15 es inalcanzable offline
+
+Técnicamente el service worker cachea tanto las páginas de paso como
+`/reportes/sincronizacion/`, así que la pantalla **carga** sin conexión. El
+problema es llegar a ella.
+
+El único enlace a S-15 en toda la aplicación es el badge de
+`mis_reportes.html`, y "Mis reportes" **no está cacheada**: offline devuelve el
+error de red. El resultado es que el escenario para el que S-15 fue construida
+es exactamente el que no puede alcanzarla:
+
+```
+Estás en el formulario, sin señal, con pasos pendientes
+  → querés ver la cola
+  → el único enlace vive en Mis reportes
+  → Mis reportes no carga offline
+  → sin salida, salvo saber la URL de memoria
+```
+
+El banner de pendientes que aparece en el paso avisa del problema pero no
+enlaza a la pantalla que lo resuelve.
+
+Ninguna spec cubre este caso, así que no es un incumplimiento: es un hueco de
+diseño. El arreglo más directo es enlazar S-15 desde ese banner, donde el
+usuario ya está mirando cuando le ocurre.
+
+---
+
+## Nota metodológica: cómo probar la sesión expirada
+
+Borrar `sessionid` desde DevTools **no reproduce** una expiración de sesión: la
+herramienta se lleva también la cookie `csrftoken`, y sin ella Django rechaza el
+POST con `403 CSRF cookie not set` **antes** de que la petición llegue a la
+vista. Nunca se ejecuta el `login_required` que produce el 302 al login, así que
+el código clasifica el resultado como `fallo` en vez de `sesion_expirada`.
+
+Una expiración real no se comporta así: `sessionid` dura 7 días y `csrftoken`
+un año, de modo que la sesión muere con la cookie de CSRF todavía presente.
+
+**Para probarlo hay que borrar únicamente `sessionid`, dejando `csrftoken`
+intacta.** Hecho así, el flujo funciona: navega al login y conserva el borrador.

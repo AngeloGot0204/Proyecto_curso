@@ -29,14 +29,14 @@ Chain strategy: feature-branch-chain
 - [x] 1.1 Create `reportes/static/reportes/envio-paso.js`: `window.reportesEnvioPaso.enviar({url, valores, reporteId, seccionId, csrfToken})` → `Promise<{resultado, url, error}>`; rebuild `FormData` from `valores` per D8 (`true`→`"on"`, `false` omitted, ids coerced).
 - [x] 1.2 Refactor `paso-offline.js`: `intentarEnvio`/`manejarRespuesta` delegate to `reportesEnvioPaso.enviar`, keep existing banner/Dexie/navigation behavior (D2: helper returns outcome, caller keeps UI/nav policy).
 - [x] 1.3 RED: `reportes/tests/test_views.py` — add case asserting `paso.html` still loads `envio-paso.js` before `paso-offline.js`. RED first (assert fails), then GREEN: add `<script>` tag in `paso.html`.
-- [ ] 1.4 Manual DevTools regression (mirrors backlog #10): submit paso online, offline, session-expired — confirm identical outcome to pre-extraction behavior. **Pending human sign-off** — automated regression net covered instead: `pytest reportes/tests/test_views.py -k paso` (25 passed) exercises the Django-side POST/redirect/servidor_actualizado contract; the actual browser fetch/CSRF/redirect-follow/Dexie-reconciliation path implemented in `envio-paso.js` has no JS runner in this project (spec's Out of Scope) and still needs the manual DevTools script run once before merge.
+- [x] 1.4 Manual DevTools regression: submit paso online, offline, session-expired. **Verificado 2026-09-01.** Online: guarda y navega. Offline: queda en cola con banner "Sin conexión — pendiente de subir". Sesión expirada: navega al login y conserva el borrador. Nota metodológica al pie. Contexto original: — automated regression net covered instead: `pytest reportes/tests/test_views.py -k paso` (25 passed) exercises the Django-side POST/redirect/servidor_actualizado contract; the actual browser fetch/CSRF/redirect-follow/Dexie-reconciliation path implemented in `envio-paso.js` has no JS runner in this project (spec's Out of Scope) and still needs the manual DevTools script run once before merge.
 
 ## Phase 2: Draft Metadata Capture (D4)
 
 - [x] 2.1 RED: `reportes/tests/test_views.py` — assert rendered `paso.html` form has `data-tipo-nombre`/`data-fecha-reporte` attributes with expected values.
 - [x] 2.2 GREEN: add both attributes to the form in `paso.html`, sourced from existing view context.
 - [x] 2.3 Update `paso-offline.js`: `escribirBorrador`/`marcarComo` read the two attrs and persist `tipoNombre`/`fechaReporte` on every `borradores.put`; no `db.version()` bump.
-- [ ] 2.4 Manual DevTools regression (mirrors 1.4): inspect a written `borradores` row, confirm both fields present, legacy rows still valid. **Pending human sign-off** — no JS runner exists in this project (design's Testing Strategy/spec's Out of Scope) so this cannot be automated; `escribirBorrador`/`marcarComo` now read `data-tipo-nombre`/`data-fecha-reporte` (confirmed present via `test_paso_expone_tipo_nombre_y_fecha_reporte_en_data_attrs`) and unconditionally write `tipoNombre`/`fechaReporte` onto every `borradores.put` call, still needs the manual DevTools inspection run once before merge.
+- [x] 2.4 Inspeccionar una fila escrita en `borradores`. **Verificado 2026-09-01**: `tipoNombre` = "Reporte de Verificación de Instalación de Pernos con Resina" y `fechaReporte` = "Sept. 1, 2026, 5:40 p.m.", ambos con valor. No se pudo comprobar el sub-caso de filas legacy (no había ninguna previa al cambio en la base local). Contexto original: — no JS runner exists in this project (design's Testing Strategy/spec's Out of Scope) so this cannot be automated; `escribirBorrador`/`marcarComo` now read `data-tipo-nombre`/`data-fecha-reporte` (confirmed present via `test_paso_expone_tipo_nombre_y_fecha_reporte_en_data_attrs`) and unconditionally write `tipoNombre`/`fechaReporte` onto every `borradores.put` call, still needs the manual DevTools inspection run once before merge.
 
 ## Phase 3: Sincronizacion Route Shell (D1)
 
@@ -49,20 +49,20 @@ Chain strategy: feature-branch-chain
 
 - [x] 4.1 Create `reportes/static/reportes/sincronizacion.js`: query `borradores.where("estado").anyOf("pendiente","fallo")` across all reports, sort by `actualizadoEn` desc, render rows (tipo/fecha/paso/estado chip) or empty state.
 - [x] 4.2 Wire "Reintentar": build retry URL from the `__SECCION__` placeholder (D3), call `reportesEnvioPaso.enviar` with the row's stored `valores`; on `ok` delete row + re-render; on `fallo`/`pendiente` update row + re-render; on `sesion_expirada` navigate, keep row.
-- [ ] 4.3 Manual DevTools (Unit 3 harness): 2+ reports with pending/failed rows, verify full list, single-action-only rows, retry success/fail/expired-session paths, no duplicate `Reporte`.
+- [x] 4.3 **Verificado 2026-09-01.** Lista con filas de 2 reportes distintos, cada una con tipo/fecha/paso y una sola acción. Reintento exitoso: borra la fila y muestra el estado vacío; servidor confirma 20 valores guardados, 16 reportes totales y ningún `id_local` duplicado. Reintento fallido (offline): las filas permanecen. Sesión expirada: navega al login y las filas sobreviven. **Detectó un defecto: ver "Metadatos perdidos al reintentar" en `archive-report.md`.**
 
 ## Phase 5: Entry Badge on Mis Reportes (D5)
 
 - [x] 5.1 RED: `reportes/tests/test_views.py` — `mis_reportes.html` response contains a hidden badge link to `reportes_sincronizacion` and loads `offline-db.js`/`pendientes-badge.js`.
 - [x] 5.2 GREEN: add hidden badge markup + script tags to `mis_reportes.html`.
 - [x] 5.3 Create `reportes/static/reportes/pendientes-badge.js`: `borradores.where("estado").anyOf(...).count()`, reveal badge with count or keep hidden at 0.
-- [ ] 5.4 Manual DevTools: 3 pending rows → badge shows "3"; 0 rows → badge hidden; click navigates to S-15 route.
+- [x] 5.4 **Verificado 2026-09-01**: con 1 fila pendiente el badge muestra "1"; al vaciarse la cola el badge desaparece; el click navega a S-15.
 
 ## Phase 6: Service Worker (D7)
 
 - [x] 6.1 RED: `reportes/tests/test_estatico.py` — `client.get("/sw.js")` body contains `/reportes/sincronizacion/` in the navigation branch and `CACHE = "reportes-offline-v20"`.
 - [x] 6.2 GREEN: add the sincronizacion path to `esNavegacionDePaso`-equivalent branch (or a new navigate-match), bump `CACHE` to `v20` in `sw.js`.
-- [ ] 6.3 Manual DevTools: load S-15 online once, go offline, reload — screen renders from cache per network-first-with-fallback contract.
+- [x] 6.3 **Verificado 2026-09-01**: con S-15 ya visitada, al pasar a offline y recargar la pantalla se sirve desde cache en vez del error de red.
 
 ## Phase 7: Full Suite + Docs
 
