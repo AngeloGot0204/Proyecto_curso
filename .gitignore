@@ -29,3 +29,7 @@ Thumbs.db
 
 .vercel
 .env*
+
+# Cache local del registro de skills: se regenera solo y guarda rutas
+# absolutas de la maquina de cada desarrollador.
+.atl/
