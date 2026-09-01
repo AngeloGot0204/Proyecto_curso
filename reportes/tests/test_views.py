@@ -767,7 +767,7 @@ def test_sw_js_contiene_cache_v7(client):
     response = client.get("/sw.js")
     contenido = response.content.decode()
 
-    assert "reportes-offline-v21" in contenido
+    assert "reportes-offline-v23" in contenido
 
 
 @pytest.mark.django_db
@@ -2420,3 +2420,27 @@ def test_seleccion_de_tipo_selecciona_activo_crea_reporte(
 
     assert response.status_code == 302
     assert Reporte.objects.filter(tipo=tipo, creador=usuario).count() == 1
+
+
+@pytest.mark.django_db
+def test_sidebar_enlaza_a_sincronizacion(client, usuario_factory):
+    """Hueco de navegación detectado en la verificación manual del change
+    `vista-sincronizacion-pendientes`: el service worker cachea S-15, pero su
+    único enlace vivía en `mis_reportes.html`, que NO está cacheada. Sin
+    conexión, alguien con pasos pendientes no tenía forma de llegar a la
+    pantalla que los resuelve salvo escribir la URL de memoria.
+
+    El sidebar se renderiza desde `base.html` en TODA pantalla autenticada,
+    incluidas las que el service worker cachea, así que el enlace viaja con
+    ellas y queda disponible con o sin conexión."""
+    usuario = usuario_factory(username="ve-sincronizacion")
+    client.force_login(usuario)
+
+    respuesta = client.get(reverse("reportes_mis"))
+    contenido = respuesta.content.decode()
+
+    inicio_sidebar = contenido.index('class="escritorio__sidebar"')
+    fin_sidebar = contenido.index("</nav>", inicio_sidebar)
+    sidebar = contenido[inicio_sidebar:fin_sidebar]
+
+    assert reverse("reportes_sincronizacion") in sidebar

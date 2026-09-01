@@ -217,7 +217,7 @@ def test_sw_js_cachea_sincronizacion_y_bumpea_v7(client):
     response = client.get("/sw.js")
     contenido = response.content.decode()
 
-    assert "reportes-offline-v21" in contenido
+    assert "reportes-offline-v23" in contenido
     assert "/reportes/sincronizacion/" in contenido
 
 
@@ -245,3 +245,5 @@ def test_envio_paso_js_preserva_campos_no_gestionados_del_borrador():
     assert "Object.assign(" in contenido
     # Ninguna de las dos escrituras pasa un literal directo a put().
     assert "put({" not in contenido
+
+

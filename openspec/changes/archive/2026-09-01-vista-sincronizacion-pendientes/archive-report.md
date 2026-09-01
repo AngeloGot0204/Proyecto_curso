@@ -112,8 +112,21 @@ El banner de pendientes que aparece en el paso avisa del problema pero no
 enlaza a la pantalla que lo resuelve.
 
 Ninguna spec cubre este caso, así que no es un incumplimiento: es un hueco de
-diseño. El arreglo más directo es enlazar S-15 desde ese banner, donde el
-usuario ya está mirando cuando le ocurre.
+diseño.
+
+**Arreglado el 2026-09-01.** S-15 se agrega como ítem del sidebar
+(`templates/partials/sidebar.html`), junto a Inicio, Mis reportes y Nuevo
+reporte.
+
+Se evaluó primero enlazarla desde el banner de pendientes, y se descartó: el
+sidebar se renderiza desde `base.html` en **toda** pantalla autenticada,
+incluidas las que el service worker cachea, así que el enlace viaja con ellas
+y está disponible siempre — no solo cuando ya hay un borrador pendiente. Es
+además la ubicación consistente con el resto de la navegación, y no obliga a
+pasar la URL por un atributo hasta el JavaScript.
+
+Cubierto por `test_sidebar_enlaza_a_sincronizacion` y verificado en navegador:
+desde un paso cacheado, sin conexión, el ítem del sidebar abre S-15.
 
 ---
 
