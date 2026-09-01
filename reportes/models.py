@@ -74,6 +74,15 @@ class Reporte(models.Model):
             Value("reportes_numero_registro_seq"), function="nextval"
         ),
     )
+    # Soft-delete marker (creator-only report deletion): `None` means the
+    # `Reporte` is live, a timestamp means the creator deleted it. Mirrors
+    # `TipoDeReporte.activo`'s deactivate-don't-destroy spirit — the row and
+    # every related row (`ValorDeReporte`, `Adjunto`, `Generacion`,
+    # `ParticipacionEnReporte`, `CambioDeValor`, `VistoBueno`) stay in the
+    # database for audit/recovery; only every listing/lookup query excludes
+    # it (`listado.reportes_accesibles`, `views._reporte_accesible`, and the
+    # creator-only `cerrar_reporte`/`invitar`/`eliminar_reporte` lookups).
+    eliminado_en = models.DateTimeField(null=True, blank=True, default=None)
 
     class Meta:
         verbose_name = "Reporte"

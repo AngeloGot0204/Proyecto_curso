@@ -97,19 +97,30 @@ def _destinos(nodo):
     ]
 
 
+def claves_obligatorias(estructura):
+    """Every `valores`-dict key declared by an `obligatorio` node in
+    `estructura` (design D1, backlog #12). Public so `reportes/listado.py`
+    derives the exact same denominator `_validar_completitud` already uses
+    internally — never a second, drift-prone traversal. Mirrors
+    `claves_de_valor`'s "one owner" rationale: `_validar_completitud`
+    delegates to this instead of re-walking `_iterar_nodos` itself."""
+    return [
+        clave
+        for _ubicacion, nodo, _clave_de_etiqueta in _iterar_nodos(estructura)
+        if nodo.get("obligatorio")
+        for clave in claves_de_valor(nodo)
+    ]
+
+
 def _validar_completitud(estructura, valores):
     """Accumulate every required id absent from `valores` and raise ONE
     `ValoresIncompletos` listing all of them (design's Sequence, step 4;
     "accumulate every problem"; D2: membership test, never truthiness, so
     `False`/`0`/`""` count as present; D3: only `nodo.get("obligatorio")`
-    truthy nodes are required)."""
-    faltantes = [
-        clave
-        for _ubicacion, nodo, _clave_de_etiqueta in _iterar_nodos(estructura)
-        if nodo.get("obligatorio")
-        for clave, _coordenada in _destinos(nodo)
-        if clave not in valores
-    ]
+    truthy nodes are required). Delegates the enumeration itself to the
+    public `claves_obligatorias` (design D1) — this function adds only the
+    membership check against `valores`."""
+    faltantes = [clave for clave in claves_obligatorias(estructura) if clave not in valores]
     if faltantes:
         raise ValoresIncompletos(faltantes)
 

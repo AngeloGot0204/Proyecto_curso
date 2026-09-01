@@ -68,6 +68,31 @@ def desde_texto(campo, texto):
     return campo.to_python(texto)
 
 
+def etiquetas_de_campos(estructura: dict) -> dict[str, str]:
+    """`{identificador_de_campo: etiqueta legible}` for every campo/item in
+    `estructura` — the same `ValorDeReporte`/`CambioDeValor` identifiers
+    `tipos_reporte.generador.claves_de_valor` derives, paired with each
+    node's own `etiqueta`/`texto` for display (backlog #8's history view:
+    raw ids like `pt01_inicio` mean nothing to a human, the node that
+    declared them already carries the label). A `rango-hora-inicio-fin`
+    item yields two keys from one node — each gets " — inicio"/" — fin"
+    appended so they read as two distinct rows, not duplicates."""
+    from tipos_reporte.generador import claves_de_valor
+    from tipos_reporte.validacion import _iterar_nodos
+
+    etiquetas: dict[str, str] = {}
+    for _ubicacion, nodo, clave_de_etiqueta in _iterar_nodos(estructura):
+        etiqueta = nodo.get(clave_de_etiqueta) or nodo.get("id", "")
+        claves = claves_de_valor(nodo)
+        if len(claves) == 1:
+            etiquetas[claves[0]] = etiqueta
+        else:
+            for clave in claves:
+                sufijo = " — inicio" if clave.endswith("_inicio") else " — fin"
+                etiquetas[clave] = f"{etiqueta}{sufijo}"
+    return etiquetas
+
+
 def valores_de_reporte(reporte) -> dict[str, str]:
     """Build the `{identificador_de_campo: valor}` dict for `reporte` from
     its persisted `ValorDeReporte` rows (design D5) — the ONE shared

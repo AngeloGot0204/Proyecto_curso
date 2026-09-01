@@ -2,18 +2,23 @@
 
 {% block title %}Participantes — Reporte #{{ reporte.id }}{% endblock %}
 
-{% block content %}
-<h1>Participantes del reporte</h1>
+{% block barra %}
+<header class="barra-pantalla">
+    <h1 class="barra-pantalla__titulo">Participantes</h1>
+    {% include "_chip_conexion.html" %}
+</header>
+{% endblock %}
 
-<p>Creador: {{ reporte.creador.username }}</p>
+{% block content %}
+<p class="mono">Creador: {{ reporte.creador.username }}</p>
 
 <section>
     <h2>Invitados</h2>
-    <ul>
+    <ul class="checklist">
         {% for participacion in participaciones %}
-        <li>{{ participacion.usuario.username }}</li>
+        <li class="checklist__item">{{ participacion.usuario.username }}</li>
         {% empty %}
-        <li>Todavía no hay usuarios invitados.</li>
+        <li class="checklist__item">Todavía no hay usuarios invitados.</li>
         {% endfor %}
     </ul>
 </section>
@@ -21,40 +26,47 @@
 {% if reporte.creador_id == request.user.id %}
 <section>
     <h2>Compartir con...</h2>
-    <form method="post" action="{% url 'reportes_invitar' reporte.id %}">
+    <form method="post" action="{% url 'reportes_invitar' reporte.id %}" class="acciones">
         {% csrf_token %}
-        <label for="username">Nombre de usuario</label>
-        <input type="text" id="username" name="username" required>
-        <button type="submit">Invitar</button>
+        <div class="campo">
+            <label for="username" class="campo__etiqueta">Nombre de usuario</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <button type="submit" class="acciones__primario">Invitar</button>
     </form>
 </section>
 {% endif %}
 
 <section>
     <h2>Historial de cambios</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Campo</th>
-                <th>Valor anterior</th>
-                <th>Autor</th>
-                <th>Fecha</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for cambio in cambios %}
-            <tr>
-                <td>{{ cambio.identificador_de_campo }}</td>
-                <td>{{ cambio.valor_anterior|default:"—" }}</td>
-                <td>{{ cambio.autor.username }}</td>
-                <td>{{ cambio.fecha }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="4">Todavía no hay cambios registrados.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <ol class="historial">
+        {% for sesion in sesiones_de_cambios %}
+        <li class="historial__sesion">
+            <details {% if forloop.first %}open{% endif %}>
+                <summary class="historial__resumen">
+                    <span class="historial__punto" aria-hidden="true"></span>
+                    <span class="barra-pantalla__avatar historial__avatar" aria-hidden="true">{{ sesion.autor.username|slice:":1"|upper }}</span>
+                    <span class="historial__autor">{{ sesion.autor.username }}</span>
+                    <span class="historial__fecha mono">{{ sesion.fecha }}</span>
+                    <span class="chip chip--borde-gris">{{ sesion.items|length }} cambio{{ sesion.items|length|pluralize }}</span>
+                </summary>
+                <ul class="historial__items">
+                    {% for item in sesion.items %}
+                    <li class="historial__item">
+                        <span class="chip chip--borde mono">{{ item.etiqueta }}</span>
+                        {% if item.cambio.valor_anterior %}
+                        <span class="historial__valor-anterior">{{ item.cambio.valor_anterior }}</span>
+                        {% else %}
+                        <span class="historial__valor-anterior historial__valor-anterior--vacio">valor inicial</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+        </li>
+        {% empty %}
+        <li class="historial__vacio">Todavía no hay cambios registrados.</li>
+        {% endfor %}
+    </ol>
 </section>
 {% endblock %}

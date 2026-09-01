@@ -2,70 +2,112 @@
 
 {% block title %}{{ tipo.nombre }}{% endblock %}
 
+{% block barra %}
+<header class="barra-pantalla">
+    <a class="barra-pantalla__volver" href="{% url 'tipos_lista' %}" aria-label="Volver a Tipos de reporte">←</a>
+    <h1 class="barra-pantalla__titulo">{{ tipo.nombre }}</h1>
+</header>
+{% endblock %}
+
 {% block content %}
-<h1>{{ tipo.nombre }}</h1>
 
-<dl>
-    <dt>Código</dt>
-    <dd>{{ tipo.codigo }}</dd>
-    <dt>Versión de formato</dt>
-    <dd>{{ tipo.version_formato }}</dd>
-    <dt>Logo</dt>
-    <dd>{% if tipo.logo %}<a href="{{ tipo.logo.url }}">{{ tipo.logo.name }}</a>{% else %}Sin logo{% endif %}</dd>
-    <dt>Plantilla</dt>
-    <dd><a href="{{ tipo.plantilla.url }}">{{ tipo.plantilla.name }}</a></dd>
-    <dt>Definición activa</dt>
-    <dd>
-        {% if tipo.definicion_activa %}
-        v{{ tipo.definicion_activa.version }}
-        {% else %}
-        Sin definición activa
-        {% endif %}
-    </dd>
-</dl>
-
-<p><a href="{% url 'tipos_editar' tipo.id %}">Editar</a></p>
-
-{% if tipo.definicion_activa %}
-<form method="post" action="{% url 'tipos_desactivar' tipo.id %}">
-    {% csrf_token %}
-    <button type="submit">Desactivar tipo de reporte</button>
-</form>
+{% if not tipo.definicion_activa %}
+<div class="aviso">
+    <strong>Sin definición activa.</strong>
+    Nadie puede crear reportes con este tipo hasta que actives una definición.
+    {% if borrador %}
+    <form method="post" action="{% url 'tipos_definicion_activar' borrador.id %}" class="acciones">
+        {% csrf_token %}
+        <button type="submit" class="acciones__primario">Activar el borrador de abajo</button>
+    </form>
+    {% endif %}
+</div>
 {% endif %}
 
-<h2>Definiciones</h2>
+<section class="tipo-detalle__seccion tipo-detalle__seccion--principal">
+    <div class="tipo-detalle__encabezado">
+        <h2 class="mono">Definiciones</h2>
+        <a href="{% url 'tipos_definicion_crear' tipo.id %}" class="acciones__secundario">Nueva definición</a>
+    </div>
+    <table class="tabla">
+        <thead>
+            <tr>
+                <th>Estado</th>
+                <th>Versión</th>
+                <th>Activada en</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for definicion in definiciones %}
+            <tr>
+                <td>
+                    {% if definicion.estado == "activa" %}
+                    <span class="chip chip--solido">{{ definicion.get_estado_display }}</span>
+                    {% else %}
+                    <span class="chip chip--borde">{{ definicion.get_estado_display }}</span>
+                    {% endif %}
+                </td>
+                <td class="mono">{{ definicion.version|default:"—" }}</td>
+                <td class="mono">{{ definicion.activada_en|default:"—" }}</td>
+                <td>
+                    {% if definicion.estado == "borrador" %}
+                    <div class="acciones">
+                        <a href="{% url 'tipos_definicion_editar' tipo.id definicion.id %}" class="acciones__secundario">Editar definición</a>
+                        <form method="post" action="{% url 'tipos_definicion_activar' definicion.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="acciones__primario">Activar</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4">Este tipo todavía no tiene ninguna definición.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
 
-<p><a href="{% url 'tipos_definicion_crear' tipo.id %}">Nueva definición</a></p>
-<table>
-    <thead>
-        <tr>
-            <th>Estado</th>
-            <th>Versión</th>
-            <th>Activada en</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for definicion in definiciones %}
-        <tr>
-            <td>{{ definicion.get_estado_display }}</td>
-            <td>{{ definicion.version|default:"—" }}</td>
-            <td>{{ definicion.activada_en|default:"—" }}</td>
-            <td>
-                {% if definicion.estado == "borrador" %}
-                <a href="{% url 'tipos_definicion_editar' tipo.id definicion.id %}">Editar</a>
-                <form method="post" action="{% url 'tipos_definicion_activar' definicion.id %}">
-                    {% csrf_token %}
-                    <button type="submit">Activar</button>
-                </form>
-                {% endif %}
-            </td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="4">Este tipo todavía no tiene ninguna definición.</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<section class="tipo-detalle__seccion tipo-detalle__seccion--secundaria">
+    <h2 class="mono">Datos del tipo</h2>
+    <div class="tipo-detalle__metadata">
+        <div class="campo">
+            <span class="campo__etiqueta">Código</span>
+            <span class="mono">{{ tipo.codigo }}</span>
+        </div>
+        <div class="campo">
+            <span class="campo__etiqueta">Versión de formato</span>
+            <span>{{ tipo.version_formato }}</span>
+        </div>
+        <div class="campo">
+            <span class="campo__etiqueta">Logo</span>
+            {% if tipo.logo %}<a href="{{ tipo.logo.url }}">{{ tipo.logo.name }}</a>{% else %}<span>Sin logo</span>{% endif %}
+        </div>
+        <div class="campo">
+            <span class="campo__etiqueta">Plantilla</span>
+            <a href="{{ tipo.plantilla.url }}">{{ tipo.plantilla.name }}</a>
+        </div>
+        <div class="campo">
+            <span class="campo__etiqueta">Definición activa</span>
+            {% if tipo.definicion_activa %}
+            <span class="chip chip--solido">v{{ tipo.definicion_activa.version }}</span>
+            {% else %}
+            <span class="chip chip--borde-gris">Sin definición activa</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="acciones">
+        <a class="acciones__secundario" href="{% url 'tipos_editar' tipo.id %}">Editar tipo</a>
+        {% if tipo.definicion_activa %}
+        <form method="post" action="{% url 'tipos_desactivar' tipo.id %}">
+            {% csrf_token %}
+            <button type="submit" class="acciones__secundario">Desactivar tipo de reporte</button>
+        </form>
+        {% endif %}
+    </div>
+</section>
 {% endblock %}

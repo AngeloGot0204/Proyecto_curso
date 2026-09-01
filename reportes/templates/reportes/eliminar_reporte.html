@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Eliminar reporte #{{ reporte.id }}{% endblock %}
+
+{% block barra %}
+<header class="barra-pantalla">
+    <a class="barra-pantalla__volver" href="{% url 'reportes_participantes' reporte.id %}" aria-label="Anterior">←</a>
+    <h1 class="barra-pantalla__titulo">Eliminar reporte</h1>
+    {% include "_chip_conexion.html" %}
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="hoja">
+    <div class="hoja__cuerpo">
+        <p>Estás por eliminar este reporte:</p>
+        <p class="mono">{{ reporte.tipo.nombre }} — creado el {{ reporte.fecha_creacion }}</p>
+        <p>Esta acción no se puede deshacer desde la interfaz: el reporte dejará de aparecer en "Mis reportes" para vos y para cualquier participante invitado.</p>
+    </div>
+
+    <div class="hoja__pie">
+        <form method="post" action="{% url 'reportes_eliminar' reporte.id %}" class="acciones">
+            {% csrf_token %}
+            <button type="submit" class="acciones__primario">Sí, eliminar</button>
+        </form>
+        <a href="{% url 'reportes_participantes' reporte.id %}" class="acciones__secundario">Cancelar</a>
+    </div>
+</div>
+{% endblock %}

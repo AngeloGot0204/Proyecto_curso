@@ -835,3 +835,31 @@ def test_adjunto_no_decodificable_se_omite_sin_interrumpir_la_generacion(
     libro = load_workbook(resultado)
     hoja = libro[estructura["hoja"]]
     assert hoja._images == []
+
+
+# ---------------------------------------------------------------------------
+# claves_obligatorias (backlog #12, PR 1 of a stacked-to-main chain; spec
+# `listado-reportes` "Percent Avance Per Card"; design D1). Public so
+# `reportes/listado.py` derives the same denominator `_validar_completitud`
+# already uses internally, never a second obligatorio enumeration.
+# ---------------------------------------------------------------------------
+
+
+def test_claves_obligatorias_coincide_con_validar_completitud(definicion_valida):
+    """Task 1.1 RED: on empty `valores`, `claves_obligatorias(estructura)`
+    must return exactly the same ids `_validar_completitud` reports as
+    missing (`ValoresIncompletos.faltantes`) — `definicion_valida`'s single
+    obligatorio node is the "turno" campo; its "p-01" item is not
+    obligatorio, so it must never appear."""
+    from tipos_reporte.generador import (
+        ValoresIncompletos,
+        _validar_completitud,
+        claves_obligatorias,
+    )
+
+    estructura = definicion_valida()
+
+    with pytest.raises(ValoresIncompletos) as excinfo:
+        _validar_completitud(estructura, {})
+
+    assert set(claves_obligatorias(estructura)) == set(excinfo.value.faltantes)

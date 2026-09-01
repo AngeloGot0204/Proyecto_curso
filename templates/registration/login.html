@@ -3,12 +3,16 @@
 {% block title %}Iniciar sesión{% endblock %}
 
 {% block content %}
-    <h1>Iniciar sesión</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.non_field_errors }}
-        {{ form.as_p }}
-        <button type="submit">Ingresar</button>
-    </form>
-    <p>Solicita tu cuenta al administrador.</p>
+    <div class="login">
+        <h1 class="login__titulo">Iniciar sesión</h1>
+        <form method="post" class="form-basica">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {{ form.as_p }}
+            <div class="acciones">
+                <button type="submit" class="acciones__primario">Ingresar</button>
+            </div>
+        </form>
+        <p class="campo__ayuda">Solicita tu cuenta al administrador.</p>
+    </div>
 {% endblock %}

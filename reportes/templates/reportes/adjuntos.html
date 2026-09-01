@@ -2,37 +2,40 @@
 
 {% block title %}Adjuntos — Reporte #{{ reporte.id }}{% endblock %}
 
-{% block content %}
-<h1>Adjuntos del reporte</h1>
+{% block barra %}
+<header class="barra-pantalla">
+    <h1 class="barra-pantalla__titulo">Adjuntos del reporte</h1>
+    {% include "_chip_conexion.html" %}
+</header>
+{% endblock %}
 
-<section>
-    <table>
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Categoría</th>
-                <th>Autor</th>
-                <th>Fecha de subida</th>
-                <th>Tamaño (bytes)</th>
-                <th>Descarga</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for adjunto in adjuntos %}
-            <tr>
-                <td>{{ adjunto.nombre_original }}</td>
-                <td>{{ adjunto.get_categoria_display }}</td>
-                <td>{{ adjunto.autor.username }}</td>
-                <td>{{ adjunto.fecha_subida }}</td>
-                <td>{{ adjunto.tamano_bytes }}</td>
-                <td><a href="{{ adjunto.archivo.url }}">Descargar</a></td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="6">Todavía no hay adjuntos.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</section>
+{% block content %}
+<ul class="adjuntos">
+    {% for adjunto in adjuntos %}
+    <li class="adjuntos__item">
+        <span class="adjuntos__miniatura" aria-hidden="true"></span>
+        <div class="adjuntos__info">
+            <p class="adjuntos__nombre">{{ adjunto.nombre_original }}</p>
+            <p class="adjuntos__meta mono">{{ adjunto.get_categoria_display }} · {{ adjunto.tamano_bytes }} bytes · {{ adjunto.autor.username }} · {{ adjunto.fecha_subida }}</p>
+        </div>
+        <a class="adjuntos__descarga" href="{{ adjunto.archivo.url }}">Descargar</a>
+        {% if reporte.creador_id == request.user.id or adjunto.autor_id == request.user.id %}
+        <form method="post" class="adjuntos__eliminar" action="{% url 'reportes_adjuntos_eliminar' reporte.id adjunto.id %}" onsubmit="return confirm('¿Eliminar este adjunto? No se puede deshacer.')">
+            {% csrf_token %}
+            <input type="hidden" name="siguiente" value="adjuntos">
+            <button type="submit" class="lista__eliminar" aria-label="Eliminar {{ adjunto.nombre_original }}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            </button>
+        </form>
+        {% endif %}
+    </li>
+    {% empty %}
+    <li class="adjuntos__vacio">Todavía no hay adjuntos.</li>
+    {% endfor %}
+</ul>
 {% endblock %}

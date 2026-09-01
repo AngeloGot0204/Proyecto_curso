@@ -1,18 +1,39 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Generador de Reportes de Campo{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components.css' %}">
+    <script src="{% static 'js/conexion-chip.js' %}" defer></script>
+    <script src="{% static 'js/toasts.js' %}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-    {% if messages %}
-    <ul class="messages">
-        {% for message in messages %}
-        <li class="alert alert-{{ message.tags }}">{{ message }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-    {% block content %}{% endblock %}
+    <div class="{% if user.is_authenticated %}escritorio{% else %}escritorio--sin-sidebar{% endif %}">
+        {% if user.is_authenticated %}
+        {% include "partials/sidebar.html" %}
+        {% endif %}
+        <div class="escritorio__cuerpo">
+            {% block barra %}{% endblock %}
+            <div class="pagina">
+                {% if messages %}
+                <ul class="messages" data-toasts>
+                    {% for message in messages %}
+                    <li class="aviso aviso--{{ message.tags }}" role="alert">
+                        {{ message }}
+                        <button type="button" class="aviso__cerrar" data-cerrar-aviso aria-label="Cerrar aviso">×</button>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                <div class="escritorio__principal">
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

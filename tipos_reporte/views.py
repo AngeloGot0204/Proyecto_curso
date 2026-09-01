@@ -53,7 +53,10 @@ def detalle(request, tipo_id):
     definiciones = tipo.definiciones.order_by(
         F("activada_en").desc(nulls_first=True), "-id"
     )
-    contexto = {"tipo": tipo, "definiciones": definiciones}
+    borrador = next(
+        (d for d in definiciones if d.estado == Estado.BORRADOR), None
+    )
+    contexto = {"tipo": tipo, "definiciones": definiciones, "borrador": borrador}
     return render(request, "tipos_reporte/detalle.html", contexto)
 
 

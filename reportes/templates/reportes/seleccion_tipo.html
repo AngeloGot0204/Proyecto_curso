@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo reporte{% endblock %}
+
+{% block barra %}
+<header class="barra-pantalla">
+    <a class="barra-pantalla__volver" href="{% url 'reportes_mis' %}" aria-label="Volver a Mis reportes">←</a>
+    <h1 class="barra-pantalla__titulo">Nuevo reporte</h1>
+</header>
+{% endblock %}
+
+{% block content %}
+{% if request.user.es_administrador %}
+<div class="acciones">
+    <a href="{% url 'tipos_lista' %}" class="acciones__secundario">Administrar tipos de reporte</a>
+</div>
+{% endif %}
+
+<section class="lista">
+    <ul class="lista__items">
+        {% for tipo in tipos %}
+        <li class="lista__tarjeta">
+            {% if tipo.activo %}
+            <form method="post" action="{% url 'reportes_nuevo' tipo.codigo %}">
+                {% csrf_token %}
+                <button type="submit" class="acciones__primario">
+                    {{ tipo.codigo }} — {{ tipo.definicion_activa.estructura.secciones|length }} secciones
+                </button>
+            </form>
+            {% else %}
+            <span class="lista__meta mono">{{ tipo.codigo }}</span>
+            <span class="chip chip--borde-gris">próximamente</span>
+            {% if request.user.es_administrador %}
+            <a href="{% url 'tipos_detalle' tipo.id %}" class="acciones__secundario">Definir</a>
+            {% else %}
+            <button type="button" class="acciones__secundario" disabled>Próximamente</button>
+            {% endif %}
+            {% endif %}
+        </li>
+        {% empty %}
+        <li class="lista__vacio">
+            No hay tipos de reporte disponibles.
+            {% if request.user.es_administrador %}
+            <a href="{% url 'tipos_lista' %}">Crear uno →</a>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endblock %}

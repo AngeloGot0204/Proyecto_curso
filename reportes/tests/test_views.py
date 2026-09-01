@@ -9,13 +9,16 @@ duplicate rows on re-POST), the creator-only 404 (D9), the unknown-
 Non-blocking obligatorio marker).
 """
 
+import re
 from io import BytesIO
 from unittest import mock
 
 import pytest
 from django.contrib.messages import get_messages
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import formats
 from openpyxl import load_workbook
 
 from reportes.models import (
@@ -29,6 +32,7 @@ from reportes.models import (
 )
 from reportes.validacion import validar_reporte
 from tipos_reporte.generador import PlantillaIlegible
+from tipos_reporte.models import TipoDeReporte
 
 
 @pytest.fixture
@@ -377,6 +381,111 @@ def test_get_paso_incluye_atributos_data_y_script_paso_js(
     assert 'data-rango="p-01"' in contenido_proceso
 
 
+@pytest.mark.django_db
+def test_paso_aplica_pasos_indicador_y_checklist_component_classes(sesion_de_creador):
+    """Change `retrofit-visual-design2` PR2 (design D3, task 3.10): the
+    wizard step indicator uses `.pasos` (DESIGN2 §4 "Indicador de pasos")
+    and the field list uses `.checklist` (DESIGN2 §4 "Checklist por rol",
+    reasonable extrapolation onto the generic `paso.html` field loop, since
+    no per-role data structure exists in this app — spec `visual-design-
+    system`, requirement 'Eight DESIGN2 Component Classes')."""
+    client, reporte = sesion_de_creador
+
+    response = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'class="pasos' in contenido
+    assert 'class="checklist' in contenido
+    assert 'checklist__item' in contenido
+
+
+@pytest.mark.django_db
+def test_paso_fila_de_horas_aplica_component_class(
+    client, estructura_con_validaciones, reporte_con_validaciones_factory
+):
+    """Change `retrofit-visual-design2` PR2 (design D3/§6.b, task 3.10): a
+    `rango-hora-inicio-fin` item's two fields (`_inicio`/`_fin` suffix,
+    `tipos_reporte.generador._SUFIJO_POR_CLAVE`) both get the `.fila-horas`
+    modifier so they lay out side-by-side (DESIGN2 §6.b "Fila de horas")."""
+    reporte = reporte_con_validaciones_factory(client, estructura_con_validaciones)
+
+    response = client.get(
+        reverse("reportes_paso", args=[reporte.id, "proceso-instalacion"])
+    )
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert contenido.count("fila-horas") == 2
+
+
+@pytest.mark.django_db
+def test_paso_primer_boton_submit_sigue_siendo_el_del_formulario_tras_retrofit(
+    sesion_de_creador,
+):
+    """Submit-order guard (design's "the JS contract"; `paso.js:63`'s
+    `querySelector('form button[type="submit"]')`) re-verified against the
+    real retrofitted `paso.html` markup — not just the pre-retrofit shell
+    (task 1.7 covered `base.html`/`login.html` only)."""
+    client, reporte = sesion_de_creador
+
+    response = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    contenido = response.content.decode()
+
+    primer_boton = re.search(
+        r'<button[^>]*type="submit"[^>]*>([^<]*)</button>', contenido
+    )
+
+    assert response.status_code == 200
+    assert primer_boton is not None
+    assert "Guardar y continuar" in primer_boton.group(1)
+
+
+@pytest.mark.django_db
+def test_paso_carga_envio_paso_js_antes_que_paso_offline_js(sesion_de_creador):
+    """Change `vista-sincronizacion-pendientes`, Phase 1 (design's D2) —
+    `envio-paso.js` defines `window.reportesEnvioPaso`, which
+    `paso-offline.js` now depends on at parse/execute time, so the shared
+    helper MUST be present in the document and load before it."""
+    client, reporte = sesion_de_creador
+
+    response = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "reportes/envio-paso.js" in contenido
+    assert contenido.index("reportes/envio-paso.js") < contenido.index(
+        "reportes/paso-offline.js"
+    )
+
+
+@pytest.mark.django_db
+def test_paso_expone_tipo_nombre_y_fecha_reporte_en_data_attrs(sesion_de_creador):
+    """Change `vista-sincronizacion-pendientes`, Phase 2 (design's D4) —
+    the step `<form>` MUST expose `data-tipo-nombre`/`data-fecha-reporte` so
+    `paso-offline.js` can persist them into the Dexie draft row without a
+    network fetch (spec `sincronizacion-pendientes`, requirement 'Draft
+    Write Captures Display Metadata')."""
+    client, reporte = sesion_de_creador
+
+    response = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    contenido = response.content.decode()
+
+    fecha_esperada = formats.date_format(reporte.fecha_creacion, "DATETIME_FORMAT")
+
+    assert response.status_code == 200
+    assert f'data-tipo-nombre="{reporte.tipo.nombre}"' in contenido
+    assert f'data-fecha-reporte="{fecha_esperada}"' in contenido
+
+
 # ---------------------------------------------------------------------------
 # revision (S-09 review screen; spec `validacion-reporte`)
 # ---------------------------------------------------------------------------
@@ -501,7 +610,9 @@ def test_get_revision_con_errores_deshabilita_generar(
 
     assert response.status_code == 200
     assert response.context["resultado"].errores != ()
-    assert "disabled" in response.content.decode()
+    # `disabled` moved with the closure control — change
+    # `cierre-en-participantes` (tasks.md 7.1) — asserted on
+    # `reportes_participantes` in `test_get_participantes_creador_ineligible_ve_disabled_y_razon`.
 
 
 @pytest.mark.django_db
@@ -530,7 +641,133 @@ def test_get_revision_sin_errores_habilita_generar(
 
     assert response.status_code == 200
     assert response.context["resultado"].errores == ()
-    assert "disabled" not in response.content.decode()
+    # `disabled` moved with the closure control — change
+    # `cierre-en-participantes` (tasks.md 7.2) — asserted on
+    # `reportes_participantes` in `test_get_participantes_creador_elegible_sin_disabled`.
+
+
+# ---------------------------------------------------------------------------
+# revision — visual retrofit (change `retrofit-visual-design2` PR3, tasks.md
+# Phase 4; design D3/D6, spec `visual-design-system`)
+# ---------------------------------------------------------------------------
+
+
+# `test_revision_boton_primario_deshabilitado_muestra_razon_via_acciones_razon`
+# (originally `retrofit-visual-design2` PR3, design D6, task 4.1) folded into
+# `test_get_participantes_creador_ineligible_ve_disabled_y_razon` — change
+# `cierre-en-participantes` (tasks.md 7.3): the closure control, its
+# `disabled` attribute, and its `.acciones__razon` sibling all moved to
+# `participantes.html`.
+
+
+@pytest.mark.django_db
+def test_revision_tripwire_disabled_sigue_presente_como_antes(
+    client,
+    estructura_con_validaciones,
+    tipo_con_definicion_activa_factory,
+    reporte_factory,
+    usuario_factory,
+):
+    """The literal `disabled` HTML-attribute tripwire (originally
+    `retrofit-visual-design2` PR3, design D6, task 4.2) stays on
+    `reportes_revision` — the "Marcar como terminado" closure control never
+    moved to `participantes.html`. Builds its own two `TipoDeReporte` rows
+    (distinct `codigo`) directly, since `reporte_con_validaciones_factory`
+    hardcodes a single codigo/username pair and cannot be called twice in
+    one test."""
+    tipo_con_errores, definicion_con_errores = tipo_con_definicion_activa_factory(
+        estructura=estructura_con_validaciones(),
+        codigo="instalacion-resinas-tripwire-con-errores",
+    )
+    creador_con_errores = usuario_factory(username="creador-tripwire-con-errores")
+    reporte_con_errores = reporte_factory(
+        tipo=tipo_con_errores,
+        definicion=definicion_con_errores,
+        creador=creador_con_errores,
+    )
+    client.force_login(creador_con_errores)
+    respuesta_con_errores = client.get(
+        reverse("reportes_revision", args=[reporte_con_errores.id])
+    )
+    assert "disabled" in respuesta_con_errores.content.decode()
+
+    tipo_sin_errores, definicion_sin_errores = tipo_con_definicion_activa_factory(
+        estructura=estructura_con_validaciones(),
+        codigo="instalacion-resinas-tripwire-sin-errores",
+    )
+    creador_sin_errores = usuario_factory(username="creador-tripwire-sin-errores")
+    reporte_sin_errores = reporte_factory(
+        tipo=tipo_sin_errores,
+        definicion=definicion_sin_errores,
+        creador=creador_sin_errores,
+    )
+    for identificador, valor in (
+        ("observaciones-generales", "Todo en orden."),
+        ("estado-general", "Cumple"),
+        ("p-01_inicio", "08:00"),
+        ("p-01_fin", "09:00"),
+    ):
+        ValorDeReporte.objects.create(
+            reporte=reporte_sin_errores,
+            identificador_de_campo=identificador,
+            valor=valor,
+            autor=creador_sin_errores,
+        )
+    client.force_login(creador_sin_errores)
+    respuesta_sin_errores = client.get(
+        reverse("reportes_revision", args=[reporte_sin_errores.id])
+    )
+    assert "disabled" not in respuesta_sin_errores.content.decode()
+
+
+@pytest.mark.django_db
+def test_revision_aplica_hoja_modal_component_class(
+    client, estructura_con_validaciones, reporte_con_validaciones_factory
+):
+    """Change `retrofit-visual-design2` PR3 (design D3/D5, task 4.3): the
+    errores/advertencias listing is wrapped in the `.hoja` component class
+    (DESIGN2 §4 "Hoja modal (S-09)")."""
+    reporte = reporte_con_validaciones_factory(client, estructura_con_validaciones)
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'class="hoja"' in contenido
+    assert "hoja__encabezado" in contenido
+    assert "hoja__cuerpo" in contenido
+
+
+@pytest.mark.django_db
+def test_participantes_aplica_checklist_y_campo_component_classes(
+    sesion_de_creador, participacion_factory
+):
+    """Change `retrofit-visual-design2` PR3 (design D3, task 4.4): the
+    invitados listing gets the `.checklist` component class and the invite
+    form's field gets `.campo` (DESIGN2 §4 "Checklist por rol" reused as the
+    rhythm/list wrapper, matching PR2's `paso.html` precedent; S-10)."""
+    client, reporte = sesion_de_creador
+    participacion_factory(reporte, username="participante-checklist")
+
+    response = client.get(reverse("reportes_participantes", args=[reporte.id]))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'class="checklist' in contenido
+    assert 'class="campo' in contenido
+
+
+def test_sw_js_contiene_cache_v7(client):
+    """Change `vista-sincronizacion-pendientes` (design D7, task 6.1/6.2):
+    the SW `CACHE` version bumps `v6` -> `v7` so a returning user's stale
+    cache never wins over the S-15 screen's new navigation branch. One
+    assertion per PR (Testing Strategy) — supersedes the PR3 `v6` pin
+    (mirrors `test_estatico.py::test_sw_js_cachea_sincronizacion_y_bumpea_v7`,
+    which also asserts the new navigation-branch path)."""
+    response = client.get("/sw.js")
+    contenido = response.content.decode()
+
+    assert "reportes-offline-v20" in contenido
 
 
 @pytest.mark.django_db
@@ -625,6 +862,8 @@ def test_cerrar_reporte_rechazado_si_no_puede_generar(
     assert not VistoBueno.objects.filter(reporte=reporte).exists()
     reporte.refresh_from_db()
     assert reporte.estado == EstadoDeReporte.EN_PROGRESO
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_participantes", args=[reporte.id])
 
 
 @pytest.mark.django_db
@@ -639,7 +878,7 @@ def test_cerrar_reporte_creador_exitoso(reporte_listo_para_cerrar):
     reporte.refresh_from_db()
     assert reporte.estado == EstadoDeReporte.TERMINADO
     assert response.status_code == 302
-    assert response.url == reverse("reportes_revision", args=[reporte.id])
+    assert response.url == reverse("reportes_mis")
 
 
 @pytest.mark.django_db
@@ -654,6 +893,131 @@ def test_cerrar_reporte_doble_post_es_idempotente(reporte_listo_para_cerrar):
     assert VistoBueno.objects.filter(reporte=reporte).count() == 1
     mensajes_segunda = list(get_messages(segunda.wsgi_request))
     assert any(mensaje.level_tag == "success" for mensaje in mensajes_segunda)
+
+
+# ---------------------------------------------------------------------------
+# eliminar_reporte (soft delete: creator-only, regardless of estado)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_eliminar_reporte_no_creador_devuelve_404(
+    cliente_autenticado, usuario_factory, reporte_factory
+):
+    otro_creador = usuario_factory(username="otro_creador_eliminar")
+    reporte = reporte_factory(creador=otro_creador)
+
+    response = cliente_autenticado.post(
+        reverse("reportes_eliminar", args=[reporte.id])
+    )
+
+    assert response.status_code == 404
+    reporte.refresh_from_db()
+    assert reporte.eliminado_en is None
+
+
+@pytest.mark.django_db
+def test_eliminar_reporte_participante_invitado_devuelve_404(sesion_de_invitado):
+    """Only the creator may delete, unaffected by `ParticipacionEnReporte`
+    (mirrors `cerrar_reporte`'s "Invited non-creator participant cannot
+    close")."""
+    client, reporte = sesion_de_invitado
+
+    response = client.post(reverse("reportes_eliminar", args=[reporte.id]))
+
+    assert response.status_code == 404
+    reporte.refresh_from_db()
+    assert reporte.eliminado_en is None
+
+
+@pytest.mark.django_db
+def test_eliminar_reporte_get_muestra_confirmacion_sin_efecto(sesion_de_creador):
+    client, reporte = sesion_de_creador
+
+    response = client.get(reverse("reportes_eliminar", args=[reporte.id]))
+
+    assert response.status_code == 200
+    reporte.refresh_from_db()
+    assert reporte.eliminado_en is None
+
+
+@pytest.mark.django_db
+def test_eliminar_reporte_creador_exitoso(sesion_de_creador):
+    client, reporte = sesion_de_creador
+
+    response = client.post(reverse("reportes_eliminar", args=[reporte.id]))
+
+    reporte.refresh_from_db()
+    assert reporte.eliminado_en is not None
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_mis")
+
+
+@pytest.mark.django_db
+def test_eliminar_reporte_no_borra_datos_relacionados(sesion_de_creador):
+    """Soft delete only stamps `eliminado_en` — `ValorDeReporte` and every
+    other related row stay intact for audit/recovery."""
+    client, reporte = sesion_de_creador
+    ValorDeReporte.objects.create(
+        reporte=reporte,
+        identificador_de_campo="turno",
+        valor="Día",
+        autor=reporte.creador,
+    )
+
+    client.post(reverse("reportes_eliminar", args=[reporte.id]))
+
+    assert ValorDeReporte.objects.filter(reporte=reporte).count() == 1
+    assert Reporte.objects.filter(pk=reporte.pk).exists()
+
+
+@pytest.mark.django_db
+def test_eliminar_reporte_terminado_tambien_se_puede_eliminar(
+    reporte_listo_para_cerrar,
+):
+    """Deletion is allowed regardless of `estado` — `en_progreso` or
+    `terminado`."""
+    client, reporte = reporte_listo_para_cerrar
+    client.post(reverse("reportes_cerrar", args=[reporte.id]))
+    reporte.refresh_from_db()
+    assert reporte.estado == EstadoDeReporte.TERMINADO
+
+    response = client.post(reverse("reportes_eliminar", args=[reporte.id]))
+
+    reporte.refresh_from_db()
+    assert reporte.eliminado_en is not None
+    assert response.status_code == 302
+
+
+@pytest.mark.django_db
+def test_reporte_eliminado_404_en_paso_revision_participantes(sesion_de_creador):
+    """Once soft-deleted, a `Reporte` 404s exactly like one that never
+    existed on every access-scoped screen — creator included."""
+    client, reporte = sesion_de_creador
+    client.post(reverse("reportes_eliminar", args=[reporte.id]))
+
+    for nombre, args in (
+        ("reportes_paso", [reporte.id, "datos-generales"]),
+        ("reportes_revision", [reporte.id]),
+        ("reportes_participantes", [reporte.id]),
+    ):
+        response = client.get(reverse(nombre, args=args))
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_reporte_eliminado_no_aparece_en_mis_reportes(sesion_de_creador):
+    client, reporte = sesion_de_creador
+    client.post(reverse("reportes_eliminar", args=[reporte.id]))
+
+    response = client.get(reverse("reportes_mis"))
+
+    ids_listados = {
+        tarjeta.reporte.id
+        for grupo in response.context["grupos"]
+        for tarjeta in grupo["tarjetas"]
+    }
+    assert reporte.id not in ids_listados
 
 
 # ---------------------------------------------------------------------------
@@ -831,7 +1195,47 @@ def test_get_revision_no_creador_no_ve_boton_cerrar(
         request=request,
     )
 
-    assert "Cerrar reporte" not in contenido
+    assert "Marcar como terminado" not in contenido
+
+
+@pytest.mark.django_db
+def test_get_revision_creador_ve_form_cerrar_pero_get_no_crea_visto_bueno(
+    reporte_listo_para_cerrar,
+):
+    """Follow-up to `cierre-en-participantes`: the closure control is now
+    also reachable directly from `reportes_revision` (not only via
+    `participantes.html`), so a report is fully actionable from wherever
+    the creator enters it — a GET still never creates a `VistoBueno`
+    (only `cerrar_reporte`'s POST does)."""
+    client, reporte = reporte_listo_para_cerrar
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert f'action="{reverse("reportes_cerrar", args=[reporte.id])}"' in contenido
+    assert "Marcar como terminado" in contenido
+    assert not VistoBueno.objects.filter(reporte=reporte).exists()
+
+
+@pytest.mark.django_db
+def test_get_revision_contiene_link_a_participantes_e_historial(
+    reporte_listo_para_cerrar,
+):
+    """`reportes_revision` links to `reportes_participantes` with the
+    "Participantes e historial →" label, for viewing invited users and
+    change history (separate from the closure action, which now lives on
+    both screens)."""
+    client, reporte = reporte_listo_para_cerrar
+
+    response = client.get(reverse("reportes_revision", args=[reporte.id]))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Participantes e historial" in contenido
+    assert (
+        f'href="{reverse("reportes_participantes", args=[reporte.id])}"' in contenido
+    )
 
 
 @pytest.mark.django_db
@@ -879,11 +1283,35 @@ def test_invitar_exitoso(sesion_de_creador, usuario_factory):
     )
 
     assert response.status_code == 302
+    assert response.url == reverse("reportes_participantes", args=[reporte.id])
     assert ParticipacionEnReporte.objects.filter(
         reporte=reporte, usuario=invitado
     ).exists()
     mensajes = list(get_messages(response.wsgi_request))
     assert any(mensaje.level_tag == "success" for mensaje in mensajes)
+
+
+@pytest.mark.django_db
+def test_invitar_con_next_mis_redirige_a_mis_reportes(client, usuario_factory, reporte_factory):
+    """The "compartir" quick-share icon on `mis_reportes.html` posts
+    `next=mis` so the creator never has to open the report to invite
+    someone — the response goes straight back to "Mis reportes" instead
+    of `reportes_participantes`."""
+    creador = usuario_factory(username="creador-next-mis")
+    reporte = reporte_factory(creador=creador)
+    invitado = usuario_factory(username="invitado-next-mis")
+    client.force_login(creador)
+
+    response = client.post(
+        reverse("reportes_invitar", args=[reporte.id]),
+        data={"username": invitado.username, "next": "mis"},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_mis")
+    assert ParticipacionEnReporte.objects.filter(
+        reporte=reporte, usuario=invitado
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -1009,7 +1437,8 @@ def test_participantes_historial_mas_reciente_primero(sesion_de_creador):
 
     response = client.get(reverse("reportes_participantes", args=[reporte.id]))
 
-    cambios = list(response.context["cambios"])
+    sesiones = response.context["sesiones_de_cambios"]
+    cambios = [item["cambio"] for sesion in sesiones for item in sesion["items"]]
     assert cambios == [segundo, primero]
 
 
@@ -1027,6 +1456,45 @@ def test_participantes_no_participante_devuelve_404(
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_participantes_contexto_incluye_resultado(sesion_de_creador):
+    """Change `cierre-en-participantes` (tasks.md 1.3; design's Interfaces
+    section): `participantes` computes `resultado` via `validar_reporte`,
+    exactly like `revision` already does, so the closure form can render
+    the `puede_generar`/errores-driven gating."""
+    client, reporte = sesion_de_creador
+
+    response = client.get(reverse("reportes_participantes", args=[reporte.id]))
+
+    assert response.status_code == 200
+    assert response.context["resultado"] == validar_reporte(reporte)
+
+
+# ---------------------------------------------------------------------------
+# reportes_cerrar — closure endpoint (no longer exposed via a form on
+# `reportes_participantes`; the closure control lives only on
+# `reportes_revision` now). The endpoint itself is unchanged.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_post_reportes_cerrar_creador_exitoso(reporte_listo_para_cerrar):
+    """Mirrors `test_cerrar_reporte_creador_exitoso`: POSTing to
+    `reportes_cerrar` creates the `VistoBueno`, sets `estado=TERMINADO`,
+    and redirects to `reportes_mis`."""
+    client, reporte = reporte_listo_para_cerrar
+
+    response = client.post(reverse("reportes_cerrar", args=[reporte.id]))
+
+    assert VistoBueno.objects.filter(
+        reporte=reporte, usuario=reporte.creador
+    ).exists()
+    reporte.refresh_from_db()
+    assert reporte.estado == EstadoDeReporte.TERMINADO
+    assert response.status_code == 302
+    assert response.url == reverse("reportes_mis")
 
 
 # ---------------------------------------------------------------------------
@@ -1072,6 +1540,60 @@ def test_sw_js_body_referencia_paso_js(client):
     contenido = response.content.decode()
 
     assert "/static/reportes/paso.js" in contenido
+
+
+@pytest.mark.django_db
+def test_base_html_incluye_ambos_links_css(client, usuario_factory):
+    """`base.html` links both `static/css/tokens.css` and
+    `static/css/components.css` (spec `visual-design-system`, scenario
+    'base.html links the new stylesheets and font')."""
+    usuario_factory(username="usuario-base-html-links")
+    response = client.get(reverse("login"))
+    contenido = response.content.decode()
+
+    assert '<link rel="stylesheet" href="/static/css/tokens.css">' in contenido
+    assert (
+        '<link rel="stylesheet" href="/static/css/components.css">' in contenido
+    )
+
+
+@pytest.mark.django_db
+def test_base_incluye_script_conexion_chip_defer(client, usuario_factory):
+    """Change `chip-conexion-en-vivo` (tasks.md 2.2; design's Decision
+    "Script included once in base.html, not per template"): the rendered
+    `<head>` must include `js/conexion-chip.js` with `defer`."""
+    usuario_factory(username="usuario-base-html-conexion-chip")
+    response = client.get(reverse("login"))
+    contenido = response.content.decode()
+
+    assert "js/conexion-chip.js" in contenido
+    assert "defer" in contenido
+
+
+def test_base_html_no_referencia_cdn(client):
+    """No `<link>`/`<script>` in the rendered page references a third-party
+    CDN font or stylesheet (spec: 'no third-party CDN dependency')."""
+    response = client.get(reverse("login"))
+    contenido = response.content.decode().lower()
+
+    assert "fonts.googleapis" not in contenido
+    assert "fonts.gstatic" not in contenido
+    assert "cdn." not in contenido
+
+
+def test_login_primer_boton_submit_es_el_del_formulario_de_login(client):
+    """Submit-order guard against the new `base.html` shell (design: a
+    header/logout form ahead of the page's own submit form would silently
+    break `querySelector`-based JS elsewhere, e.g. `paso.js:63`). The first
+    `form button[type="submit"]` in document order on `/login/` must be the
+    login form's own submit button."""
+    response = client.get(reverse("login"))
+    contenido = response.content.decode()
+
+    primer_boton = re.search(r'<button[^>]*type="submit"[^>]*>([^<]*)</button>', contenido)
+
+    assert primer_boton is not None
+    assert "Ingresar" in primer_boton.group(1)
 
 
 # ---------------------------------------------------------------------------
@@ -1133,10 +1655,21 @@ def test_post_paso_actualiza_servidor_actualizado_en_siguiente_get(sesion_de_cre
 
 
 # ---------------------------------------------------------------------------
-# mis_reportes (backlog #12, PR 2 of 3; spec `listado-reportes`; design's
-# View shape / D2 / D3 / D4). Focused command: `pytest
-# reportes/tests/test_views.py -q -k "mis_reportes"`.
+# mis_reportes (backlog #12, spec `listado-reportes`; design's Data Flow /
+# D1-D5). Status-bucket grouping replaces the old creador/participante
+# split (design's Technical Approach note: "the delta spec supersedes
+# proposal.md"). Focused command: `pytest reportes/tests/test_views.py -q
+# -k mis_reportes`.
 # ---------------------------------------------------------------------------
+
+
+def _bucket_de(response, reporte):
+    """Test-local helper: find which `grupos` bucket id contains `reporte`,
+    or `None` if it appears in no bucket on the rendered page."""
+    for grupo in response.context["grupos"]:
+        if any(tarjeta.reporte.pk == reporte.pk for tarjeta in grupo["tarjetas"]):
+            return grupo["id"]
+    return None
 
 
 @pytest.mark.django_db
@@ -1155,8 +1688,8 @@ def test_mis_reportes_anonimo_redirige_a_login(client, reporte_factory):
 def test_mis_reportes_lista_solo_accesibles(
     client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
 ):
-    """Spec 'User sees only accessible reports': creator A sees R1 (own)
-    and R2 (invited), not R3 (stranger's)."""
+    """Spec 'Access-Scoped Report List': creator A sees R1 (own) and R2
+    (invited), not R3 (stranger's)."""
     a = usuario_factory(username="mis-reportes-a")
     b = usuario_factory(username="mis-reportes-b")
     tipo1, definicion1 = tipo_con_definicion_activa_factory(
@@ -1175,7 +1708,7 @@ def test_mis_reportes_lista_solo_accesibles(
     client.force_login(a)
 
     response = client.get(reverse("reportes_mis"))
-    reportes_en_pagina = list(response.context["page_obj"])
+    reportes_en_pagina = [t.reporte for t in response.context["page_obj"]]
 
     assert response.status_code == 200
     assert r1 in reportes_en_pagina
@@ -1195,106 +1728,119 @@ def test_mis_reportes_admin_sin_relacion_no_ve_reporte_ajeno(
     client.force_login(admin)
 
     response = client.get(reverse("reportes_mis"))
-    reportes_en_pagina = list(response.context["page_obj"])
+    reportes_en_pagina = [t.reporte for t in response.context["page_obj"]]
 
     assert response.status_code == 200
     assert r4 not in reportes_en_pagina
 
 
 @pytest.mark.django_db
-def test_mis_reportes_agrupa_creados_por_mi(client, usuario_factory, reporte_factory):
-    """Spec 'Report grouped as created by me'."""
-    a = usuario_factory(username="mis-reportes-agrupa-creador")
-    r1 = reporte_factory(creador=a)
-    client.force_login(a)
-
-    response = client.get(reverse("reportes_mis"))
-
-    assert response.status_code == 200
-    assert r1 in response.context["creados"]
-    assert r1 not in response.context["compartidos"]
-
-
-@pytest.mark.django_db
-def test_mis_reportes_agrupa_compartidos_conmigo(
-    client, usuario_factory, reporte_factory, participacion_factory
-):
-    """Spec 'Report grouped as shared with me': invited-only report
-    appears under 'compartidos conmigo' and NOT under 'creados por mí'."""
-    b = usuario_factory(username="mis-reportes-agrupa-otro-creador")
-    r2 = reporte_factory(creador=b)
-    invitado = participacion_factory(r2, username="mis-reportes-agrupa-invitado")
-    client.force_login(invitado)
-
-    response = client.get(reverse("reportes_mis"))
-
-    assert response.status_code == 200
-    assert r2 in response.context["compartidos"]
-    assert r2 not in response.context["creados"]
-
-
-@pytest.mark.django_db
-def test_mis_reportes_chip_en_progreso(client, usuario_factory, reporte_factory):
-    """Spec 'en_progreso report renders its real status'."""
-    a = usuario_factory(username="mis-reportes-chip-en-progreso")
-    reporte_factory(creador=a, estado=EstadoDeReporte.EN_PROGRESO)
-    client.force_login(a)
-
-    response = client.get(reverse("reportes_mis"))
-    contenido = response.content.decode()
-
-    assert response.status_code == 200
-    assert "En progreso" in contenido
-    assert "generado" not in contenido
-
-
-@pytest.mark.django_db
-def test_mis_reportes_chip_terminado(client, usuario_factory, reporte_factory):
-    """Spec 'terminado report renders its real status'."""
-    a = usuario_factory(username="mis-reportes-chip-terminado")
-    reporte_factory(creador=a, estado=EstadoDeReporte.TERMINADO)
-    client.force_login(a)
-
-    response = client.get(reverse("reportes_mis"))
-    contenido = response.content.decode()
-
-    assert response.status_code == 200
-    assert "Terminado" in contenido
-    assert "generado" not in contenido
-
-
-@pytest.mark.django_db
-def test_mis_reportes_busqueda_por_tipo(
+def test_mis_reportes_relacion_creados_filtra_antes_de_agrupar(
     client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
 ):
-    """Spec 'Search by tipo nombre': `?q=auditoria` narrows results to the
-    matching tipo only (design D4 accent-folding)."""
-    a = usuario_factory(username="mis-reportes-busqueda")
-    tipo_auditoria, definicion_auditoria = tipo_con_definicion_activa_factory(
-        nombre="Auditoría", codigo="auditoria-busqueda"
+    """Spec 'Filter restricts before grouping': user A created R1 (missing
+    fields) and was invited to R2 (visto bueno present); `?relacion=creados`
+    must leave R2 out of every bucket, not just its own bucket."""
+    a = usuario_factory(username="mis-reportes-relacion-a")
+    tipo1, definicion1 = tipo_con_definicion_activa_factory(
+        nombre="Relacion filtra 1", codigo="relacion-filtra-1"
     )
-    tipo_inspeccion, definicion_inspeccion = tipo_con_definicion_activa_factory(
-        nombre="Inspección", codigo="inspeccion-busqueda"
+    tipo2, definicion2 = tipo_con_definicion_activa_factory(
+        nombre="Relacion filtra 2", codigo="relacion-filtra-2"
     )
-    r_auditoria = reporte_factory(
-        creador=a, tipo=tipo_auditoria, definicion=definicion_auditoria
-    )
-    reporte_factory(creador=a, tipo=tipo_inspeccion, definicion=definicion_inspeccion)
+    r1 = reporte_factory(creador=a, tipo=tipo1, definicion=definicion1)
+    r2 = reporte_factory(tipo=tipo2, definicion=definicion2)
+    ParticipacionEnReporte.objects.create(reporte=r2, usuario=a)
+    VistoBueno.objects.create(reporte=r2, usuario=r2.creador)
     client.force_login(a)
 
-    response = client.get(reverse("reportes_mis"), {"q": "auditoria"})
-    reportes_en_pagina = list(response.context["page_obj"])
+    response = client.get(reverse("reportes_mis"), {"relacion": "creados"})
 
     assert response.status_code == 200
-    assert reportes_en_pagina == [r_auditoria]
+    assert _bucket_de(response, r1) is not None
+    assert _bucket_de(response, r2) is None
+
+
+@pytest.mark.django_db
+def test_mis_reportes_relacion_por_defecto_es_todos(
+    client, usuario_factory, reporte_factory, participacion_factory,
+    tipo_con_definicion_activa_factory,
+):
+    """Spec 'Default is todos': with no `?relacion=`, both created and
+    shared reports are considered for bucketing."""
+    tipo1, definicion1 = tipo_con_definicion_activa_factory(
+        nombre="Relacion default 1", codigo="relacion-default-1"
+    )
+    tipo2, definicion2 = tipo_con_definicion_activa_factory(
+        nombre="Relacion default 2", codigo="relacion-default-2"
+    )
+    r_creado = reporte_factory(tipo=tipo1, definicion=definicion1)
+    a = participacion_factory(r_creado, username="mis-reportes-relacion-default-a")
+    r_creado_por_a = reporte_factory(creador=a, tipo=tipo2, definicion=definicion2)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+
+    assert response.status_code == 200
+    assert _bucket_de(response, r_creado) is not None
+    assert _bucket_de(response, r_creado_por_a) is not None
+
+
+@pytest.mark.django_db
+def test_mis_reportes_bucket_terminado_es_el_mismo_para_creador_e_invitado(
+    client, usuario_factory, reporte_factory, participacion_factory
+):
+    """Spec 'Closed report is terminado for any viewer': grouping does not
+    depend on the requesting user's own authorship history."""
+    reporte = reporte_factory()
+    invitado = participacion_factory(reporte, username="mis-reportes-bucket-invitado")
+    VistoBueno.objects.create(reporte=reporte, usuario=reporte.creador)
+
+    client.force_login(reporte.creador)
+    respuesta_creador = client.get(reverse("reportes_mis"))
+    client.force_login(invitado)
+    respuesta_invitado = client.get(reverse("reportes_mis"))
+
+    assert _bucket_de(respuesta_creador, reporte) == "terminado"
+    assert _bucket_de(respuesta_invitado, reporte) == "terminado"
+
+
+@pytest.mark.django_db
+def test_mis_reportes_en_progreso_sin_importar_quien_completo(
+    client, usuario_factory, estructura_con_validaciones, tipo_con_definicion_activa_factory
+):
+    """Spec 'Missing fields groups as en progreso regardless of authorship':
+    the creador authored one value, invited user B never authored any, and
+    the report is still 'en progreso' for B — the SAME bucket as for the
+    creador."""
+    tipo, definicion = tipo_con_definicion_activa_factory(
+        estructura=estructura_con_validaciones(),
+        nombre="En progreso autoria",
+        codigo="en-progreso-autoria",
+    )
+    creador = usuario_factory(username="mis-reportes-en-progreso-creador")
+    reporte = Reporte.objects.create(tipo=tipo, definicion=definicion, creador=creador)
+    ValorDeReporte.objects.create(
+        reporte=reporte,
+        identificador_de_campo="estado-general",
+        valor="Cumple",
+        autor=creador,
+    )
+    b = usuario_factory(username="mis-reportes-en-progreso-b")
+    ParticipacionEnReporte.objects.create(reporte=reporte, usuario=b)
+    client.force_login(b)
+
+    response = client.get(reverse("reportes_mis"))
+
+    assert _bucket_de(response, reporte) == "en_progreso"
 
 
 @pytest.mark.django_db
 def test_mis_reportes_filtro_estado(
     client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
 ):
-    """Spec 'Filter by estado': `?estado=terminado` narrows to terminado
-    reports only."""
+    """Spec 'Filter by computed estado bucket': `?estado=terminado` narrows
+    to terminado reports only."""
     a = usuario_factory(username="mis-reportes-filtro-estado")
     tipo1, definicion1 = tipo_con_definicion_activa_factory(
         nombre="Filtro estado 1", codigo="filtro-estado-1"
@@ -1302,60 +1848,42 @@ def test_mis_reportes_filtro_estado(
     tipo2, definicion2 = tipo_con_definicion_activa_factory(
         nombre="Filtro estado 2", codigo="filtro-estado-2"
     )
-    reporte_factory(
-        creador=a, tipo=tipo1, definicion=definicion1, estado=EstadoDeReporte.EN_PROGRESO
-    )
-    terminado = reporte_factory(
-        creador=a, tipo=tipo2, definicion=definicion2, estado=EstadoDeReporte.TERMINADO
-    )
+    en_progreso = reporte_factory(creador=a, tipo=tipo1, definicion=definicion1)
+    terminado = reporte_factory(creador=a, tipo=tipo2, definicion=definicion2)
+    VistoBueno.objects.create(reporte=terminado, usuario=a)
     client.force_login(a)
 
     response = client.get(reverse("reportes_mis"), {"estado": "terminado"})
-    reportes_en_pagina = list(response.context["page_obj"])
+    reportes_en_pagina = [t.reporte for t in response.context["page_obj"]]
 
     assert response.status_code == 200
     assert reportes_en_pagina == [terminado]
+    assert en_progreso not in reportes_en_pagina
 
 
 @pytest.mark.django_db
-def test_mis_reportes_busqueda_y_estado_combinados(
+def test_mis_reportes_estado_terminado_encuentra_reporte_en_pagina_2_sin_filtro(
     client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
 ):
-    """Spec 'Search and estado filter combine'."""
-    a = usuario_factory(username="mis-reportes-combinado")
-    tipo_auditoria, definicion_auditoria = tipo_con_definicion_activa_factory(
-        nombre="Auditoría", codigo="auditoria-combinado"
+    """Design D2's rationale: bucket-then-filter-then-paginate means
+    `?estado=terminado` finds a terminado report that would have landed on
+    page 2 of the UNFILTERED set — proves filtering happens before, not
+    after, pagination."""
+    a = usuario_factory(username="mis-reportes-pagina-2-estado")
+    tipo, definicion = tipo_con_definicion_activa_factory(
+        nombre="Pagina 2 estado", codigo="pagina-2-estado"
     )
-    coincide = reporte_factory(
-        creador=a,
-        tipo=tipo_auditoria,
-        definicion=definicion_auditoria,
-        estado=EstadoDeReporte.TERMINADO,
-    )
-    reporte_factory(
-        creador=a,
-        tipo=tipo_auditoria,
-        definicion=definicion_auditoria,
-        estado=EstadoDeReporte.EN_PROGRESO,
-    )
-    tipo_inspeccion, definicion_inspeccion = tipo_con_definicion_activa_factory(
-        nombre="Inspección", codigo="inspeccion-combinado"
-    )
-    reporte_factory(
-        creador=a,
-        tipo=tipo_inspeccion,
-        definicion=definicion_inspeccion,
-        estado=EstadoDeReporte.TERMINADO,
-    )
+    for _ in range(20):
+        reporte_factory(creador=a, tipo=tipo, definicion=definicion)
+    terminado = reporte_factory(creador=a, tipo=tipo, definicion=definicion)
+    VistoBueno.objects.create(reporte=terminado, usuario=a)
     client.force_login(a)
 
-    response = client.get(
-        reverse("reportes_mis"), {"q": "auditoria", "estado": "terminado"}
-    )
-    reportes_en_pagina = list(response.context["page_obj"])
+    response = client.get(reverse("reportes_mis"), {"estado": "terminado"})
+    reportes_en_pagina = [t.reporte for t in response.context["page_obj"]]
 
     assert response.status_code == 200
-    assert reportes_en_pagina == [coincide]
+    assert reportes_en_pagina == [terminado]
 
 
 @pytest.mark.django_db
@@ -1371,12 +1899,9 @@ def test_mis_reportes_estado_invalido_no_falla(
     tipo2, definicion2 = tipo_con_definicion_activa_factory(
         nombre="Estado invalido 2", codigo="estado-invalido-2"
     )
-    reporte_factory(
-        creador=a, tipo=tipo1, definicion=definicion1, estado=EstadoDeReporte.EN_PROGRESO
-    )
-    reporte_factory(
-        creador=a, tipo=tipo2, definicion=definicion2, estado=EstadoDeReporte.TERMINADO
-    )
+    reporte_factory(creador=a, tipo=tipo1, definicion=definicion1)
+    terminado = reporte_factory(creador=a, tipo=tipo2, definicion=definicion2)
+    VistoBueno.objects.create(reporte=terminado, usuario=a)
     client.force_login(a)
 
     response = client.get(reverse("reportes_mis"), {"estado": "basura"})
@@ -1414,7 +1939,7 @@ def test_mis_reportes_orden_mas_reciente_primero(
     client.force_login(a)
 
     response = client.get(reverse("reportes_mis"))
-    reportes_en_pagina = list(response.context["page_obj"])
+    reportes_en_pagina = [t.reporte for t in response.context["page_obj"]]
 
     assert response.status_code == 200
     assert reportes_en_pagina == [r3, r2, r1]
@@ -1484,8 +2009,10 @@ def test_mis_reportes_pagina_2_preserva_query_string(
 
 
 @pytest.mark.django_db
-def test_mis_reportes_no_muestra_numero_registro(client, usuario_factory, reporte_factory):
-    """Spec 'No numero_registro Column in List'."""
+def test_mis_reportes_muestra_numero_registro_asignado(
+    client, usuario_factory, reporte_factory
+):
+    """Spec 'Assigned numero_registro renders'."""
     a = usuario_factory(username="mis-reportes-numero-registro")
     reporte = reporte_factory(creador=a)
     client.force_login(a)
@@ -1494,4 +2021,402 @@ def test_mis_reportes_no_muestra_numero_registro(client, usuario_factory, report
     contenido = response.content.decode()
 
     assert response.status_code == 200
-    assert str(reporte.numero_registro) not in contenido
+    assert str(reporte.numero_registro) in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_local_chip_cuando_numero_registro_es_none(
+    client, usuario_factory, reporte_factory
+):
+    """Spec 'Unsynced report renders local chip' (design D4 — a persisted
+    `Reporte.numero_registro` can never itself be `None`, so this exercises
+    the template contract directly by injecting a `TarjetaDeReporte` whose
+    `numero_registro` is `None`, the shape a future offline row from
+    `vista-sincronizacion-pendientes` would have)."""
+    from reportes.listado import TarjetaDeReporte
+
+    a = usuario_factory(username="mis-reportes-local-chip")
+    reporte = reporte_factory(creador=a)
+    client.force_login(a)
+
+    tarjeta_local = TarjetaDeReporte(
+        reporte=reporte, bucket="en_progreso", avance=0, numero_registro=None
+    )
+    with mock.patch("reportes.listado.construir_tarjetas", return_value=[tarjeta_local]):
+        response = client.get(reverse("reportes_mis"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "local" in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_muestra_porcentaje_de_avance(
+    client, usuario_factory, estructura_con_validaciones, tipo_con_definicion_activa_factory
+):
+    """Spec 'Partial completion renders a percentage': 1 of 4 obligatorios
+    filled ⇒ 25%."""
+    tipo, definicion = tipo_con_definicion_activa_factory(
+        estructura=estructura_con_validaciones(),
+        nombre="Avance porcentaje",
+        codigo="avance-porcentaje",
+    )
+    a = usuario_factory(username="mis-reportes-avance")
+    reporte = Reporte.objects.create(tipo=tipo, definicion=definicion, creador=a)
+    ValorDeReporte.objects.create(
+        reporte=reporte,
+        identificador_de_campo="estado-general",
+        valor="Cumple",
+        autor=a,
+    )
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "25" in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_cta_nuevo_reporte_presente_incluso_sin_resultados(
+    client, usuario_factory
+):
+    """Spec 'Fixed Nuevo Reporte Entry Point' / 'CTA is always present': the
+    entry point moved from an inline button into the sidebar's "Reportes"
+    link (always rendered via base.html for every authenticated screen),
+    to avoid duplicating it with the sidebar nav — still renders even with
+    zero accessible reports."""
+    a = usuario_factory(username="mis-reportes-cta-vacio")
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert reverse("reportes_seleccion_tipo") in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_cta_nuevo_reporte_presente_con_filtros_y_busqueda(
+    client, usuario_factory, reporte_factory
+):
+    """Spec 'CTA is always present': the sidebar "Reportes" entry point
+    still renders under `?q=`/`?relacion=`/`?estado=` combinations,
+    including ones that empty the result set."""
+    a = usuario_factory(username="mis-reportes-cta-filtros")
+    reporte_factory(creador=a)
+    client.force_login(a)
+
+    response = client.get(
+        reverse("reportes_mis"),
+        {"q": "algo-que-no-existe", "relacion": "compartidos", "estado": "terminado"},
+    )
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert reverse("reportes_seleccion_tipo") in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_numero_de_consultas_no_crece_con_n(
+    client, usuario_factory, tipo_con_definicion_activa_factory, reporte_factory
+    ):
+    """Task 3.3 — the view's query count must stay constant regardless of
+    how many reports are being listed (design D2: `annotate(Exists(...))` +
+    `select_related`/`prefetch_related` instead of one query per report)."""
+    from django.test.utils import CaptureQueriesContext
+    from django.db import connection
+
+    a = usuario_factory(username="mis-reportes-num-queries")
+    tipo, definicion = tipo_con_definicion_activa_factory(
+        nombre="Num queries", codigo="num-queries"
+    )
+    reporte_factory(creador=a, tipo=tipo, definicion=definicion)
+    client.force_login(a)
+
+    with CaptureQueriesContext(connection) as capturado_uno:
+        client.get(reverse("reportes_mis"))
+    consultas_con_uno = len(capturado_uno.captured_queries)
+
+    for _ in range(9):
+        reporte_factory(creador=a, tipo=tipo, definicion=definicion)
+
+    with CaptureQueriesContext(connection) as capturado_diez:
+        client.get(reverse("reportes_mis"))
+    consultas_con_diez = len(capturado_diez.captured_queries)
+
+    assert consultas_con_diez == consultas_con_uno
+
+
+# ---------------------------------------------------------------------------
+# Live connection chip (change `chip-conexion-en-vivo`; spec `capa-offline`
+# — "Live Connection Chip in Shared Screen Bar"; design's File Changes /
+# "Chip renders hidden, JS reveals it"). Focused command: `pytest
+# reportes/tests/test_views.py reportes/tests/test_estatico.py`.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_chip_conexion_presente_en_paso_mis_reportes_adjuntos_en_orden_disenio2(
+    client, usuario_factory, reporte_factory
+):
+    """Change `chip-conexion-en-vivo` (tasks.md 2.4; DESIGN2 §4 bar order:
+    volver · título · indicador · conexión · avatar): the `[data-chip-
+    conexion]` node is present on the `paso`, `mis_reportes`, and `adjuntos`
+    screens, in that document order relative to the bar's other elements."""
+    creador = usuario_factory(username="chip-conexion-orden")
+    reporte = reporte_factory(creador=creador)
+    client.force_login(creador)
+
+    respuesta_paso = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    contenido_paso = respuesta_paso.content.decode()
+    assert respuesta_paso.status_code == 200
+    assert "data-chip-conexion" in contenido_paso
+    assert contenido_paso.index(
+        "barra-pantalla__indicador"
+    ) < contenido_paso.index("data-chip-conexion")
+
+    respuesta_mis_reportes = client.get(reverse("reportes_mis"))
+    contenido_mis_reportes = respuesta_mis_reportes.content.decode()
+    assert respuesta_mis_reportes.status_code == 200
+    assert "data-chip-conexion" in contenido_mis_reportes
+    assert contenido_mis_reportes.index(
+        "data-chip-conexion"
+    ) < contenido_mis_reportes.index("barra-pantalla__avatar")
+
+    respuesta_adjuntos = client.get(reverse("reportes_adjuntos", args=[reporte.id]))
+    contenido_adjuntos = respuesta_adjuntos.content.decode()
+    assert respuesta_adjuntos.status_code == 200
+    assert "data-chip-conexion" in contenido_adjuntos
+    assert contenido_adjuntos.index(
+        "barra-pantalla__titulo"
+    ) < contenido_adjuntos.index("data-chip-conexion")
+
+
+def test_chip_conexion_ausente_en_login(client):
+    """Change `chip-conexion-en-vivo` (tasks.md 2.5; spec scenario 'Chip
+    does not appear on the login screen'): `/login/` has no
+    `.barra-pantalla`, so `data-chip-conexion` must not appear there."""
+    response = client.get(reverse("login"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "data-chip-conexion" not in contenido
+
+
+@pytest.mark.django_db
+def test_paso_offline_banner_markup_no_afectado_por_chip(
+    client, usuario_factory, reporte_factory
+):
+    """Change `chip-conexion-en-vivo` (tasks.md 4.1; spec scenario 'Chip is
+    independent from the paso-offline draft banner'): the chip addition must
+    not touch `paso.html`'s `paso-offline.js` script include or its
+    `data-reporte-id`/`data-seccion-id`/`data-servidor-actualizado` contract
+    that `[data-borrador-banner]`/`[data-borrador-prompt]` depend on at
+    runtime."""
+    creador = usuario_factory(username="chip-conexion-no-afecta-borrador")
+    reporte = reporte_factory(creador=creador)
+    client.force_login(creador)
+
+    response = client.get(
+        reverse("reportes_paso", args=[reporte.id, "datos-generales"])
+    )
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "reportes/paso-offline.js" in contenido
+    assert "data-reporte-id=" in contenido
+    assert "data-seccion-id=" in contenido
+    assert "data-servidor-actualizado=" in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_aplica_barra_pantalla_y_lista_component_classes(
+    client, usuario_factory, reporte_factory
+):
+    """Change `retrofit-visual-design2` PR2 (design D3, task 3.9): S-02's
+    screen header uses `.barra-pantalla` (DESIGN2 §4 "Barra de pantalla",
+    no volver — root screen) and its report groupings use `.lista`, a
+    mobile card list (DESIGN2 §3 "listas de tarjetas"; spec `visual-design-
+    system`, requirement 'Eight DESIGN2 Component Classes')."""
+    a = usuario_factory(username="mis-reportes-barra-lista")
+    reporte_factory(creador=a)
+    client.force_login(a)
+
+    response = client.get(reverse("reportes_mis"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'class="barra-pantalla' in contenido
+    assert 'class="lista' in contenido
+
+
+# ---------------------------------------------------------------------------
+# sincronizacion (S-15 aggregated pending/failed sync screen; change
+# `vista-sincronizacion-pendientes`, Phase 3, design D1/D3; spec
+# `sincronizacion-pendientes`)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_reportes_sincronizacion_resuelve_y_responde_ok(client, usuario_factory):
+    """Change `vista-sincronizacion-pendientes`, task 3.1/3.2 (design D1) —
+    the route MUST exist and render for an authenticated user with zero ORM
+    queries against `Reporte` (the list is built entirely client-side from
+    Dexie)."""
+    usuario = usuario_factory(username="sincronizacion-resuelve")
+    client.force_login(usuario)
+
+    response = client.get(reverse("reportes_sincronizacion"))
+
+    assert response.status_code == 200
+
+
+def test_reportes_sincronizacion_anonimo_redirige_a_login(client):
+    """Change `vista-sincronizacion-pendientes`, task 3.1 (design D1) —
+    same `login_required` contract as every other reportes route."""
+    response = client.get(reverse("reportes_sincronizacion"))
+
+    assert response.status_code == 302
+    assert reverse("login") in response.url
+
+
+@pytest.mark.django_db
+def test_reportes_sincronizacion_expone_hooks_de_shell(client, usuario_factory):
+    """Change `vista-sincronizacion-pendientes`, task 3.3/3.4 (design D3) —
+    the shell MUST render a CSRF token input, the `{% url 'reportes_paso' 0
+    '__SECCION__' %}` retry-URL placeholder, and the list/empty-state
+    hooks the client JS (Phase 4) will bind against."""
+    usuario = usuario_factory(username="sincronizacion-hooks")
+    client.force_login(usuario)
+
+    response = client.get(reverse("reportes_sincronizacion"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert "csrfmiddlewaretoken" in contenido
+    assert reverse("reportes_paso", args=[0, "__SECCION__"]) in contenido
+    assert "data-sincronizacion-lista" in contenido
+    assert "data-sincronizacion-vacio" in contenido
+
+
+@pytest.mark.django_db
+def test_mis_reportes_expone_badge_de_pendientes(client, usuario_factory):
+    """Change `vista-sincronizacion-pendientes`, task 5.1/5.2 (design D5) —
+    `mis_reportes.html` MUST render a hidden badge link to
+    `reportes_sincronizacion` and load `offline-db.js`/`pendientes-badge.js`
+    so the client can reveal it with a live pending/failed count (spec
+    'Entry Point From Mis Reportes')."""
+    usuario = usuario_factory(username="mis-reportes-badge")
+    client.force_login(usuario)
+
+    response = client.get(reverse("reportes_mis"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert reverse("reportes_sincronizacion") in contenido
+    assert "data-badge-pendientes" in contenido
+    assert "reportes/offline-db.js" in contenido
+    assert "reportes/pendientes-badge.js" in contenido
+
+
+# ---------------------------------------------------------------------------
+# seleccion_de_tipo (S-03; change `mis-reportes-agrupado-por-estado` Phase 5;
+# spec `seleccion-tipo-reporte`; design D6). Entry point reached from
+# "Mis reportes" (S-02) "+ Nuevo reporte", submitting to the existing,
+# untouched `reportes_nuevo` route.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_seleccion_de_tipo_lista_activos(
+    client, usuario_factory, tipo_con_definicion_activa_factory
+):
+    """Spec 'Active Tipo De Reporte Listing' — 'Active types are listed':
+    two active `TipoDeReporte` rows with distinct códigos are both listed
+    with their código and section count."""
+    tipo_a, _definicion_a = tipo_con_definicion_activa_factory(
+        codigo="seleccion-tipo-activo-a"
+    )
+    tipo_b, _definicion_b = tipo_con_definicion_activa_factory(
+        codigo="seleccion-tipo-activo-b"
+    )
+    usuario = usuario_factory(username="seleccion-tipo-lista-activos")
+    client.force_login(usuario)
+
+    response = client.get(reverse("reportes_seleccion_tipo"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert tipo_a.codigo in contenido
+    assert tipo_b.codigo in contenido
+    # Both fixture tipos share `definicion_valida`'s 2-section estructura.
+    assert contenido.count("2 secciones") == 2
+
+
+@pytest.mark.django_db
+def test_seleccion_de_tipo_muestra_inactivos_deshabilitados(
+    client, usuario_factory
+):
+    """Spec 'Inactive Types Shown Disabled' — 'Inactive type cannot be
+    selected': a `TipoDeReporte` with no `definicion_activa` (design D6:
+    `activo` is a property, never a queryable column) appears disabled with
+    a "próximamente" label and its selection control does not submit."""
+    tipo_inactivo = TipoDeReporte.objects.create(
+        nombre="Tipo sin activar",
+        codigo="seleccion-tipo-inactivo",
+        plantilla=SimpleUploadedFile(
+            "plantilla.xlsx", b"contenido-irrelevante-para-este-nivel"
+        ),
+    )
+    usuario = usuario_factory(username="seleccion-tipo-inactivo-usuario")
+    client.force_login(usuario)
+
+    response = client.get(reverse("reportes_seleccion_tipo"))
+    contenido = response.content.decode()
+
+    assert response.status_code == 200
+    assert tipo_inactivo.codigo in contenido
+    assert "próximamente" in contenido
+    assert f'action="{reverse("reportes_nuevo", args=[tipo_inactivo.codigo])}"' not in contenido
+
+
+@pytest.mark.django_db
+def test_seleccion_de_tipo_anonimo_redirige(client):
+    """Spec 'Active Tipo De Reporte Listing' — 'Anonymous user is
+    redirected': no authenticated session redirects to the login flow."""
+    response = client.get(reverse("reportes_seleccion_tipo"))
+
+    assert response.status_code == 302
+    assert reverse("login") in response.url
+
+
+@pytest.mark.django_db
+def test_seleccion_de_tipo_selecciona_activo_crea_reporte(
+    client, usuario_factory, tipo_con_definicion_activa_factory
+):
+    """Spec 'Submits To Existing Nuevo Reporte Route' — 'Selecting an
+    active type creates a report': the S-03 screen's form for an active
+    tipo posts to the existing `reportes_nuevo` route, unchanged, creating
+    the `Reporte` via that route's own logic — this screen duplicates no
+    creation logic."""
+    tipo, definicion = tipo_con_definicion_activa_factory(
+        codigo="seleccion-tipo-selecciona-activo"
+    )
+    usuario = usuario_factory(username="seleccion-tipo-selecciona-activo-usuario")
+    client.force_login(usuario)
+
+    respuesta_lista = client.get(reverse("reportes_seleccion_tipo"))
+    contenido_lista = respuesta_lista.content.decode()
+
+    assert respuesta_lista.status_code == 200
+    assert f'action="{reverse("reportes_nuevo", args=[tipo.codigo])}"' in contenido_lista
+    assert "csrfmiddlewaretoken" in contenido_lista
+
+    response = client.post(reverse("reportes_nuevo", args=[tipo.codigo]))
+
+    assert response.status_code == 302
+    assert Reporte.objects.filter(tipo=tipo, creador=usuario).count() == 1

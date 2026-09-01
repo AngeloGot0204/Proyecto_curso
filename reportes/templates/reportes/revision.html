@@ -2,52 +2,75 @@
 
 {% block title %}Revisión — Reporte #{{ reporte.id }}{% endblock %}
 
+{% block barra %}
+<header class="barra-pantalla">
+    <a class="barra-pantalla__volver" href="{% url 'reportes_mis' %}" aria-label="Volver a Pendientes">←</a>
+    <h1 class="barra-pantalla__titulo">Revisión del reporte</h1>
+</header>
+{% endblock %}
+
 {% block content %}
-<h1>Revisión del reporte</h1>
-
-{% if resultado.errores %}
-<section>
-    <h2>Debes corregir</h2>
-    <ul>
-        {% for problema in resultado.errores %}
-        <li>
-            <a href="{% url 'reportes_paso' reporte.id problema.seccion_id %}">
-                {{ problema.mensaje }}
-            </a>
-        </li>
-        {% endfor %}
-    </ul>
-</section>
+{% if pasos %}
+<div class="acciones">
+    <a href="{% url 'reportes_paso' reporte.id pasos.0.id %}" class="acciones__secundario">Explorar pasos</a>
+</div>
 {% endif %}
 
-{% if resultado.advertencias %}
-<section>
-    <h2>Advertencias</h2>
-    <ul>
-        {% for problema in resultado.advertencias %}
-        <li>
-            <a href="{% url 'reportes_paso' reporte.id problema.seccion_id %}">
-                {{ problema.mensaje }}
-            </a>
-        </li>
-        {% endfor %}
-    </ul>
-</section>
-{% endif %}
+<div class="hoja">
+    <div class="hoja__tirador" aria-hidden="true"></div>
+    <div class="hoja__encabezado">
+        <span class="chip chip--borde">{{ resultado.errores|length }} error{{ resultado.errores|pluralize:"es" }} · {{ resultado.advertencias|length }} advertencia{{ resultado.advertencias|pluralize }}</span>
+    </div>
+    <div class="hoja__cuerpo">
+        {% if resultado.errores %}
+        <section>
+            <h2>Debes corregir</h2>
+            <ul class="hoja__lista">
+                {% for problema in resultado.errores %}
+                <li class="hoja__item hoja__item--error">
+                    <a href="{% url 'reportes_paso' reporte.id problema.seccion_id %}">
+                        {{ problema.mensaje }} →
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
 
-{% if tiene_visto_bueno %}
-<form method="post" action="{% url 'reportes_generar' reporte.id %}">
-    {% csrf_token %}
-    <button type="submit">Generar</button>
-</form>
-{% endif %}
+        {% if resultado.advertencias %}
+        <section>
+            <h2>Advertencias</h2>
+            <ul class="hoja__lista">
+                {% for problema in resultado.advertencias %}
+                <li class="hoja__item hoja__item--ambar">
+                    <a href="{% url 'reportes_paso' reporte.id problema.seccion_id %}">
+                        {{ problema.mensaje }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+    </div>
 
-{% if reporte.creador_id == request.user.id %}
-<form method="post" action="{% url 'reportes_cerrar' reporte.id %}">
-    {% csrf_token %}
-    <button type="submit" {% if not resultado.puede_generar %}disabled{% endif %}>Cerrar reporte</button>
-</form>
-{% endif %}
+    <div class="hoja__pie">
+        {% if tiene_visto_bueno %}
+        <form method="post" action="{% url 'reportes_generar' reporte.id %}" class="acciones">
+            {% csrf_token %}
+            <button type="submit" class="acciones__primario">Generar</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
 
-<a href="{% url 'reportes_participantes' reporte.id %}">Participantes</a>
+<div class="acciones">
+    <a href="{% url 'reportes_participantes' reporte.id %}" class="acciones__secundario">Participantes e historial →</a>
+    {% if reporte.creador_id == request.user.id %}
+    <form method="post" action="{% url 'reportes_cerrar' reporte.id %}" class="acciones">
+        {% csrf_token %}
+        <button type="submit" class="acciones__primario" {% if not resultado.puede_generar %}disabled{% endif %}>Marcar como terminado</button>
+        <span class="acciones__razon">Corregí {{ resultado.errores|length }} error{{ resultado.errores|pluralize:"es" }} primero</span>
+    </form>
+    {% endif %}
+</div>
 {% endblock %}

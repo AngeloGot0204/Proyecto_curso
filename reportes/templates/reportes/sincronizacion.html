@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Sincronización pendiente{% endblock %}
+
+{% block extra_head %}
+{# Change `vista-sincronizacion-pendientes`, task 3.4 (design's File #}
+{# Changes / Data Flow) — render-only shell (D1); everything below reads #}
+{# Dexie client-side, mirroring `paso.html`'s script order. #}
+<script src="https://unpkg.com/dexie@3/dist/dexie.js" crossorigin="anonymous"></script>
+<script src="{% static 'reportes/offline-db.js' %}"></script>
+<script src="{% static 'reportes/envio-paso.js' %}"></script>
+<script src="{% static 'reportes/sincronizacion.js' %}" defer></script>
+<script>
+    if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+            navigator.serviceWorker.register("/sw.js").catch(function () {
+                // Registration failure must never block the page — same
+                // degrade-to-online-only contract as `paso.html` (change
+                // `capa-offline`).
+            });
+        });
+    }
+</script>
+{% endblock %}
+
+{% block barra %}
+<header class="barra-pantalla">
+    <a class="barra-pantalla__volver" href="{% url 'reportes_mis' %}" aria-label="Volver a Mis reportes">←</a>
+    <h1 class="barra-pantalla__titulo">Sincronización pendiente</h1>
+    {% include "_chip_conexion.html" %}
+</header>
+{% endblock %}
+
+{% block content %}
+{# Change `vista-sincronizacion-pendientes`, design D3 — a form-only CSRF #}
+{# token plus the retry-URL placeholder; `sincronizacion.js` (Phase 4) #}
+{# reads `[data-url-paso-plantilla]` and substitutes `__SECCION__` per row, #}
+{# so Django stays the routing authority for the retry `fetch()` target. #}
+<form data-sincronizacion-form>
+    {% csrf_token %}
+</form>
+<span hidden data-url-paso-plantilla="{% url 'reportes_paso' 0 '__SECCION__' %}"></span>
+
+<ul class="lista" data-sincronizacion-lista aria-live="polite"></ul>
+
+<p data-sincronizacion-vacio hidden>No hay pasos pendientes de sincronizar.</p>
+{% endblock %}

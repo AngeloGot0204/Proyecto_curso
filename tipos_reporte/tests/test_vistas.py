@@ -103,6 +103,26 @@ def test_lista_busqueda_por_q(client, administrador_factory, tipo_de_reporte_fac
     assert tipos_en_pagina == [coincide]
 
 
+@pytest.mark.django_db
+def test_lista_aplica_grid_de_escritorio_sidebar_316px(
+    client, administrador_factory, tipo_de_reporte_factory
+):
+    """Change `retrofit-visual-design2` PR1b (design D5, DESIGN2 §3
+    'Escritorio S-14'): the desktop admin shell wraps the screen in the
+    `.escritorio` grid (sidebar 232px, token `--sidebar`) with its inner
+    `.escritorio__contenido` grid (`316px minmax(0,1fr)`, 28px gap)."""
+    admin = administrador_factory(username="lista-grid-escritorio-admin")
+    tipo_de_reporte_factory(nombre="Grid", codigo="lista-grid-escritorio")
+    client.force_login(admin)
+
+    response = client.get(reverse("tipos_lista"))
+    contenido = response.content.decode()
+
+    assert 'class="escritorio"' in contenido
+    assert "escritorio__sidebar" in contenido
+    assert "escritorio__contenido" in contenido
+
+
 # ---------------------------------------------------------------------------
 # tipos_detalle
 # ---------------------------------------------------------------------------
@@ -146,6 +166,24 @@ def test_detalle_no_administrador_403(
     response = client.get(reverse("tipos_detalle", args=[tipo.id]))
 
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_detalle_aplica_tabla_component_class(
+    client, administrador_factory, tipo_de_reporte_factory, definicion_factory
+):
+    """Change `retrofit-visual-design2` PR1b (design D3/D5): the read-only
+    definiciones listing on the S-14 detail screen uses the new `.tabla`
+    component class."""
+    admin = administrador_factory(username="detalle-tabla-admin")
+    tipo = tipo_de_reporte_factory(nombre="Con tabla", codigo="detalle-tabla-class")
+    definicion_factory(tipo=tipo, estado=Estado.HISTORICA, version=1, activada_en=timezone.now())
+    client.force_login(admin)
+
+    response = client.get(reverse("tipos_detalle", args=[tipo.id]))
+    contenido = response.content.decode()
+
+    assert 'class="tabla"' in contenido
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +344,24 @@ def test_crear_tipo_no_administrador_403(client, usuario_factory):
     assert response.status_code == 403
 
 
+@pytest.mark.django_db
+def test_formulario_tipo_aplica_campo_component_class(
+    client, administrador_factory
+):
+    """Change `retrofit-visual-design2` PR1b (design D3/D5): `formulario_tipo.html`
+    wraps `{{ form.as_p }}` in `.form-basica` (same pattern `login.html`
+    shipped in PR1a) so the `.campo`/`.form-basica` descendant selectors
+    already in `components.css` style every native widget without touching
+    `tipos_reporte/forms.py`."""
+    admin = administrador_factory(username="formulario-tipo-campo-admin")
+    client.force_login(admin)
+
+    response = client.get(reverse("tipos_crear"))
+    contenido = response.content.decode()
+
+    assert 'class="form-basica"' in contenido
+
+
 # ---------------------------------------------------------------------------
 # tipos_editar (PR2, design D4, D8)
 # ---------------------------------------------------------------------------
@@ -449,6 +505,25 @@ def test_editar_definicion_no_borrador_404(
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_formulario_definicion_aplica_campo_component_class(
+    client, administrador_factory, tipo_de_reporte_factory
+):
+    """Change `retrofit-visual-design2` PR1b (design D3/D5): `formulario_definicion.html`
+    wraps `{{ form.as_p }}` in `.form-basica`, same pattern as
+    `formulario_tipo.html`."""
+    admin = administrador_factory(username="formulario-definicion-campo-admin")
+    tipo = tipo_de_reporte_factory(
+        nombre="Formulario definicion", codigo="formulario-definicion-campo"
+    )
+    client.force_login(admin)
+
+    response = client.get(reverse("tipos_definicion_crear", args=[tipo.id]))
+    contenido = response.content.decode()
+
+    assert 'class="form-basica"' in contenido
 
 
 @pytest.mark.django_db

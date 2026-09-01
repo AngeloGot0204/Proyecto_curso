@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Usuarios{% endblock %}
+
+{% block barra %}
+<header class="barra-pantalla">
+    <h1 class="barra-pantalla__titulo">Usuarios</h1>
+</header>
+{% endblock %}
+
+{% block content %}
+
+        <div class="escritorio__contenido">
+            <div>
+                <div class="acciones">
+                    <a href="{% url 'usuarios_crear' %}" class="acciones__primario">Nuevo usuario</a>
+                </div>
+
+                <form method="get" action="{% url 'usuarios_lista' %}" class="filtros">
+                    <div class="filtros__campo filtros__campo--buscar">
+                        <label for="q">Buscar</label>
+                        <input type="text" id="q" name="q" value="{{ q }}" placeholder="Nombre de usuario">
+                    </div>
+                    <button type="submit" class="acciones__secundario filtros__boton">Filtrar</button>
+                </form>
+            </div>
+
+            <div>
+                <table class="tabla">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Rol</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usuario in page_obj %}
+                        <tr>
+                            <td class="mono">{{ usuario.username }}</td>
+                            <td>{{ usuario.get_rol_display }}</td>
+                            <td>
+                                {% if usuario.is_active %}
+                                <span class="chip chip--solido">Activo</span>
+                                {% else %}
+                                <span class="chip chip--borde-gris">Suspendido</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="lista__tarjeta-acciones">
+                                    <a href="{% url 'usuarios_editar' usuario.id %}" class="lista__eliminar" aria-label="Editar {{ usuario.username }}">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
+                                        </svg>
+                                    </a>
+                                    <a href="{% url 'usuarios_resetear_password' usuario.id %}" class="lista__eliminar" aria-label="Resetear contraseña de {{ usuario.username }}">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <circle cx="7.5" cy="15.5" r="5.5"></circle>
+                                            <path d="m21 2-9.6 9.6"></path>
+                                            <path d="m15.5 7.5 3 3L22 7l-3-3"></path>
+                                        </svg>
+                                    </a>
+                                    <form method="post" action="{% url 'usuarios_suspender' usuario.id %}">
+                                        {% csrf_token %}
+                                        {% if usuario.is_active %}
+                                        <button type="submit" class="lista__eliminar" aria-label="Suspender {{ usuario.username }}">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <circle cx="9" cy="7" r="4"></circle>
+                                                <path d="M2 21v-2a4 4 0 0 1 4-4h6"></path>
+                                                <line x1="17" y1="8" x2="22" y2="13"></line>
+                                                <line x1="22" y1="8" x2="17" y2="13"></line>
+                                            </svg>
+                                        </button>
+                                        {% else %}
+                                        <button type="submit" class="lista__eliminar" aria-label="Reactivar {{ usuario.username }}">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <circle cx="9" cy="7" r="4"></circle>
+                                                <path d="M2 21v-2a4 4 0 0 1 4-4h6"></path>
+                                                <polyline points="17 11 19 13 23 9"></polyline>
+                                            </svg>
+                                        </button>
+                                        {% endif %}
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4">No hay usuarios registrados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                <nav class="acciones" aria-label="Paginación">
+                    {% if page_obj.has_previous %}
+                    <a class="acciones__secundario" href="{% querystring page=page_obj.previous_page_number %}">Anterior</a>
+                    {% endif %}
+                    <span class="mono">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                    {% if page_obj.has_next %}
+                    <a class="acciones__secundario" href="{% querystring page=page_obj.next_page_number %}">Siguiente</a>
+                    {% endif %}
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+{% endblock %}

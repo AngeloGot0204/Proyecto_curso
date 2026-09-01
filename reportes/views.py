@@ -22,15 +22,33 @@ do NOT widen with invitations (spec `cierre-reporte`).
 `revision` (S-09 review screen; backlog `validacion-datos-formulario`;
 spec `validacion-reporte`) is a GET-only, creator-or-participant-scoped
 view that calls `reportes.validacion.validar_reporte` and renders its two
-buckets.
+buckets. Closure (creating the `VistoBueno`) is owned by `participantes`
+(S-10), not `revision` (change `cierre-en-participantes`; backlog #8's
+correction of the original S-09 placement) — `revision` links out to
+Participantes for closure and keeps only "Generar".
 
 `mis_reportes` (backlog #12, spec `listado-reportes`; design's View shape)
 is the "Mis reportes" dashboard: a searchable, filterable, paginated,
 creator/participant-grouped list over `reportes.listado`'s pure query
 helpers. Reachable directly at `reportes/mis/` in this PR;
 `usuarios/views.py::inicio` is repointed at it in PR 3 of this chain.
+
+`eliminar_reporte` is a creator-only SOFT delete: it stamps `Reporte.
+eliminado_en` rather than running an actual `.delete()`, so every related
+row survives for audit/recovery. `_reporte_accesible` and
+`listado.reportes_accesibles` both exclude soft-deleted reports, so a
+deleted `Reporte` 404s on every access-scoped screen exactly like one that
+never existed — creator included.
+
+`seleccion_de_tipo` (S-03; change `mis-reportes-agrupado-por-estado`
+Phase 5; spec `seleccion-tipo-reporte`; design D6) is the "Mis reportes"
+"+ Nuevo reporte" entry point: an additive, read-only listing of every
+`TipoDeReporte`, each active one's form POSTing straight to the existing,
+untouched `reportes_nuevo` route. It duplicates no `Reporte`-creation
+logic.
 """
 
+import datetime
 import logging
 import uuid
 
@@ -39,6 +57,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
+from django.db.models import Exists, OuterRef
 from django.http import (
     Http404,
     HttpResponse,
@@ -65,7 +84,12 @@ from reportes.models import (
     VistoBueno,
 )
 from reportes.permisos import tiene_acceso
-from reportes.valores import desde_texto, guardar_valor, valores_de_reporte
+from reportes.valores import (
+    desde_texto,
+    etiquetas_de_campos,
+    guardar_valor,
+    valores_de_reporte,
+)
 from reportes.validacion import validar_reporte
 from tipos_reporte import generador
 from tipos_reporte.generador import ProblemaDeGeneracion
@@ -112,8 +136,10 @@ def _reporte_accesible(reporte_id, usuario):
     itself only ever raises `Http404` — raising `Http404` manually here
     produces a byte-identical response, preserving D9's no-existence-leak
     (same 404 for "absent" and "no access"). `cerrar_reporte` and `invitar`
-    stay creator-only and do NOT use this shim."""
-    reporte = get_object_or_404(Reporte, pk=reporte_id)
+    stay creator-only and do NOT use this shim. `eliminado_en__isnull=True`
+    makes a soft-deleted `Reporte` 404 exactly like one that never existed
+    (report deletion), for creator and participants alike."""
+    reporte = get_object_or_404(Reporte, pk=reporte_id, eliminado_en__isnull=True)
     if not tiene_acceso(reporte, usuario):
         raise Http404("Reporte inexistente o sin acceso.")
     return reporte
@@ -123,7 +149,10 @@ def _reporte_accesible(reporte_id, usuario):
 @require_POST
 def iniciar_reporte(request, codigo_tipo):
     """`POST /reportes/<codigo_tipo>/nuevo/` (design D7; idempotency per
-    change `sincronizacion-numero-registro`, design D3/D8).
+    change `sincronizacion-numero-registro`, design D3/D8). Reached from
+    `seleccion_de_tipo` (S-03)'s per-tipo form since change
+    `mis-reportes-agrupado-por-estado`, Phase 5 — this view's own creation
+    logic is unchanged and unduplicated by that screen.
 
     `id_local` is a client-generated UUID sent as a hidden POST field so a
     retried POST (network retry, double-click, offline-then-retry) resolves
@@ -224,6 +253,12 @@ def paso(request, reporte_id, seccion_id):
 
     servidor_actualizado = _servidor_actualizado(reporte, seccion)
 
+    adjuntos_actuales = None
+    if seccion_id == SECCION_DE_ADJUNTOS:
+        adjuntos_actuales = reporte.adjuntos.filter(
+            seccion_id=SECCION_DE_ADJUNTOS
+        ).select_related("autor")
+
     contexto = {
         "reporte": reporte,
         "seccion": seccion,
@@ -233,6 +268,7 @@ def paso(request, reporte_id, seccion_id):
         "url_siguiente": url_siguiente,
         "posicion": f"Paso {posicion_actual + 1} de {len(ids_de_secciones)}",
         "servidor_actualizado": servidor_actualizado,
+        "adjuntos_actuales": adjuntos_actuales,
     }
     return render(request, "reportes/paso.html", contexto)
 
@@ -278,10 +314,16 @@ def revision(request, reporte_id):
     uses to disable "Generar"."""
     reporte = _reporte_accesible(reporte_id, request.user)
     resultado = validar_reporte(reporte)
+    estructura = reporte.definicion.estructura
+    pasos = [
+        {"id": sid, "titulo": _seccion_por_id(estructura, sid).get("titulo", sid)}
+        for sid in _ids_de_secciones(estructura)
+    ]
     contexto = {
         "reporte": reporte,
         "resultado": resultado,
         "tiene_visto_bueno": VistoBueno.objects.filter(reporte=reporte).exists(),
+        "pasos": pasos,
     }
     return render(request, "reportes/revision.html", contexto)
 
@@ -297,18 +339,21 @@ def cerrar_reporte(request, reporte_id):
     non-creator participant — 404s exactly like one that does not exist.
     Re-validates
     `puede_generar` server-side — independent of any client-side gating in
-    `revision.html` — before creating the `VistoBueno`. `get_or_create`
-    inside `transaction.atomic()` makes a double-POST an idempotent no-op
-    (design D2): a bare `create()` would raise `IntegrityError` on the
-    `OneToOneField` for a double-click, which is exactly the raw-500
-    failure mode this design forbids."""
-    reporte = get_object_or_404(Reporte, pk=reporte_id, creador=request.user)
+    `participantes.html`, which owns the closure control (change
+    `cierre-en-participantes`) — before creating the `VistoBueno`.
+    `get_or_create` inside `transaction.atomic()` makes a double-POST an
+    idempotent no-op (design D2): a bare `create()` would raise
+    `IntegrityError` on the `OneToOneField` for a double-click, which is
+    exactly the raw-500 failure mode this design forbids."""
+    reporte = get_object_or_404(
+        Reporte, pk=reporte_id, creador=request.user, eliminado_en__isnull=True
+    )
     if not validar_reporte(reporte).puede_generar:
         messages.error(
             request,
             "El reporte todavía tiene errores pendientes; no puede cerrarse.",
         )
-        return redirect("reportes_revision", reporte_id=reporte.id)
+        return redirect("reportes_participantes", reporte_id=reporte.id)
 
     with transaction.atomic():
         VistoBueno.objects.get_or_create(
@@ -318,7 +363,7 @@ def cerrar_reporte(request, reporte_id):
         reporte.save(update_fields=["estado"])
 
     messages.success(request, "Reporte cerrado. Ya puede generarse el documento.")
-    return redirect("reportes_revision", reporte_id=reporte.id)
+    return redirect("reportes_mis")
 
 
 @login_required
@@ -398,8 +443,18 @@ def invitar(request, reporte_id):
     protect "creator has no participation row", ADR-0006) sets an error
     flash message with no row created; a valid, not-yet-invited username is
     granted access idempotently via `get_or_create`, mirroring
-    `cerrar_reporte`'s idempotency pattern."""
-    reporte = get_object_or_404(Reporte, pk=reporte_id, creador=request.user)
+    `cerrar_reporte`'s idempotency pattern.
+
+    `next` is an optional POST field letting the caller pick the
+    post-invite screen: `"mis"` returns to "Mis reportes" (the quick-share
+    entry point on each card, so the creator never has to open the report
+    to invite someone); anything else — including absent — keeps the
+    original behavior of returning to `reportes_participantes`. It is a
+    closed whitelist, never a raw redirect target, so this can't become an
+    open redirect."""
+    reporte = get_object_or_404(
+        Reporte, pk=reporte_id, creador=request.user, eliminado_en__isnull=True
+    )
     username = (request.POST.get("username") or "").strip()
     invitado = get_user_model().objects.filter(username=username).first()
     if invitado is None:
@@ -409,6 +464,8 @@ def invitar(request, reporte_id):
     else:
         ParticipacionEnReporte.objects.get_or_create(reporte=reporte, usuario=invitado)
         messages.success(request, f"{username} ya puede trabajar en este reporte.")
+    if request.POST.get("next") == "mis":
+        return redirect("reportes_mis")
     return redirect("reportes_participantes", reporte_id=reporte.id)
 
 
@@ -419,9 +476,11 @@ def participantes(request, reporte_id):
     Creator-or-invited-participant scoped via `_reporte_accesible`, like
     `paso`/`revision`/`generar`. Lists invited users plus the creator (shown
     as a label, not a queried `ParticipacionEnReporte` row), the
-    creator-only invite form, and the `Reporte`'s `CambioDeValor` history
-    ordered most-recent-first (`-fecha, -id`, matching
-    `valores._recortar_historial`'s tiebreaker)."""
+    creator-only invite form, the creator-only closure control (change
+    `cierre-en-participantes`; screen now owns closure, mirroring
+    `revision`'s `resultado` computation), and the `Reporte`'s
+    `CambioDeValor` history ordered most-recent-first (`-fecha, -id`,
+    matching `valores._recortar_historial`'s tiebreaker)."""
     reporte = _reporte_accesible(reporte_id, request.user)
     participaciones = ParticipacionEnReporte.objects.filter(
         reporte=reporte
@@ -429,12 +488,87 @@ def participantes(request, reporte_id):
     cambios = CambioDeValor.objects.filter(reporte=reporte).select_related(
         "autor"
     ).order_by("-fecha", "-id")
+    etiquetas = etiquetas_de_campos(reporte.definicion.estructura)
     contexto = {
         "reporte": reporte,
         "participaciones": participaciones,
-        "cambios": cambios,
+        "sesiones_de_cambios": _agrupar_cambios_en_sesiones(cambios, etiquetas),
+        "resultado": validar_reporte(reporte),
     }
     return render(request, "reportes/participantes.html", contexto)
+
+
+UMBRAL_SESION = datetime.timedelta(minutes=5)
+
+
+def _agrupar_cambios_en_sesiones(cambios, etiquetas):
+    """Groups `cambios` (already `-fecha, -id` ordered — newest first) into
+    "sesiones": consecutive runs by the SAME `autor` within `UMBRAL_SESION`
+    of each other. `participantes.html`'s history was a flat 30-row table,
+    one row per field, with no signal separating "one editing sitting" from
+    "unrelated changes on different days" — a burst of 7 saves in the same
+    minute repeated the same author/timestamp 7 times. Each item also
+    carries its human-readable `etiqueta` (falls back to the raw id for a
+    field the current `estructura` no longer declares, e.g. after an
+    edited definition — history must never 404/crash on stale ids)."""
+    sesiones = []
+    for cambio in cambios:
+        item = {
+            "cambio": cambio,
+            "etiqueta": etiquetas.get(
+                cambio.identificador_de_campo, cambio.identificador_de_campo
+            ),
+        }
+        sesion_abierta = sesiones[-1] if sesiones else None
+        if (
+            sesion_abierta is not None
+            and sesion_abierta["autor_id"] == cambio.autor_id
+            and sesion_abierta["items"][-1]["cambio"].fecha - cambio.fecha
+            <= UMBRAL_SESION
+        ):
+            sesion_abierta["items"].append(item)
+        else:
+            sesiones.append(
+                {
+                    "autor": cambio.autor,
+                    "autor_id": cambio.autor_id,
+                    "fecha": cambio.fecha,
+                    "items": [item],
+                }
+            )
+    return sesiones
+
+
+@login_required
+def eliminar_reporte(request, reporte_id):
+    """`GET`/`POST /reportes/<reporte_id>/eliminar/` — report deletion.
+    Strictly creator-scoped, like `cerrar_reporte`/`invitar`: a `Reporte`
+    that exists but belongs to someone else — including an invited
+    participant — 404s exactly like one that does not exist, and so does
+    an already-deleted one (`eliminado_en__isnull=True` in the lookup).
+
+    This is a SOFT delete (destructive from the user's point of view, but
+    not from the database's): `POST` only stamps `eliminado_en = now()` on
+    the `Reporte` row itself — it never runs an actual `.delete()`, and
+    every related row (`ValorDeReporte`, `Adjunto`, `Generacion`,
+    `ParticipacionEnReporte`, `CambioDeValor`, `VistoBueno`) stays intact
+    for audit/recovery. From then on `listado.reportes_accesibles` and
+    `_reporte_accesible` exclude it everywhere — creator included — so it
+    behaves as if it never existed.
+
+    `GET` renders a confirmation screen with no side effect (mirrors this
+    codebase's other destructive actions having a real "are you sure" step,
+    since there is no client-side confirm() pattern here to reuse); `POST`
+    performs the deletion and redirects to "Mis reportes"."""
+    reporte = get_object_or_404(
+        Reporte, pk=reporte_id, creador=request.user, eliminado_en__isnull=True
+    )
+    if request.method == "POST":
+        reporte.eliminado_en = timezone.now()
+        reporte.save(update_fields=["eliminado_en"])
+        messages.success(request, "Reporte eliminado.")
+        return redirect("reportes_mis")
+    return render(request, "reportes/eliminar_reporte.html", {"reporte": reporte})
 
 
 @login_required
@@ -499,6 +633,38 @@ def subir_adjunto(request, reporte_id):
 
 
 @login_required
+@require_POST
+def eliminar_adjunto(request, reporte_id, adjunto_id):
+    """`POST /reportes/<reporte_id>/adjuntos/<adjunto_id>/eliminar/` — lets
+    someone undo a mistaken upload without a support request. Scoped like
+    every other mutating action on an accessible `Reporte`
+    (`_reporte_accesible`), plus a second, narrower check: only the
+    `Reporte`'s creator or the `Adjunto`'s own `autor` (the person who
+    uploaded it) may delete it — an invited participant can't delete a
+    file a *different* participant uploaded, mirroring `cerrar_reporte`'s
+    "widen access to view, keep mutation narrow" pattern. A hard
+    `.delete()`, not soft-delete (design mirrors `Adjunto` itself: no
+    audit trail requirement for attachments, unlike `Reporte`)."""
+    reporte = _reporte_accesible(reporte_id, request.user)
+    adjunto = get_object_or_404(Adjunto, pk=adjunto_id, reporte=reporte)
+
+    puede_eliminar = (
+        reporte.creador_id == request.user.id or adjunto.autor_id == request.user.id
+    )
+    if not puede_eliminar:
+        raise Http404("Sin acceso a este adjunto.")
+
+    adjunto.archivo.delete(save=False)
+    adjunto.delete()
+    messages.success(request, "Adjunto eliminado.")
+
+    siguiente = request.POST.get("siguiente")
+    if siguiente == "adjuntos":
+        return redirect("reportes_adjuntos", reporte_id=reporte.id)
+    return redirect("reportes_paso", reporte_id=reporte.id, seccion_id=SECCION_DE_ADJUNTOS)
+
+
+@login_required
 def adjuntos_de_reporte(request, reporte_id):
     """`GET /reportes/<reporte_id>/adjuntos/` (backlog #11; spec
     `adjuntos-reporte` — "Server-Side Listing and Download"; design's
@@ -515,32 +681,84 @@ def adjuntos_de_reporte(request, reporte_id):
 
 
 @login_required
+def seleccion_de_tipo(request):
+    """`GET /reportes/nuevo/` (S-03; change `mis-reportes-agrupado-por-
+    estado`; spec `seleccion-tipo-reporte`; design D6). Entry point reached
+    from "Mis reportes" (S-02) "+ Nuevo reporte". Lists every
+    `TipoDeReporte` ordered by `nombre`; "available" means
+    `definicion_activa_id is not None` — `TipoDeReporte.activo` is a
+    *property* over `definicion_activa` (design D1 of
+    `motor-definicion-tipo-reporte`), not a column, so
+    `filter(activo=True)` would raise (design D6). Each available tipo's
+    form POSTs to the existing, untouched `reportes_nuevo` route; this
+    screen creates no `Reporte` itself (spec 'Submits To Existing Nuevo
+    Reporte Route')."""
+    tipos = TipoDeReporte.objects.select_related("definicion_activa").order_by(
+        "nombre"
+    )
+    return render(request, "reportes/seleccion_tipo.html", {"tipos": tipos})
+
+
+@login_required
 def mis_reportes(request):
     """`GET /reportes/mis/` (backlog #12; spec `listado-reportes`; design's
-    View shape / D2 / D3 / D4). Access-scoped to creator-or-invited-
-    participant via `listado.reportes_accesibles` — no admin override
-    (spec "Admin Override Explicitly Out of Scope"). `?q=` search and
-    `?estado=` filter are both optional and combinable; an unrecognized
-    `?estado=` is silently ignored, never an error (design D3).
-    `Paginator.get_page` clamps an invalid/out-of-range `?page=` instead of
-    raising (design D2). The page's rows are partitioned in Python into
-    "creados por mí" / "compartidos conmigo" using the same
-    `creador_id == request.user.id` idiom `participantes.html` already
-    uses."""
+    Data Flow / D1-D5). Access-scoped to creator-or-invited-participant via
+    `listado.reportes_accesibles` — no admin override (spec "Admin Override
+    Explicitly Out of Scope"). `?q=`, `?relacion=` and `?estado=` are all
+    optional and combinable, `?relacion=` narrowing the queryset BEFORE
+    bucketing (spec "Filter restricts before grouping", one non-nested
+    level). Rows are bucketed (`listado.construir_tarjetas`, design D2)
+    over the WHOLE scoped set, THEN filtered by the computed `?estado=`
+    bucket, THEN paginated — never the reverse, or `?estado=terminado`
+    could miss a report that would otherwise land on a later page (design
+    D2's rationale, spec 'Post-closure redirect lands in terminado').
+    `.annotate(Exists(VistoBueno))` + `select_related("definicion")` +
+    `prefetch_related("valores")` keep `construir_tarjetas` at ~O(1)
+    queries regardless of how many reports are listed (design D2)."""
     q = (request.GET.get("q") or "").strip()
+    relacion = listado.normalizar_relacion(request.GET.get("relacion"))
     estado = listado.normalizar_estado(request.GET.get("estado"))
-    qs = listado.aplicar_busqueda(listado.reportes_accesibles(request.user), q)
+
+    qs = listado.reportes_accesibles(request.user)
+    qs = listado.aplicar_busqueda(qs, q)
+    qs = listado.aplicar_relacion(qs, request.user, relacion)
+    qs = (
+        qs.annotate(
+            tiene_visto_bueno=Exists(
+                VistoBueno.objects.filter(reporte=OuterRef("pk"))
+            )
+        )
+        .select_related("definicion")
+        .prefetch_related("valores")
+    )
+
+    tarjetas = listado.construir_tarjetas(qs)
     if estado:
-        qs = qs.filter(estado=estado)
-    page_obj = Paginator(qs, TAMANO_DE_PAGINA).get_page(request.GET.get("page"))
-    creados = [r for r in page_obj if r.creador_id == request.user.id]
-    compartidos = [r for r in page_obj if r.creador_id != request.user.id]
+        tarjetas = [tarjeta for tarjeta in tarjetas if tarjeta.bucket == estado]
+
+    page_obj = Paginator(tarjetas, TAMANO_DE_PAGINA).get_page(request.GET.get("page"))
+    grupos = listado.agrupar_por_bucket(page_obj.object_list)
+
     contexto = {
         "page_obj": page_obj,
-        "creados": creados,
-        "compartidos": compartidos,
+        "grupos": grupos,
         "q": q,
+        "relacion": relacion,
+        "relaciones": listado.RELACIONES,
         "estado": estado,
-        "estados": EstadoDeReporte.choices,
+        "buckets": listado.BUCKETS,
     }
     return render(request, "reportes/mis_reportes.html", contexto)
+
+
+@login_required
+def sincronizacion(request):
+    """`GET /reportes/sincronizacion/` (S-15; change
+    `vista-sincronizacion-pendientes`, design D1; spec `sincronizacion-
+    pendientes`, requirement 'Aggregated Cross-Report Pending List').
+    Render-only shell — deliberately runs ZERO `Reporte`/ORM queries: the
+    list of pending/failed drafts lives only in the device's IndexedDB
+    (`borradores` store), so the server cannot know them and must not try
+    (design D1's rationale). `sincronizacion.js` (Phase 4) queries Dexie
+    client-side and renders into the hooks this shell exposes."""
+    return render(request, "reportes/sincronizacion.html")
