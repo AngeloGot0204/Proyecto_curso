@@ -425,10 +425,26 @@ def test_paso_fila_de_horas_aplica_component_class(
 def test_paso_primer_boton_submit_sigue_siendo_el_del_formulario_tras_retrofit(
     sesion_de_creador,
 ):
-    """Submit-order guard (design's "the JS contract"; `paso.js:63`'s
-    `querySelector('form button[type="submit"]')`) re-verified against the
-    real retrofitted `paso.html` markup — not just the pre-retrofit shell
-    (task 1.7 covered `base.html`/`login.html` only)."""
+    """Submit-target guard for `paso.js`'s `aplicarEstadoDeNavegacion`.
+
+    This test used to assert that the FIRST `<button type="submit">` on the
+    whole page was the step's own — a guard that matched `paso.js`'s
+    unscoped `querySelector('form button[type="submit"]')`. That assumption
+    stopped holding when `db1c1d6` gave the sidebar a logout `<form>`, which
+    renders before the page content: the selector started resolving to
+    "Cerrar sesión", so an invalid time range disabled the LOGOUT button and
+    left "Guardar y continuar" enabled — the validation guard silently
+    stopped guarding.
+
+    The fix scoped the selector to the step form. So the property worth
+    pinning is no longer "first on the page" (a DOM-order coincidence any
+    layout change can break) but "resolves to the step's own submit button",
+    which is what the code actually needs. Asserted on both halves of that
+    contract: the markup exposes the step form under the same
+    `[data-reporte-id][data-seccion-id]` attributes `paso-offline.js`
+    already keys on, and `paso.js` scopes its lookup to it."""
+    from pathlib import Path
+
     client, reporte = sesion_de_creador
 
     response = client.get(
@@ -436,13 +452,28 @@ def test_paso_primer_boton_submit_sigue_siendo_el_del_formulario_tras_retrofit(
     )
     contenido = response.content.decode()
 
-    primer_boton = re.search(
-        r'<button[^>]*type="submit"[^>]*>([^<]*)</button>', contenido
-    )
-
     assert response.status_code == 200
-    assert primer_boton is not None
-    assert "Guardar y continuar" in primer_boton.group(1)
+
+    # Half 1 — the markup contract the selector depends on.
+    formulario = re.search(
+        r"<form[^>]*data-reporte-id[^>]*data-seccion-id[^>]*>(.*?)</form>",
+        contenido,
+        re.DOTALL,
+    )
+    assert formulario is not None, "el paso no expone su form con los data-attrs"
+    boton_del_paso = re.search(
+        r'<button[^>]*type="submit"[^>]*>([^<]*)</button>', formulario.group(1)
+    )
+    assert boton_del_paso is not None
+    assert "Guardar y continuar" in boton_del_paso.group(1)
+
+    # Half 2 — the lookup stays scoped. An unscoped `form button[...]` would
+    # pass half 1 and still grab the sidebar's logout button at runtime.
+    paso_js = (
+        Path(__file__).resolve().parents[1] / "static" / "reportes" / "paso.js"
+    ).read_text(encoding="utf-8")
+    assert 'document.querySelector(\'form button[type="submit"]\')' not in paso_js
+    assert 'form[data-reporte-id][data-seccion-id] button[type="submit"]' in paso_js
 
 
 @pytest.mark.django_db

@@ -60,7 +60,16 @@
     }
 
     function aplicarEstadoDeNavegacion(habilitar) {
-        var boton = document.querySelector('form button[type="submit"]');
+        // Scoped to the step's own form, never `form button[...]`: the
+        // sidebar renders a logout <form> before the page content, so the
+        // unscoped lookup resolved to "Cerrar sesión" — disabling logout
+        // while leaving "Guardar y continuar" enabled, which quietly turned
+        // this validation guard into a no-op. Same
+        // `[data-reporte-id][data-seccion-id]` contract paso-offline.js
+        // keys on.
+        var boton = document.querySelector(
+            'form[data-reporte-id][data-seccion-id] button[type="submit"]'
+        );
         if (boton) {
             boton.disabled = !habilitar;
         }
