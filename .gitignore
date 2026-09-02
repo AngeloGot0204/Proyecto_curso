@@ -33,3 +33,10 @@ Thumbs.db
 # Cache local del registro de skills: se regenera solo y guarda rutas
 # absolutas de la maquina de cada desarrollador.
 .atl/
+
+# Entornos virtuales adicionales (p. ej. .venv312 para verificar en la
+# version de Python que corre en produccion).
+.venv*/
+
+# Configuracion local de Claude Code: rutas y estado propios de cada maquina.
+.claude/

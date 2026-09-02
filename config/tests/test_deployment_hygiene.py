@@ -107,3 +107,23 @@ def test_a9_env_ignored_and_example_has_no_real_secrets():
             continue
         value = line.split("=", 1)[1].strip()
         assert len(value) < 40, ".env.example must not contain a real secret key"
+
+
+def test_a15_vercelignore_excluye_los_archivos_de_entorno():
+    """SECURITY-REPORT.md F-12: `.gitignore` keeps `.env` out of the repo,
+    and `test_a9` proves it. Deployments are a separate path: when a
+    `.vercelignore` exists the Vercel CLI reads it INSTEAD of `.gitignore`
+    to decide what to upload, so the exclusion has to be restated there.
+    Vercel also skips `.env` by default; this asserts we do not depend on
+    that default staying true."""
+    from pathlib import Path
+
+    raiz = Path(__file__).resolve().parents[2]
+    lineas = {
+        linea.strip()
+        for linea in (raiz / ".vercelignore").read_text(encoding="utf-8").splitlines()
+    }
+
+    assert ".env" in lineas
+    assert ".env.*" in lineas
+    assert "!.env.example" in lineas

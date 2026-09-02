@@ -6,3 +6,11 @@ staticfiles/
 *.pyc
 .pytest_cache/
 node_modules/
+
+# Secrets must never reach a deployment bundle. .gitignore already
+# excludes these, but the Vercel CLI reads THIS file instead when it
+# exists, so the exclusion has to be restated here (SECURITY-REPORT.md
+# F-12). Vercel also skips .env by default; not depending on that.
+.env
+.env.*
+!.env.example
