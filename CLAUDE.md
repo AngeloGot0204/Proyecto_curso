@@ -121,16 +121,23 @@ EXIF en las fotos, librerías de terceros vendorizadas en `static/vendor/` con S
 registrado, y CSP sin `unsafe-inline` — que solo se sostiene mientras ninguna plantilla
 tenga JavaScript inline. Hay un test que lo vigila.
 
-## Harness propio
+## Skills instaladas
 
-`.agents/skills/` — dos skills escritas para este proyecto:
+`.agents/skills/` — cuatro skills **de terceros**, instaladas en este proyecto. Ninguna
+fue escrita acá; `skills-lock.json` registra el origen y el hash de cada una.
 
-- **`generar-backlog`** — despieza un PRD + Technical Design en un backlog ordenado de
-  specs, cada una lista para arrancar un ciclo SDD.
-- **`revision-adversarial`** — revisa un Technical Design y sus ADRs buscando huecos y
-  decisiones débiles, en vez de validarlas. Su salida está en
-  `REVISION-ADVERSARIAL.md`, y las decisiones que resolvió, en
-  `RESOLUCION-ADVERSARIAL.md`.
+| Skill | Origen | Qué produjo en este repo |
+|---|---|---|
+| `generar-backlog` | `adminoryslabs/Skills` | `BACKLOG.md` |
+| `revision-adversarial` | `adminoryslabs/Skills` | `REVISION-ADVERSARIAL.md` y `RESOLUCION-ADVERSARIAL.md` |
+| `security-pass` | `adminoryslabs/Armory` | `SECURITY-REPORT.md` |
+| `deploy-pass` | `adminoryslabs/Armory` | `DEPLOY-PLAN.md` |
+
+Instalación: `npx skills add <origen> --skill <nombre>`.
+
+Antes de atribuir la autoría de una skill a este proyecto, leer `skills-lock.json`. Una
+versión anterior de este archivo afirmaba que dos de ellas eran propias; era falso, y
+estar en `.agents/skills/` no es evidencia de autoría.
 
 ## Flujo de trabajo
 

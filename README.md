@@ -1,11 +1,20 @@
 # Generador de Reportes de Campo
 
-Aplicación web para completar reportes de instalación en faena y generar el
+Aplicación web para completar reportes de calidad en campo y generar el
 `.xlsx` final sobre la plantilla original de la empresa, sin abrir Excel ni
 ajustar formato a mano.
 
 Está pensada para trabajo en terreno: el formulario se completa paso a paso,
 funciona sin señal y sincroniza cuando vuelve la conexión.
+
+| | |
+|---|---|
+| **Aplicación** | https://proyecto-curso-dmc-gotuzzo.vercel.app/ |
+| **Video demostrativo** | https://www.youtube.com/watch?v=TFGSEiEMd2Y |
+| **Acceso de prueba** | `admin` / `admin123` |
+
+El sistema arranca sin tipos de reporte cargados: el primer paso es subir una
+plantilla `.xlsx` y su definición YAML desde la administración.
 
 ## Cómo funciona, en una pasada
 
@@ -141,11 +150,39 @@ su número de registro. Lo que funciona sin señal es completarlo.
 | `TECH-DESIGN.md` | Arquitectura y modelo de datos |
 | `adrs/` | Por qué se decidió cada cosa, y qué se descartó |
 | `BACKLOG.md` | Los 15 ítems del proyecto y su estado |
+| `REVISION-ADVERSARIAL.md` | Crítica del propio diseño; `RESOLUCION-ADVERSARIAL.md` resuelve sus 15 puntos |
 | `openspec/specs/` | Contrato vigente de cada capacidad |
 | `openspec/changes/archive/` | Ciclo SDD completo de cada cambio |
+| `SECURITY-REPORT.md` | Auditoría de seguridad: 14 hallazgos con evidencia y estado |
+| `DEPLOY-PLAN.md` | Sistema de despliegue y 13 hallazgos verificados sobre la infraestructura |
+| `CLAUDE.md` | Contexto del proyecto para el agente: convenciones y trampas conocidas |
 
 Si vas a tocar código, `openspec/specs/` es lo que describe el comportamiento
 esperado hoy. Los `adrs/` explican por qué las cosas son como son.
+
+## Skills instaladas
+
+`.agents/skills/` trae cuatro skills **de terceros** usadas durante el desarrollo.
+Ninguna fue escrita en este repositorio; `skills-lock.json` registra el origen y el
+hash de cada una.
+
+| Skill | Origen | Qué produjo acá |
+|---|---|---|
+| `generar-backlog` | `adminoryslabs/Skills` | `BACKLOG.md` |
+| `revision-adversarial` | `adminoryslabs/Skills` | `REVISION-ADVERSARIAL.md` |
+| `security-pass` | `adminoryslabs/Armory` | `SECURITY-REPORT.md` |
+| `deploy-pass` | `adminoryslabs/Armory` | `DEPLOY-PLAN.md` |
+
+```bash
+npx skills add adminoryslabs/Skills --skill generar-backlog
+```
+
+## Integración continua
+
+`.github/workflows/ci.yml` corre en cada push y en cada pull request: la suite
+completa (520 pruebas) contra PostgreSQL real en Python 3.12, más `check --deploy`,
+verificación de migraciones pendientes y comprobación SHA-256 de las librerías
+vendorizadas en `static/vendor/`.
 
 ## Despliegue
 
