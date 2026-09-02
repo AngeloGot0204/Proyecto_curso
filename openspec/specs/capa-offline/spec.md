@@ -139,6 +139,66 @@ The system MUST serve `/sw.js` via a dedicated Django view at the domain root (o
 - WHEN a client requests `GET /sw.js`
 - THEN the response is served successfully (not redirected to a login page, not 401/403)
 
+### Requirement: Live Connection Chip in Shared Screen Bar
+
+Every in-app screen that renders `.barra-pantalla` MUST include a
+connection-state chip reflecting `navigator.onLine`, included from one shared
+partial so no screen declares its own copy.
+
+The chip MUST be set synchronously on page load from the current
+`navigator.onLine` value, before any `online`/`offline` event fires, so it
+never flashes the wrong state. `window` MUST carry `online` and `offline`
+listeners that repaint the same chip live, without a page reload.
+
+The chip MUST reuse the existing `.chip`/`.chip--borde` visual language and
+MUST NOT introduce a new one. It MUST NOT carry an `aria-live` announcement
+on state change. It MUST NOT appear on the login screen, which renders no
+`.barra-pantalla`.
+
+The driving script MUST stay strictly isolated from `paso-offline.js`:
+it touches only the `[data-chip-conexion]` node's class, text, state
+attribute and hidden flag, exports nothing on `window`, and MUST NOT alter
+draft persistence, the draft-restore prompt, sync-queue behavior, or
+service-worker caching scope.
+
+#### Scenario: Initial load reflects current connection state without waiting for an event
+
+- GIVEN a user loads an in-app screen that renders `.barra-pantalla`
+- WHEN the page finishes loading and `navigator.onLine` is `true`
+- THEN the chip shows the "en línea" state immediately, without waiting for an `online` event
+- AND when `navigator.onLine` is `false` at load, the chip shows the "offline" state immediately, without waiting for an `offline` event
+
+#### Scenario: Chip updates live when the browser goes offline
+
+- GIVEN a user is on an in-app screen with `.barra-pantalla` visible and the chip shows "en línea"
+- WHEN the browser fires an `offline` event on `window`
+- THEN the chip updates to the "offline" state without a page reload
+
+#### Scenario: Chip updates live when the browser comes back online
+
+- GIVEN a user is on an in-app screen with `.barra-pantalla` visible and the chip shows "offline"
+- WHEN the browser fires an `online` event on `window`
+- THEN the chip updates to the "en línea" state without a page reload
+
+#### Scenario: Chip appears on every screen with a bar
+
+- GIVEN any authenticated screen that renders `.barra-pantalla`
+- WHEN the response HTML is inspected
+- THEN it contains the shared chip node
+
+#### Scenario: Chip does not appear on the login screen
+
+- GIVEN a user is on the login screen, which does not render `.barra-pantalla`
+- WHEN the page loads
+- THEN no connection chip is shown
+
+#### Scenario: Chip is independent from the paso-offline draft banner
+
+- GIVEN a wizard step page renders both the connection chip and `paso-offline.js`'s draft-restore banner
+- WHEN the network state changes
+- THEN the connection chip updates independently of the draft-restore banner
+- AND `paso-offline.js`'s existing one-shot `navigator.onLine` submit-time check and draft-restore banner logic remain unchanged
+
 ## Out of Scope
 
 - Multi-step offline navigation (visiting arbitrary steps while offline).

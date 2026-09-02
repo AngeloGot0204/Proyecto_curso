@@ -10,6 +10,7 @@ Requirement "Design Token Stylesheet").
 """
 
 import re
+from pathlib import Path
 
 from django.contrib.staticfiles import finders
 
@@ -217,5 +218,130 @@ def test_sw_js_cachea_sincronizacion_y_bumpea_v7(client):
     response = client.get("/sw.js")
     contenido = response.content.decode()
 
-    assert "reportes-offline-v20" in contenido
+    assert "reportes-offline-v23" in contenido
     assert "/reportes/sincronizacion/" in contenido
+
+
+def test_envio_paso_js_preserva_campos_no_gestionados_del_borrador():
+    """Spec `sincronizacion-pendientes` — "Per-Row Display Metadata" y "Draft
+    Write Captures Display Metadata".
+
+    `envio-paso.js` reescribe la fila de `borradores` en dos puntos
+    (`reconciliarEnEnvio` y `reconciliarResultado`). Dexie `put()` REEMPLAZA el
+    registro completo, de modo que un objeto literal borra todo campo que el
+    helper no conozca: `paso-offline.js` escribe `tipoNombre`/`fechaReporte` al
+    crear el borrador, y un reintento fallido los eliminaba, dejando la fila de
+    S-15 como "Reporte · <seccion>" sin tipo ni fecha.
+
+    Tripwire de fuente, no de comportamiento: este proyecto no tiene runner de
+    JS (Out of Scope de la spec `capa-offline`), así que se verifica que ambas
+    escrituras lean la fila previa y la fusionen en vez de reemplazarla."""
+    ruta = finders.find("reportes/envio-paso.js")
+    with open(ruta, "r", encoding="utf-8") as archivo:
+        contenido = archivo.read()
+
+    # Lee la fila existente antes de escribir, en vez de asumir sus campos.
+    assert "borradores.get(" in contenido
+    # Fusiona sobre lo previo: los campos no gestionados sobreviven.
+    assert "Object.assign(" in contenido
+    # Ninguna de las dos escrituras pasa un literal directo a put().
+    assert "put({" not in contenido
+
+
+
+
+# --- Third-party scripts stay same-origin (SECURITY-REPORT.md F-02) ------
+
+_TAG_DE_SCRIPT_EXTERNO = re.compile(
+    r"""<script[^>]*\bsrc\s*=\s*["'](?P<url>(?:https?:)?//[^"']+)["']""",
+    re.IGNORECASE,
+)
+
+
+def _plantillas_del_proyecto():
+    """Every `.html` template shipped by this project — the repo-root
+    `templates/` tree plus each app's own `templates/`. Deliberately walks
+    the filesystem instead of listing paths by hand: a template added later
+    is covered without anyone remembering to register it here."""
+    raiz = Path(__file__).resolve().parents[2]
+    directorios = [raiz / "templates"] + [
+        raiz / app / "templates"
+        for app in ("reportes", "tipos_reporte", "usuarios")
+    ]
+    return [
+        archivo
+        for directorio in directorios
+        if directorio.is_dir()
+        for archivo in sorted(directorio.rglob("*.html"))
+    ]
+
+
+def test_ninguna_plantilla_carga_scripts_desde_otro_origen():
+    """F-02: no template may load JavaScript from a foreign origin.
+
+    Dexie, heic2any and browser-image-compression used to come from
+    `unpkg.com`/`cdn.jsdelivr.net` with no `integrity` attribute — a
+    compromised CDN or upstream package would have run arbitrary code on
+    authenticated wizard screens. They are vendored under
+    `static/vendor/` now (see `static/vendor/PROVENANCE.md`).
+
+    The assertion is "same origin", not "has integrity", on purpose: a
+    pinned hash still leaves a request that can fail or be blocked, which
+    an offline-first app cannot afford, and it is one more thing to keep in
+    sync. Reintroducing a CDN tag should fail here, not in production."""
+    plantillas = _plantillas_del_proyecto()
+    assert plantillas, "no se encontró ninguna plantilla; el walker está roto"
+
+    externos = [
+        (archivo.name, coincidencia.group("url"))
+        for archivo in plantillas
+        for coincidencia in _TAG_DE_SCRIPT_EXTERNO.finditer(
+            archivo.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert externos == [], f"scripts de terceros fuera del origen propio: {externos}"
+
+
+def test_las_tres_bibliotecas_vendorizadas_son_alcanzables_por_staticfiles():
+    """F-02 companion: vendoring only helps if `collectstatic` actually
+    picks the files up. Resolves each through the staticfiles finders — the
+    same path `{% static %}` uses — and checks it is a non-empty JavaScript
+    file, mirroring how this module already verifies the self-hosted
+    `.woff2` fonts."""
+    for nombre, marca in (
+        ("vendor/dexie.js", "Dexie"),
+        ("vendor/heic2any.min.js", "heic2any"),
+        ("vendor/browser-image-compression.js", "imageCompression"),
+    ):
+        ruta = finders.find(nombre)
+        assert ruta is not None, f"{nombre} no es alcanzable por staticfiles"
+        contenido = Path(ruta).read_text(encoding="utf-8", errors="replace")
+        assert marca in contenido, f"{nombre} no define {marca}"
+
+
+_SCRIPT_INLINE = re.compile(r"<script(?![^>]*\bsrc\s*=)[^>]*>", re.IGNORECASE)
+_ATRIBUTO_DE_EVENTO = re.compile(r"\son[a-z]+\s*=", re.IGNORECASE)
+
+
+def test_ninguna_plantilla_tiene_javascript_inline():
+    """F-02: `script-src 'self'` without `'unsafe-inline'` is only
+    enforceable while no page carries inline JavaScript — and a CSP that has
+    to allow inline script blocks almost nothing worth blocking. Covers both
+    shapes the browser treats as inline: a `<script>` with no `src`, and an
+    `on*=` event-handler attribute.
+
+    The former inline blocks live in `static/js/registrar-sw.js`,
+    `static/js/confirmar-accion.js` and
+    `reportes/static/reportes/nuevo-reporte-form.js`."""
+    hallazgos = []
+    for archivo in _plantillas_del_proyecto():
+        contenido = archivo.read_text(encoding="utf-8")
+        # Django template comments are not markup the browser ever sees.
+        contenido = re.sub(r"{% comment %}.*?{% endcomment %}", "", contenido, flags=re.DOTALL)
+        for patron, clase in ((_SCRIPT_INLINE, "<script> sin src"),
+                              (_ATRIBUTO_DE_EVENTO, "atributo on*=")):
+            for coincidencia in patron.finditer(contenido):
+                hallazgos.append((archivo.name, clase, coincidencia.group(0).strip()))
+
+    assert hallazgos == [], f"JavaScript inline encontrado: {hallazgos}"

@@ -2,7 +2,23 @@
 
 ## Estado
 
-Aceptado
+Aceptado — la mitad offline nunca se implementó, ver abajo.
+
+## Estado de implementación
+
+Verificado contra el código el 2026-09-01.
+
+**En efecto:** autenticación por sesión de Django (`django.contrib.auth`),
+`SESSION_COOKIE_AGE` de 7 días, cuentas creadas por un administrador y sin
+auto-registro.
+
+**No se implementó:** la "sesión tolerante" offline. No existe caché de
+credenciales ni login sin conexión — autenticarse requiere red. Lo que sí es
+tolerante al offline es el trabajo **una vez logueado**: un paso completado sin
+señal queda en IndexedDB y, si la sesión expiró al sincronizar, se pide login
+de nuevo y el paso guardado se conserva, nunca se descarta.
+
+Queda como trabajo pendiente si el login offline llega a ser un requisito real.
 
 ## Contexto
 
@@ -36,9 +52,38 @@ señalada en la revisión adversarial):** la sesión dura **7 días** (`SESSION_
 sin PIN local adicional para reingresar en modo offline. Se prioriza deliberadamente **no bloquear
 al usuario en el frente de trabajo** sobre una capa extra de seguridad: el riesgo de que un
 dispositivo perdido o sustraído exponga reportes cacheados se considera bajo para este caso de
-uso (reportes de control de calidad, sin datos personales sensibles de terceros).
+uso.
 
 Cada dispositivo mantiene su propia sesión, de forma independiente entre PC y celular.
+
+### Revisión de la premisa (2026-09-01)
+
+La justificación original de esa aceptación de riesgo decía que se trata de «reportes de control
+de calidad, **sin datos personales sensibles de terceros**». **Esa frase era cierta cuando se
+escribió y dejó de serlo.** El backlog #11 (agosto 2026) incorporó adjuntos fotográficos tomados
+en faena: una foto de instalación puede contener rostros del personal, patentes de vehículos,
+documentación visible en pantalla y metadatos EXIF con geolocalización.
+
+La premisa se corrige acá en lugar de dejarla en pie, porque una decisión apoyada en una
+afirmación falsa no está aceptada — está sin revisar. La decisión **se mantiene** (7 días, sin PIN
+local), ahora con el costo real a la vista:
+
+- Un dispositivo perdido expone los reportes que ese dispositivo ya había visitado, **incluidas
+  las fotos cacheadas**, mientras la sesión siga vigente. Sin señal no hay forma de validar la
+  sesión, así que el service worker sirve el HTML cacheado sin poder consultar al servidor
+  (`SECURITY-REPORT.md` F-10).
+- Se asume que los dispositivos de faena tienen bloqueo de pantalla y cifrado del sistema
+  operativo. **Si esa suposición no se cumple, esta decisión debe reabrirse**: es la única capa
+  que queda entre un teléfono perdido y los reportes.
+
+Mitigación aplicada en su momento (`SECURITY-REPORT.md` F-05, opción 1), que reduce el daño sin
+cambiar esta decisión: los metadatos EXIF —geolocalización incluida— se eliminan al subir cada
+adjunto, y los archivos se borran del almacenamiento cuando se elimina un reporte. Límite conocido:
+un HEIC sin convertir no se puede decodificar con el Pillow instalado y conserva su GPS.
+
+Lo que esta revisión **no** resuelve: las URLs de los adjuntos siguen siendo públicas, permanentes
+y no revocables. Eso es `SECURITY-REPORT.md` F-05, que sigue abierto y requiere una decisión
+propia.
 
 ## Alternativas consideradas
 

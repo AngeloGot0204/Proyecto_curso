@@ -97,6 +97,58 @@ The system MUST catch `ProblemaDeGeneracion` raised by `generador.generar_report
 - AND a flash error message is present
 - AND the response status is not 500
 
+#### Scenario: Generator raises LogoIlegible
+
+- GIVEN a `TipoDeReporte` whose `logo` cannot be decoded as an image
+- WHEN generation is attempted for a `Reporte` of that tipo
+- THEN `generador.generar_reporte` raises `LogoIlegible`, a subclass of `ProblemaDeGeneracion`
+- AND the response redirects to `revision` with a flash error, not a 500
+
+### Requirement: Captured Values Are Written as Text, Never as Formulas
+
+The generated `.xlsx` is the product's deliverable and is handed to people
+outside the organization. The spreadsheet library infers a cell's type from
+the string assigned to it: a value beginning with `=` is serialized as a live
+formula the recipient's spreadsheet application evaluates on open. Wizard
+fields are free text by design, and the closed `TipoDeDato` catalog contains
+no type meaning "formula".
+
+The system MUST therefore ensure that every captured value written into a cell
+is typed as TEXT, so a captured value can never decide that it is a formula.
+The captured characters MUST be preserved verbatim — the report must read
+exactly as it was typed.
+
+Neutralization MUST happen at the single point where captured values are
+written to cells, so no other code path can bypass it, and MUST be keyed on
+the type the library actually inferred rather than on a list of leading
+characters, so it stays correct if that inference ever widens.
+
+Non-string values (numbers, booleans) MUST keep their native cell type:
+coercing them to text would silently change how the delivered document
+formats and sums those cells.
+
+This requirement does NOT apply to the template itself, whose own formulas are
+authored by an administrator and must survive generation unchanged.
+
+#### Scenario: A captured value that looks like a formula is written as text
+
+- GIVEN a captured value of `=HYPERLINK("http://example/","Ver")`
+- WHEN the document is generated
+- THEN the destination cell's type is text, not formula
+- AND the cell value is the captured string, character for character
+
+#### Scenario: Ordinary text is unaffected
+
+- GIVEN an ordinary captured value such as `Turno mañana`
+- WHEN the document is generated
+- THEN the destination cell is text with the same value as before this requirement existed
+
+#### Scenario: Numeric and boolean values keep their native type
+
+- GIVEN captured values of `42` and `True`
+- WHEN the document is generated
+- THEN their cells keep numeric and boolean types respectively, not text
+
 ### Requirement: Successful Generation Streams the Document
 
 The system MUST stream the generated `.xlsx` as an `HttpResponse` with `Content-Disposition: attachment` and the correct spreadsheet `Content-Type` on success.

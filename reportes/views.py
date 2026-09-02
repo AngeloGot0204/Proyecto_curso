@@ -70,7 +70,12 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from reportes import listado
-from reportes.adjuntos import SECCION_DE_ADJUNTOS, validar_adjunto
+from reportes.adjuntos import (
+    SECCION_DE_ADJUNTOS,
+    SUBIDAS_MAXIMAS_POR_HORA,
+    limpiar_metadatos,
+    validar_adjunto,
+)
 from reportes.formularios import construir_formulario_seccion
 from reportes.models import (
     Adjunto,
@@ -353,7 +358,7 @@ def cerrar_reporte(request, reporte_id):
             request,
             "El reporte todavía tiene errores pendientes; no puede cerrarse.",
         )
-        return redirect("reportes_participantes", reporte_id=reporte.id)
+        return redirect("reportes_revision", reporte_id=reporte.id)
 
     with transaction.atomic():
         VistoBueno.objects.get_or_create(
@@ -566,9 +571,41 @@ def eliminar_reporte(request, reporte_id):
     if request.method == "POST":
         reporte.eliminado_en = timezone.now()
         reporte.save(update_fields=["eliminado_en"])
+        _borrar_archivos_de_adjuntos(reporte)
         messages.success(request, "Reporte eliminado.")
         return redirect("reportes_mis")
     return render(request, "reportes/eliminar_reporte.html", {"reporte": reporte})
+
+
+def _borrar_archivos_de_adjuntos(reporte):
+    """Delete the stored FILE behind every `Adjunto` of `reporte`, keeping
+    the rows (SECURITY-REPORT.md F-05).
+
+    The soft delete deliberately preserves every related row for audit and
+    recovery. Attachment bytes are a different question: they live at a
+    public, permanent Vercel Blob URL that no session check guards, so
+    leaving them behind means a report its creator deleted stays readable
+    forever by anyone holding the link — including someone whose access was
+    revoked. Dropping the files while keeping the rows serves both needs:
+    the audit trail still says who uploaded what and when.
+
+    Per-attachment `try`, never one transaction: a storage backend that
+    fails on one blob must not abort the deletion the user asked for, nor
+    leave the rest of the files behind. A failure is logged (Sentry picks it
+    up) so an orphaned blob can be cleaned up out of band.
+    """
+    for adjunto in reporte.adjuntos.all():
+        if not adjunto.archivo:
+            continue
+        try:
+            adjunto.archivo.delete(save=False)
+        except Exception:
+            logger.exception(
+                "No se pudo borrar el archivo del adjunto #%s del reporte #%s; "
+                "la fila se conserva y el blob queda huérfano.",
+                adjunto.id,
+                reporte.id,
+            )
 
 
 @login_required
@@ -606,9 +643,29 @@ def subir_adjunto(request, reporte_id):
     if error is not None:
         return JsonResponse({"error": error}, status=400)
 
+    # Abuse ceiling (SECURITY-REPORT.md F-06), counted over this user's own
+    # uploads in the last hour across every report. 429, not 400, so
+    # `adjuntos.js` can tell "retry later" apart from "this file is wrong".
+    hace_una_hora = timezone.now() - datetime.timedelta(hours=1)
+    subidas_recientes = Adjunto.objects.filter(
+        autor=request.user, fecha_subida__gte=hace_una_hora
+    ).count()
+    if subidas_recientes >= SUBIDAS_MAXIMAS_POR_HORA:
+        return JsonResponse({"error": "demasiadas-subidas"}, status=429)
+
     categoria = request.POST.get("categoria")
     if categoria not in CategoriaDeAdjunto.values:
         categoria = CategoriaDeAdjunto.EVIDENCIA
+
+    # Strip camera metadata — GPS above all — BEFORE the blob is written
+    # (SECURITY-REPORT.md F-05): the stored file is served from a public,
+    # permanent URL, so anything embedded here leaves the application. Runs
+    # after `validar_adjunto` so a rejected upload still costs no work, and
+    # never raises: an undecodable file is stored as-is rather than failing
+    # the upload. `nombre_original`/`formato_original`/`tamano_bytes` are
+    # read off the returned object, so the recorded size matches the bytes
+    # actually stored.
+    archivo = limpiar_metadatos(archivo)
 
     adjunto = Adjunto.objects.create(
         reporte=reporte,

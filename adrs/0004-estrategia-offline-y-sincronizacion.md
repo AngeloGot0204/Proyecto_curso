@@ -2,7 +2,28 @@
 
 ## Estado
 
-Aceptado
+Aceptado — con dos salvedades de implementación, ver abajo.
+
+## Estado de implementación
+
+Verificado contra el código el 2026-09-01.
+
+**En efecto:** el borrador local en IndexedDB (vía Dexie), el service worker
+que cachea la página del paso ya renderizada, y la cola de subida con
+reintento manual e idempotencia por `id_local`.
+
+**No se implementó como se decidió:**
+
+1. **Workbox.** El service worker está escrito a mano, sin dependencias
+   (`reportes/templates/reportes/sw.js`). Se sirve como template de Django para
+   que las URLs de los estáticos sigan siendo autoritativas entre entornos.
+2. **"Por sección de rol".** No existen roles por sección: ADR-0003 los
+   descartó y `ValorDeReporte` no lleva campo de rol. La sincronización es
+   **por sección del wizard**, y cualquier participante invitado edita
+   cualquier sección. El título de este ADR conserva la redacción original.
+
+Además, el bloqueo de edición simultánea que este ADR referencia (ADR-0006)
+nunca se construyó.
 
 ## Contexto
 

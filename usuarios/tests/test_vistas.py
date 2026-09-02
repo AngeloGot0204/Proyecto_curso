@@ -267,3 +267,65 @@ def test_suspender_administrador_puede_suspender_a_otro_administrador(
     assert response.status_code == 302
     otro_admin.refresh_from_db()
     assert otro_admin.is_active is False
+
+
+# --- Self-demotion guard (SECURITY-REPORT.md F-11) ------------------------
+
+
+@pytest.mark.django_db
+def test_editar_no_puede_quitarse_el_rol_de_administrador_a_si_mismo(
+    client, administrador_factory
+):
+    """F-11 RED: `usuarios_suspender` already refuses to suspend the acting
+    admin, because that would lock them out of every gated screen with no
+    self-service way back in. Demoting yourself has the same effect and was
+    never guarded. Recovering requires database or `manage.py` access
+    against production."""
+    admin = administrador_factory(username="autodegradador-admin")
+    client.force_login(admin)
+
+    response = client.post(
+        reverse("usuarios_editar", args=[admin.id]), {"rol": "usuario"}
+    )
+
+    assert response.status_code == 302
+    admin.refresh_from_db()
+    assert admin.rol == "administrador"
+    assert admin.is_staff is True
+
+
+@pytest.mark.django_db
+def test_editar_puede_degradar_a_otro_administrador(client, administrador_factory):
+    """F-11 companion: the guard is about the ACTOR only. Demoting a
+    different admin stays allowed — the actor is mid-request as an active
+    admin, so no single request can leave zero administrators. Mirrors
+    `test_suspender_administrador_puede_suspender_a_otro_administrador`."""
+    actor = administrador_factory(username="degradador-actor")
+    otro = administrador_factory(username="degradador-objetivo")
+    client.force_login(actor)
+
+    response = client.post(
+        reverse("usuarios_editar", args=[otro.id]), {"rol": "usuario"}
+    )
+
+    assert response.status_code == 302
+    otro.refresh_from_db()
+    assert otro.rol == "usuario"
+    assert otro.is_staff is False
+
+
+@pytest.mark.django_db
+def test_editar_puede_dejar_su_propio_rol_sin_cambios(client, administrador_factory):
+    """F-11 companion: the guard must reject only an actual self-demotion.
+    Re-submitting the form unchanged is a legitimate no-op and must not
+    start erroring."""
+    admin = administrador_factory(username="autoeditor-admin")
+    client.force_login(admin)
+
+    response = client.post(
+        reverse("usuarios_editar", args=[admin.id]), {"rol": "administrador"}
+    )
+
+    assert response.status_code == 302
+    admin.refresh_from_db()
+    assert admin.rol == "administrador"

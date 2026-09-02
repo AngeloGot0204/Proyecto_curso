@@ -38,15 +38,16 @@ No existe auto-registro. La contraseña inicial la entrega el administrador.
 
 | ID | Pantalla | Plataforma | Referencia wireframe |
 |---|---|---|---|
+| S-00 | Inicio · resumen por estado (landing post-login) | móvil + escritorio | — |
 | S-01 | Login | móvil + escritorio | 1a |
-| S-02 | Inicio · mis reportes + cola de subida | móvil | 1b |
+| S-02 | Mis reportes + cola de subida | móvil | 1b |
 | S-03 | Nuevo reporte · selección de tipo/plantilla | móvil | 1c |
 | S-04 | Paso 1 · Datos generales (~18 campos) | móvil | 1d |
 | S-05 | Paso 2 · Parámetros preliminares (7 ítems, Sí/No por rol) | móvil | 1e |
 | S-06 | Paso 3 · Proceso de instalación (11 ítems, horas + Δ manual) | móvil | 1f |
 | S-07 | Paso 4 · Ensayo de Pull Test (4 ítems) | móvil | 1g |
 | S-08 | Paso 5 · Resultados, observaciones y adjuntos | móvil | 1h |
-| S-09 | Validación al cerrar (errores vs. advertencias) | móvil, hoja modal | 1i |
+| S-09 | Validación al cerrar (errores vs. advertencias) y visto bueno | móvil | 1i |
 | S-10 | Estado del reporte · handoff entre roles | móvil | 1j |
 | S-13 | Admin · usuarios | escritorio | 1m |
 | S-14 | Admin · tipo de reporte + logo | escritorio | 1n |
@@ -78,9 +79,15 @@ Logo institucional configurable, usuario/correo, contraseña, botón primario, n
 "solicita tu cuenta al administrador". Con sesión previa y sin señal permite entrar en
 modo offline con los datos cacheados.
 
-### S-02 Inicio · mis reportes
+### S-00 Inicio
+Landing post-login (`usuarios/views.py::inicio`, spec `listado-reportes`).
+Pantalla real de bienvenida/resumen, no un redirect a "Mis reportes": muestra un conteo por grupo (**En progreso**, **Listos
+para generar**, **Terminados**) sobre los reportes accesibles del usuario, calculado con el mismo
+pipeline que S-02 usa (`agrupar_por_bucket`) para que nunca desincronice con esa lista.
+
+### S-02 Mis reportes
 Orden: (1) banner de pendientes de subir si hay cola, (2) buscador + filtros,
-(3) grupos **En progreso**, **Pendientes de otra parte**, **Listos para generar**.
+(3) grupos **En progreso**, **Listos para generar**, **Terminados**.
 Cada tarjeta: título (tipo — nivel/frente), etiqueta de estado, línea mono con
 N° de registro o `local`, % de avance y fecha. Acción primaria fija: **+ Nuevo reporte**.
 
@@ -117,16 +124,19 @@ formatos soportados visibles antes de adjuntar). Nota fija: las firmas se genera
 blanco en el Excel.
 
 ### S-09 Validación al cerrar
-Hoja modal con dos listas separadas:
+Pantalla completa (no modal) con dos listas separadas:
 - **Debes corregir** — cada ítem enlaza al campo exacto; el botón "Generar" queda deshabilitado.
 - **Advertencias** — ítems "No cumple" y datos atípicos; no bloquean.
 
-### S-10 Estado del reporte · participantes y visto bueno
-Lista de **participantes invitados** (usuario · secciones que completó · última edición),
-acción **"Compartir con…"** para invitar a otro usuario, avance por sección, acceso al
-**historial de cambios** (quién editó qué y cuándo) y botón **"Marcar como terminado"**
-(visto bueno) reservado al creador del reporte (`reporte.creado_por`). La generación del `.xlsx` se habilita
-recién después del visto bueno, no por completitud automática.
+Es también, hoy, la pantalla dueña del cierre: incluye el botón **"Marcar como terminado"**
+(visto bueno), reservado al creador del reporte (`reporte.creado_por`), deshabilitado mientras
+"Debes corregir" tenga ítems. La generación del `.xlsx` se habilita recién después del visto
+bueno, no por completitud automática.
+
+### S-10 Estado del reporte · participantes
+El cierre **no** vive en esta pantalla: es de S-09. Lista de **participantes invitados** (usuario · secciones que completó ·
+última edición), acción **"Compartir con…"** para invitar a otro usuario, avance por sección y
+acceso al **historial de cambios** (quién editó qué y cuándo).
 
 > **S-11 y S-12 eliminadas.** No hay vista previa del documento dentro de la app (ADR-0007).
 > La revisión ocurre en S-09 (validación) y volviendo por los pasos del wizard. Tras el visto

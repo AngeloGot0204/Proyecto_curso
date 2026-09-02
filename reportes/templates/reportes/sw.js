@@ -9,7 +9,7 @@
  * CACHE below.
  */
 
-var CACHE = "reportes-offline-v20";
+var CACHE = "reportes-offline-v23";
 
 self.addEventListener("install", function (evento) {
   self.skipWaiting();

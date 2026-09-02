@@ -1,0 +1,92 @@
+tipo: instalacion-resinas
+hoja: JME.PC-0001.F1
+secciones:
+  - id: datos-generales
+    titulo: Datos generales
+    campos:
+      - {id: nombre_proyecto, etiqueta: "Nombre del proyecto", tipo: texto, obligatorio: true, celda: E6}
+      - {id: compania, etiqueta: "Compañía", tipo: texto, obligatorio: true, celda: E7}
+      - {id: contrato, etiqueta: "N° Contrato", tipo: texto, obligatorio: false, celda: M7}
+      - {id: plano_ref, etiqueta: "Plano ref.", tipo: texto, obligatorio: false, celda: E9}
+      - {id: area, etiqueta: "Área", tipo: texto, obligatorio: true, celda: M9}
+      - {id: frente, etiqueta: "Frente", tipo: texto, obligatorio: false, celda: R9}
+      - {id: sistema, etiqueta: "Sistema", tipo: texto, obligatorio: false, celda: E10}
+      - {id: subsistema, etiqueta: "Sub-sistema", tipo: texto, obligatorio: false, celda: M10}
+      - {id: ppi, etiqueta: "PPI", tipo: texto, obligatorio: false, celda: E11}
+      - {id: cod_diseno, etiqueta: "Cód. diseño", tipo: texto, obligatorio: false, celda: E12}
+      - {id: turno, etiqueta: "Turno", tipo: seleccion, opciones: ["Día","Noche"], obligatorio: true, celda: M12}
+      - {id: tipo_roca, etiqueta: "Tipo de roca", tipo: texto, obligatorio: false, celda: R12}
+      - {id: descripcion, etiqueta: "Descripción", tipo: texto, obligatorio: true, celda: E13}
+      - {id: fecha, etiqueta: "Fecha", tipo: fecha, obligatorio: true, celda: T7}
+
+  - id: parametros-preliminares
+    titulo: "Parámetros preliminares"
+    campos:
+      - {id: pp01_jme, etiqueta: "1. Operatividad de equipo (JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M16}
+      - {id: pp01_qa, etiqueta: "1. Operatividad de equipo (QA)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P16}
+      - {id: pp01_obs, etiqueta: "1. Observación", tipo: texto, obligatorio: false, celda: S16}
+      - {id: pp02_jme, etiqueta: "2. Resinas en buen estado (JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M17}
+      - {id: pp02_qa, etiqueta: "2. Resinas en buen estado (QA)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P17}
+      - {id: pp02_obs, etiqueta: "2. Observación", tipo: texto, obligatorio: false, celda: S17}
+      - {id: pp03_jme, etiqueta: "3. Limpieza/diámetro/longitud del perno (JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M18}
+      - {id: pp03_qa, etiqueta: "3. Limpieza/diámetro/longitud del perno (QA)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P18}
+      - {id: pp03_obs, etiqueta: "3. Observación", tipo: texto, obligatorio: false, celda: S18}
+      - {id: pp04_jme, etiqueta: "4. Diámetro de broca del Bolter (JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M19}
+      - {id: pp04_qa, etiqueta: "4. Diámetro de broca del Bolter (QA)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P19}
+      - {id: pp04_obs, etiqueta: "4. Observación", tipo: texto, obligatorio: false, celda: S19}
+      - {id: pp05_jme, etiqueta: "5. Longitud de taladros (JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M20}
+      - {id: pp05_qa, etiqueta: "5. Longitud de taladros (QA)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P20}
+      - {id: pp05_obs, etiqueta: "5. Observación", tipo: texto, obligatorio: false, celda: S20}
+      - {id: pp06_jme, etiqueta: "6. Calibración pull test (JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M21}
+      - {id: pp06_qa, etiqueta: "6. Calibración pull test (QA)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P21}
+      - {id: pp06_obs, etiqueta: "6. Observación", tipo: texto, obligatorio: false, celda: S21}
+      - {id: pp07_jme, etiqueta: "7. Certificado de calidad de materiales (JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M22}
+      - {id: pp07_obs, etiqueta: "7. Observación", tipo: texto, obligatorio: false, celda: S22}
+
+  - id: proceso-instalacion
+    titulo: "Proceso de instalación de resinas"
+    items:
+      - {id: p01, texto: "Se verifica ángulo de perforación.", tipo: rango-hora-inicio-fin, celda_inicio: M25, celda_fin: P25}
+      - {id: p02, texto: "El equipo inicia y culmina la perforación.", tipo: rango-hora-inicio-fin, celda_inicio: M26, celda_fin: P26}
+      - {id: p03, texto: "Limpieza y longitud de perforación ejecutada.", tipo: rango-hora-inicio-fin, celda_inicio: M27, celda_fin: P27}
+      - {id: p04, texto: "Ingreso de resinas acorde a diámetro/perforación.", tipo: rango-hora-inicio-fin, celda_inicio: M28, celda_fin: P28}
+      - {id: p04_obs, texto: "Observación", tipo: texto, celda: S28}
+      - {id: p05, texto: "Diámetro de resina Ø.", tipo: rango-hora-inicio-fin, celda_inicio: M29, celda_fin: P29}
+      - {id: p05_obs, texto: "Observación", tipo: texto, celda: S29}
+      - {id: p06, texto: "Longitud de cartucho de resina.", tipo: rango-hora-inicio-fin, celda_inicio: M30, celda_fin: P30}
+      - {id: p06_obs, texto: "Observación", tipo: texto, celda: S30}
+      - {id: p07, texto: "Número de resinas insertadas.", tipo: rango-hora-inicio-fin, celda_inicio: M31, celda_fin: P31}
+      - {id: p07_obs, texto: "Observación", tipo: texto, celda: S31}
+      - {id: p08, texto: "Se ocupó totalmente la perforación con resina.", tipo: rango-hora-inicio-fin, celda_inicio: M32, celda_fin: P32}
+      - {id: p08_obs, texto: "Observación", tipo: texto, celda: S32}
+      - {id: p09, texto: "Se coloca el perno en el equipo.", tipo: rango-hora-inicio-fin, celda_inicio: M33, celda_fin: P33}
+      - {id: p09_obs, texto: "Observación", tipo: texto, celda: S33}
+      - {id: p10, texto: "Se introduce el perno por rotación.", tipo: rango-hora-inicio-fin, celda_inicio: M34, celda_fin: P34}
+      - {id: p10_obs, texto: "Observación", tipo: texto, celda: S34}
+      - {id: p11, texto: "Inicio y culminación del mezclado de resinas.", tipo: rango-hora-inicio-fin, celda_inicio: M35, celda_fin: P35}
+      - {id: p11_obs, texto: "Observación", tipo: texto, celda: S35}
+
+  - id: ensayo-pull-test
+    titulo: "Ensayo de Pull Test"
+    items:
+      - {id: pt01, texto: "Instalación del equipo Pull Test.", tipo: rango-hora-inicio-fin, celda_inicio: M38, celda_fin: P38}
+      - {id: pt01_obs, texto: "Observación", tipo: texto, celda: S38}
+      - {id: pt02, texto: "Aplicación de tracción del perno.", tipo: rango-hora-inicio-fin, celda_inicio: M39, celda_fin: P39}
+      - {id: pt02_obs, texto: "Observación", tipo: texto, celda: S39}
+      - {id: pt03, texto: "Tiempo transcurrido de tensión.", tipo: rango-hora-inicio-fin, celda_inicio: M41, celda_fin: P41}
+      - {id: pt03_obs, texto: "Observación", tipo: texto, celda: S41}
+      - {id: pt04, texto: "Desplazamiento del perno.", tipo: rango-hora-inicio-fin, celda_inicio: M42, celda_fin: P42}
+      - {id: pt04_obs, texto: "Observación", tipo: texto, celda: S42}
+
+  - id: resultados
+    titulo: "Resultados de la prueba"
+    campos:
+      - {id: r01_qc, etiqueta: "Mezclado según hoja técnica (QC JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M45}
+      - {id: r01_qa, etiqueta: "Mezclado según hoja técnica (QA Antamina)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P45}
+      - {id: r01_obs, etiqueta: "Observación", tipo: texto, obligatorio: false, celda: S45}
+      - {id: r02_qc, etiqueta: "Resultado de tracción aceptable (QC JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M46}
+      - {id: r02_qa, etiqueta: "Resultado de tracción aceptable (QA Antamina)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P46}
+      - {id: r02_obs, etiqueta: "Observación", tipo: texto, obligatorio: false, celda: S46}
+      - {id: r03_qc, etiqueta: "Tiempo de fragua aceptable (QC JME)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: M47}
+      - {id: r03_qa, etiqueta: "Tiempo de fragua aceptable (QA Antamina)", tipo: seleccion, opciones: ["Sí","No","No cumple"], obligatorio: true, celda: P47}
+      - {id: r03_obs, etiqueta: "Observación", tipo: texto, obligatorio: false, celda: S47}

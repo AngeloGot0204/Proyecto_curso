@@ -1,0 +1,10 @@
+# Librerias de terceros auto-hospedadas: se guardan y se extraen byte a byte
+# como vienen del registro, sin conversion de fin de linea. Si Git normalizara
+# LF/CRLF, los SHA-256 registrados en static/vendor/PROVENANCE.md dejarian de
+# verificar en un clon nuevo, y la procedencia -- que es la razon por la que se
+# vendorizaron (SECURITY-REPORT.md F-02) -- se volveria incomprobable.
+static/vendor/*.js -text
+
+# Las fuentes ya eran binarias, pero conviene dejarlo explicito por el mismo
+# motivo: tokens.css registra su SHA-256.
+static/fonts/*.woff2 binary

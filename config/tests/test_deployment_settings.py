@@ -217,3 +217,62 @@ def test_a14_hsts_preload_refused_and_silenced(load_settings):
 
     assert module.SECURE_HSTS_PRELOAD is False
     assert "security.W021" in module.SILENCED_SYSTEM_CHECKS
+
+
+# --- Content-Security-Policy (SECURITY-REPORT.md F-02) --------------------
+
+
+@pytest.mark.django_db
+def test_a16_csp_se_envia_en_modo_report_only_por_defecto(client):
+    """The project had no CSP at all. Report-only is the default on purpose:
+    an enforcing policy that is wrong breaks every page at once, and this one
+    has never run in production."""
+    respuesta = client.get("/login/")
+
+    assert "Content-Security-Policy-Report-Only" in respuesta
+    assert "Content-Security-Policy" not in respuesta
+
+
+@pytest.mark.django_db
+def test_a17_csp_prohibe_scripts_inline_y_de_terceros(client):
+    """The point of the policy. `script-src 'self'` without
+    `'unsafe-inline'` is only possible because no page carries inline
+    JavaScript — `reportes/tests/test_estatico.py` guards that half."""
+    politica = client.get("/login/")["Content-Security-Policy-Report-Only"]
+
+    assert "script-src 'self'" in politica
+    assert "'unsafe-inline'" not in politica.split("script-src")[1].split(";")[0]
+    assert "object-src 'none'" in politica
+    assert "base-uri 'none'" in politica
+    assert "frame-ancestors 'none'" in politica
+
+
+@pytest.mark.django_db
+def test_a18_csp_permite_las_imagenes_de_vercel_blob(client):
+    """Attachments and logos are served from Vercel Blob's public host; a
+    policy that forgot it would blank every photo in the app."""
+    politica = client.get("/login/")["Content-Security-Policy-Report-Only"]
+    directiva = politica.split("img-src")[1].split(";")[0]
+
+    assert "https://*.public.blob.vercel-storage.com" in directiva
+    assert "blob:" in directiva
+    assert "data:" in directiva
+
+
+def test_a19_csp_pasa_a_enforcing_con_la_variable_de_entorno(monkeypatch):
+    """`DJANGO_CSP_REPORT_ONLY=False` flips the header name, so the switch
+    from measuring to enforcing needs no code change."""
+    from config import seguridad
+
+    monkeypatch.setenv("DJANGO_CSP_REPORT_ONLY", "False")
+
+    def _vista(request):
+        from django.http import HttpResponse
+
+        return HttpResponse("ok")
+
+    middleware = seguridad.content_security_policy(_vista)
+    respuesta = middleware(None)
+
+    assert "Content-Security-Policy" in respuesta
+    assert "Content-Security-Policy-Report-Only" not in respuesta

@@ -2,7 +2,26 @@
 
 ## Estado
 
-Aceptado
+Aceptado — el bloqueo de edición simultánea fue rechazado en la práctica, ver abajo.
+
+## Estado de implementación
+
+Verificado contra el código el 2026-09-01.
+
+**En efecto:** colaboración por invitación explícita
+(`ParticipacionEnReporte`), edición abierta de cualquier sección por cualquier
+participante, registro de cambios con auditoría FIFO de 30 por reporte
+(`CambioDeValor`), y cierre manual reservado al creador (`VistoBueno`).
+
+**Rechazado de hecho:** el bloqueo "en edición por `<usuario>`" con liberación
+manual o por 10 minutos de inactividad. No existe en el código ningún campo,
+vista ni JavaScript que marque un reporte como en edición ni que lo ponga en
+solo lectura para el resto.
+
+Hoy dos participantes pueden editar el mismo campo a la vez sin aviso: gana la
+última escritura y `CambioDeValor` queda como único rastro para reconstruir qué
+pasó. Si se quiere el bloqueo, necesita spec y diseño propios — esta decisión
+no alcanza como respaldo.
 
 ## Contexto
 
@@ -69,6 +88,8 @@ Este bloqueo es un mecanismo exclusivamente **online**: la colaboración offline
 ajeno no está soportada (ver ADR-0004). No sustituye al registro de cambios: sigue existiendo un
 historial de quién editó qué, el bloqueo sólo evita que dos personas pisen el mismo campo al mismo
 tiempo sin saberlo.
+
+> Este bloqueo **nunca se implementó**. Ver "Estado de implementación" al inicio de este ADR.
 
 ## Alternativas consideradas
 

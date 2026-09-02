@@ -14,6 +14,7 @@ This module implements every phase of the change's `tasks.md`: Phase 1
 """
 
 import logging
+import zipfile
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -44,6 +45,22 @@ class PlantillaIlegible(ProblemaDeGeneracion):
     the equivalent problem, per design's Interfaces/Contracts."""
 
     regla = "plantilla-ilegible"
+
+
+class LogoIlegible(ProblemaDeGeneracion):
+    """`tipo.logo` could not be decoded as an image (SECURITY-REPORT.md
+    F-09). Typed and catchable like every other foreseeable failure, so
+    `views.generar` degrades to a flash message instead of a raw 500 —
+    which is what a bare `PIL.UnidentifiedImageError` produced here, on
+    EVERY generation of the affected tipo, until an administrator noticed.
+
+    Unlike an attachment (`_incrustar_adjuntos`, which skips and continues),
+    the logo is not skipped: an attachment is one of several and the report
+    stands without it, while the logo is the company's mark on a document
+    that gets delivered. Shipping an unbranded report silently is worse than
+    refusing to ship one and saying why."""
+
+    regla = "logo-ilegible"
 
 
 class ValoresIncompletos(ProblemaDeGeneracion):
@@ -142,7 +159,16 @@ def _intercambiar_logo(hoja, logo):
     originales = hoja._images
     if logo and originales:
         original = originales[0]
-        nueva = ImagenOpenpyxl(BytesIO(logo.read()))
+        try:
+            nueva = ImagenOpenpyxl(BytesIO(logo.read()))
+        except Exception as error:
+            # `logo` is uploaded through `TipoDeReporteForm`, which applies
+            # no type validation, so anything can reach here. A bare raise
+            # escaped `views.generar`'s `except ProblemaDeGeneracion` and
+            # surfaced as a 500 (SECURITY-REPORT.md F-09).
+            raise LogoIlegible(
+                "No se pudo leer el logo del tipo de reporte."
+            ) from error
         nueva.anchor = original.anchor
         hoja._images.remove(original)
         hoja.add_image(nueva)
@@ -202,11 +228,40 @@ def _escribir_valores(hoja, estructura, valores):
     per D3: present-but-not-required keys are written; absent optional
     keys leave their anchor cell untouched ("lo que no se escribe, no se
     altera"). D2: membership test, so `False`/`0`/`""` are written as-is,
-    never skipped as if absent."""
+    never skipped as if absent.
+
+    Every captured string is written as TEXT, never as a formula — see
+    `_neutralizar_formula`."""
     for _ubicacion, nodo, _clave_de_etiqueta in _iterar_nodos(estructura):
         for clave, coordenada in _destinos(nodo):
             if clave in valores:
-                hoja[coordenada] = valores[clave]
+                celda = hoja[coordenada]
+                celda.value = valores[clave]
+                _neutralizar_formula(celda)
+
+
+def _neutralizar_formula(celda):
+    """Force a captured value that openpyxl typed as a formula back to text.
+
+    openpyxl infers a cell's data type from the string assigned to it: a
+    value starting with "=" becomes `data_type "f"` — a live formula Excel
+    evaluates when the delivered document is opened. Wizard fields are free
+    text (`reportes/formularios.py` builds them from the definition's closed
+    data-type catalog, none of which means "formula"), so a captured value
+    must never be able to decide that it is one: `=HYPERLINK(...)` or
+    `=WEBSERVICE(...)` in a report would exfiltrate other cells or plant a
+    phishing link inside a document the company hands to a third party.
+
+    Keyed on what openpyxl actually inferred (`data_type == "f"`) rather
+    than on a list of leading characters, so it stays correct if that
+    inference ever widens. Only the declared type changes — `celda.value`
+    keeps the captured characters verbatim, so the report still reads
+    exactly as it was typed. Non-string values are untouched: coercing a
+    number or a boolean to text would silently change how the delivered
+    `.xlsx` formats and sums those cells.
+    """
+    if celda.data_type == "f":
+        celda.data_type = "s"
 
 
 def _exportar_solo_hoja_declarada(libro, nombre_hoja):
@@ -217,6 +272,54 @@ def _exportar_solo_hoja_declarada(libro, nombre_hoja):
     for nombre in [nombre for nombre in libro.sheetnames if nombre != nombre_hoja]:
         del libro[nombre]
     libro.active = 0
+
+
+# openpyxl 3.1.5 serializa estos elementos SIN el prefijo `a:` dentro de
+# `xl/drawings/drawingN.xml`. Como ese documento declara `xmlns=` apuntando al
+# namespace `spreadsheetDrawing`, un elemento sin prefijo queda en el namespace
+# equivocado: `prstGeom` exige `a:avLst` del namespace `drawingml/main`. Excel
+# considera el dibujo inválido, lo descarta entero y abre el archivo con el
+# diálogo "Parte quitada: /xl/drawings/drawing1.xml (Forma de dibujo)",
+# perdiendo el logo institucional del reporte entregado.
+_ELEMENTOS_DRAWINGML = ("avLst", "prstDash")
+
+
+def _prefijar_drawingml(datos: bytes) -> bytes:
+    """Devuelve `datos` con los elementos de `_ELEMENTOS_DRAWINGML` prefijados
+    con `a:`.
+
+    Idempotente: busca la forma SIN prefijo (`<avLst`), que nunca coincide con
+    una ya corregida (`<a:avLst`), de modo que aplicarla dos veces no duplica
+    el prefijo."""
+    texto = datos.decode("utf-8")
+    for nombre in _ELEMENTOS_DRAWINGML:
+        texto = texto.replace(f"<{nombre}>", f"<a:{nombre}>")
+        texto = texto.replace(f"<{nombre} ", f"<a:{nombre} ")
+        texto = texto.replace(f"<{nombre}/>", f"<a:{nombre}/>")
+        texto = texto.replace(f"</{nombre}>", f"</a:{nombre}>")
+    return texto.encode("utf-8")
+
+
+def _reparar_dibujos(buffer: BytesIO) -> BytesIO:
+    """Reescribe el `.xlsx` de `buffer` corrigiendo el namespace de cada
+    `xl/drawings/drawingN.xml` (ver `_prefijar_drawingml`).
+
+    Se hace sobre los bytes ya guardados, y no sobre el modelo en memoria,
+    porque el defecto está en el serializador de openpyxl: cualquier arreglo
+    aguas arriba lo volvería a introducir al escribir. El resto de las partes
+    se copia sin tocar, conservando sus metadatos de compresión."""
+    origen = zipfile.ZipFile(buffer)
+    salida = BytesIO()
+    with zipfile.ZipFile(salida, "w", zipfile.ZIP_DEFLATED) as destino:
+        for info in origen.infolist():
+            datos = origen.read(info.filename)
+            if info.filename.startswith(
+                "xl/drawings/drawing"
+            ) and info.filename.endswith(".xml"):
+                datos = _prefijar_drawingml(datos)
+            destino.writestr(info, datos)
+    salida.seek(0)
+    return salida
 
 
 def generar_reporte(definicion, valores: dict, adjuntos=()):
@@ -296,4 +399,4 @@ def generar_reporte(definicion, valores: dict, adjuntos=()):
     buffer = BytesIO()
     libro.save(buffer)
     buffer.seek(0)
-    return buffer
+    return _reparar_dibujos(buffer)

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Nuevo reporte{% endblock %}
 
@@ -6,6 +7,7 @@
 <header class="barra-pantalla">
     <a class="barra-pantalla__volver" href="{% url 'reportes_mis' %}" aria-label="Volver a Mis reportes">←</a>
     <h1 class="barra-pantalla__titulo">Nuevo reporte</h1>
+    {% include "_chip_conexion.html" %}
 </header>
 {% endblock %}
 
@@ -21,8 +23,9 @@
         {% for tipo in tipos %}
         <li class="lista__tarjeta">
             {% if tipo.activo %}
-            <form method="post" action="{% url 'reportes_nuevo' tipo.codigo %}">
+            <form method="post" action="{% url 'reportes_nuevo' tipo.codigo %}" class="js-nuevo-reporte">
                 {% csrf_token %}
+                <input type="hidden" name="id_local" class="js-id-local">
                 <button type="submit" class="acciones__primario">
                     {{ tipo.codigo }} — {{ tipo.definicion_activa.estructura.secciones|length }} secciones
                 </button>
@@ -47,4 +50,6 @@
         {% endfor %}
     </ul>
 </section>
+
+<script src="{% static 'reportes/nuevo-reporte-form.js' %}" defer></script>
 {% endblock %}

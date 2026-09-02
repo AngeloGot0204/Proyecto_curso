@@ -7,7 +7,7 @@
 {# Change `vista-sincronizacion-pendientes`, task 5.2 (design D5) — Dexie #}
 {# read-only badge count; degrades to hidden (no-op) if Dexie/offline-db.js #}
 {# fail to load, mirroring every other offline script's guard clause. #}
-<script src="https://unpkg.com/dexie@3/dist/dexie.js" crossorigin="anonymous"></script>
+<script src="{% static 'vendor/dexie.js' %}"></script>
 <script src="{% static 'reportes/offline-db.js' %}"></script>
 <script src="{% static 'reportes/pendientes-badge.js' %}" defer></script>
 {% endblock %}
@@ -97,7 +97,7 @@
                             <button type="submit" class="acciones__secundario">Compartir</button>
                         </form>
                     </details>
-                    <form method="post" action="{% url 'reportes_eliminar' tarjeta.reporte.id %}" onsubmit="return confirm('¿Eliminar este reporte? No vas a poder deshacerlo desde la app.')">
+                    <form method="post" action="{% url 'reportes_eliminar' tarjeta.reporte.id %}" data-confirmar="¿Eliminar este reporte? No vas a poder deshacerlo desde la app.">
                         {% csrf_token %}
                         <button type="submit" class="lista__eliminar" aria-label="Eliminar reporte">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

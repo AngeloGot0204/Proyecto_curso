@@ -24,6 +24,7 @@ from dataclasses import dataclass
 import yaml
 from django.core.exceptions import ValidationError
 from openpyxl import load_workbook
+from openpyxl.cell.cell import Cell
 from openpyxl.utils.cell import coordinate_from_string
 from openpyxl.utils.exceptions import CellCoordinatesException
 from yaml import YAMLError
@@ -252,7 +253,17 @@ def _mapa_de_celdas_no_ancla(hoja) -> dict[str, str]:
     mapa: dict[str, str] = {}
     for rango in hoja.merged_cells.ranges:
         ancla = rango.coord.split(":")[0]
-        for fila in hoja[rango.coord]:
+        celdas = hoja[rango.coord]
+        # Excel admite combinar una sola celda (`B25:B25`): openpyxl guarda
+        # ese rango con `coord == "B25"` y `hoja["B25"]` devuelve un `Cell`
+        # suelto, no la tupla de tuplas de un rango real. Iterarlo reventaba
+        # con `TypeError: 'Cell' object is not iterable`, abortando la
+        # activación con una traza cruda en vez del fallo limpio de ADR-0008.
+        # Un rango de una celda no aporta celdas no-ancla: la única que
+        # contiene ES el ancla.
+        if isinstance(celdas, Cell):
+            continue
+        for fila in celdas:
             for celda in fila:
                 if celda.coordinate != ancla:
                     mapa[celda.coordinate] = ancla

@@ -4,33 +4,24 @@
 {% block title %}{{ seccion.titulo }} — Reporte #{{ reporte.id }}{% endblock %}
 
 {% block extra_head %}
-<script src="https://unpkg.com/dexie@3/dist/dexie.js" crossorigin="anonymous"></script>
+<script src="{% static 'vendor/dexie.js' %}"></script>
 <script src="{% static 'reportes/paso.js' %}" defer></script>
 <script src="{% static 'reportes/offline-db.js' %}"></script>
 <script src="{% static 'reportes/envio-paso.js' %}"></script>
 <script src="{% static 'reportes/paso-offline.js' %}" defer></script>
 {% if seccion.id == "resultados" %}
 {% comment %}
-Backlog #11, design D3 — both CDN libraries are best-effort only (see
-adjuntos.js's header); pinned to jsdelivr, matching the Dexie CDN tag's
-no-`integrity` precedent above pending tasks.md 7.3.
+Backlog #11, design D3 — both libraries are best-effort only (see
+adjuntos.js's header). Vendored under `static/vendor/` (SECURITY-REPORT.md
+F-02): loading them from a CDN with no `integrity` let a compromised CDN or
+upstream package run arbitrary code on this authenticated screen. Version
+and SHA-256 are recorded in `static/vendor/PROVENANCE.md`.
 {% endcomment %}
-<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js" crossorigin="anonymous"></script>
+<script src="{% static 'vendor/heic2any.min.js' %}"></script>
+<script src="{% static 'vendor/browser-image-compression.js' %}"></script>
 <script src="{% static 'reportes/adjuntos.js' %}" defer></script>
 {% endif %}
-<script>
-    if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-            navigator.serviceWorker.register("/sw.js").catch(function () {
-                // Registration failure must never block the page — offline
-                // support degrades silently to online-only behavior
-                // (change `capa-offline`; draft persistence still works via
-                // Dexie regardless of SW registration outcome).
-            });
-        });
-    }
-</script>
+<script src="{% static 'js/registrar-sw.js' %}" defer></script>
 {% endblock %}
 
 {% block barra %}
@@ -110,7 +101,7 @@ values ("Per-Attachment Failure Isolation").
                 <p class="adjuntos__nombre">{{ adjunto.nombre_original }}</p>
                 <p class="adjuntos__meta mono">{{ adjunto.get_categoria_display }} · {{ adjunto.autor.username }}</p>
             </div>
-            <form method="post" action="{% url 'reportes_adjuntos_eliminar' reporte.id adjunto.id %}" onsubmit="return confirm('¿Eliminar este adjunto? No se puede deshacer.')">
+            <form method="post" action="{% url 'reportes_adjuntos_eliminar' reporte.id adjunto.id %}" data-confirmar="¿Eliminar este adjunto? No se puede deshacer.">
                 {% csrf_token %}
                 <button type="submit" class="lista__eliminar" aria-label="Eliminar {{ adjunto.nombre_original }}">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

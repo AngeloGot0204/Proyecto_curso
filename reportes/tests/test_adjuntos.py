@@ -496,3 +496,311 @@ def test_eliminar_adjunto_get_no_permitido(sesion_de_creador, seccion_s08_id):
 
     assert response.status_code == 405
     assert Adjunto.objects.filter(pk=adjunto.id).exists()
+
+
+# --- Metadata stripping on upload (SECURITY-REPORT.md F-05, option A) -----
+#
+# Vercel Blob serves attachments from a public, permanent URL: the listing is
+# access-scoped, the file itself is not. A field photo therefore leaves the
+# application carrying whatever its camera embedded -- most importantly GPS
+# coordinates. Stripping metadata does not make the URL private (that is the
+# separate, larger change); it removes the most sensitive payload from a file
+# that is, in practice, world-readable.
+
+
+def _jpeg_con_metadatos(ancho=40, alto=30):
+    """A real JPEG carrying GPS coordinates, camera make and a timestamp --
+    the metadata a phone actually writes."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    imagen = Image.new("RGB", (ancho, alto), (10, 120, 200))
+    exif = Image.Exif()
+    exif[0x010F] = "ACME Phone"
+    exif[0x0132] = "2026:08:15 07:30:00"
+    gps = exif.get_ifd(0x8825)
+    gps[1], gps[2] = "S", (33.0, 27.0, 0.0)
+    gps[3], gps[4] = "W", (70.0, 39.0, 0.0)
+    buffer = BytesIO()
+    imagen.save(buffer, "JPEG", exif=exif, quality=88)
+    return buffer.getvalue()
+
+
+def _exif_de(datos):
+    from io import BytesIO
+
+    from PIL import Image
+
+    return Image.open(BytesIO(datos)).getexif()
+
+
+def test_el_jpeg_de_prueba_realmente_trae_gps():
+    """Guard on the fixture itself: if this ever stops carrying GPS, the
+    stripping tests below would pass without proving anything."""
+    exif = _exif_de(_jpeg_con_metadatos())
+
+    assert dict(exif.get_ifd(0x8825)) != {}
+    assert exif[0x010F] == "ACME Phone"
+
+
+def test_limpiar_metadatos_elimina_exif_y_gps_de_un_jpeg():
+    """F-05 RED: `limpiar_metadatos` returns a file whose EXIF block --
+    including the GPS sub-IFD -- is gone."""
+    from reportes.adjuntos import limpiar_metadatos
+
+    original = SimpleUploadedFile(
+        "foto.jpg", _jpeg_con_metadatos(), content_type="image/jpeg"
+    )
+
+    limpio = limpiar_metadatos(original)
+
+    exif = _exif_de(limpio.read())
+    assert dict(exif) == {}
+    assert dict(exif.get_ifd(0x8825)) == {}
+
+
+def test_limpiar_metadatos_conserva_los_pixeles_del_jpeg():
+    """F-05 RED: stripping must not degrade the photo. JPEG is re-encoded
+    with `quality="keep"`, which reuses the original quantization tables, so
+    the decoded pixels come back identical -- a report's evidence photo must
+    not get visibly worse because of a privacy control."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    from reportes.adjuntos import limpiar_metadatos
+
+    datos = _jpeg_con_metadatos()
+    original = SimpleUploadedFile("foto.jpg", datos, content_type="image/jpeg")
+
+    limpio = limpiar_metadatos(original)
+
+    antes = Image.open(BytesIO(datos))
+    despues = Image.open(BytesIO(limpio.read()))
+    assert despues.size == antes.size
+    assert despues.mode == antes.mode
+    assert despues.format == "JPEG"
+    assert list(despues.get_flattened_data()) == list(antes.get_flattened_data())
+
+
+def test_limpiar_metadatos_conserva_el_nombre_y_el_content_type():
+    """F-05 RED: the returned object must still be usable everywhere the
+    original was -- `views.subir_adjunto` reads `.name`, `.content_type` and
+    `.size` off it after the call."""
+    from reportes.adjuntos import limpiar_metadatos
+
+    original = SimpleUploadedFile(
+        "croquis.jpg", _jpeg_con_metadatos(), content_type="image/jpeg"
+    )
+
+    limpio = limpiar_metadatos(original)
+
+    assert limpio.name == "croquis.jpg"
+    assert limpio.content_type == "image/jpeg"
+    assert limpio.size > 0
+
+
+def test_limpiar_metadatos_devuelve_el_original_si_no_puede_decodificar():
+    """F-05 RED: a file Pillow cannot decode -- notably HEIC/HEIF, which the
+    allowlist permits and this Pillow build has no codec for -- must pass
+    through untouched rather than raise. Mirrors
+    `generador._incrustar_adjuntos`'s "skip, never block" posture: a privacy
+    control must not become a new way to fail an upload.
+
+    This is a REAL LIMIT of option A, not an oversight: an unconverted HEIC
+    keeps its GPS. Recorded in SECURITY-REPORT.md."""
+    from reportes.adjuntos import limpiar_metadatos
+
+    basura = b"ftypheic-pero-no-decodificable" * 4
+    original = SimpleUploadedFile("foto.heic", basura, content_type="image/heic")
+
+    limpio = limpiar_metadatos(original)
+
+    assert limpio.read() == basura
+    assert limpio.name == "foto.heic"
+
+
+@pytest.mark.django_db
+def test_subir_adjunto_guarda_la_foto_sin_gps(sesion_de_creador, seccion_s08_id):
+    """F-05 RED (end to end): the stripping must actually be wired into the
+    upload endpoint -- this is the property that protects the stored blob."""
+    from reportes.adjuntos import SECCION_DE_ADJUNTOS as seccion
+
+    client, reporte = sesion_de_creador
+
+    respuesta = client.post(
+        reverse("reportes_adjuntos_subir", args=[reporte.id]),
+        {
+            "archivo": SimpleUploadedFile(
+                "foto.jpg", _jpeg_con_metadatos(), content_type="image/jpeg"
+            ),
+            "seccion_id": seccion,
+            "categoria": CategoriaDeAdjunto.EVIDENCIA,
+        },
+    )
+
+    assert respuesta.status_code == 201
+    adjunto = Adjunto.objects.get()
+    with adjunto.archivo.open("rb") as guardado:
+        exif = _exif_de(guardado.read())
+    assert dict(exif) == {}
+    assert dict(exif.get_ifd(0x8825)) == {}
+
+
+@pytest.mark.django_db
+def test_eliminar_reporte_borra_los_blobs_de_sus_adjuntos(
+    sesion_de_creador, seccion_s08_id
+):
+    """F-05 RED: `eliminar_reporte` is a soft delete by design -- every row
+    stays for audit. The stored FILES are a different question: they live at
+    a public, permanent URL, so leaving them behind means a report the
+    creator deleted is still readable by anyone holding the link, forever.
+    Deleting the blobs while keeping the `Adjunto` rows resolves both needs.
+    """
+    client, reporte = sesion_de_creador
+    client.post(
+        reverse("reportes_adjuntos_subir", args=[reporte.id]),
+        {
+            "archivo": SimpleUploadedFile(
+                "foto.jpg", _jpeg_con_metadatos(), content_type="image/jpeg"
+            ),
+            "seccion_id": SECCION_DE_ADJUNTOS,
+            "categoria": CategoriaDeAdjunto.EVIDENCIA,
+        },
+    )
+    adjunto = Adjunto.objects.get()
+    almacenamiento = adjunto.archivo.storage
+    nombre = adjunto.archivo.name
+    assert almacenamiento.exists(nombre)
+
+    respuesta = client.post(reverse("reportes_eliminar", args=[reporte.id]))
+
+    assert respuesta.status_code == 302
+    reporte.refresh_from_db()
+    assert reporte.eliminado_en is not None
+    # The audit row survives; only the publicly-readable bytes are gone.
+    assert Adjunto.objects.filter(pk=adjunto.pk).exists()
+    assert not almacenamiento.exists(nombre)
+
+
+# --- Abuse ceiling on uploads (SECURITY-REPORT.md F-06) ------------------
+#
+# The spec forbids a MAXIMUM ATTACHMENT COUNT, and that stays true: nobody
+# in the field is told "you already uploaded enough photos". What the spec
+# never decided is whether unlimited-by-product also meant
+# unlimited-by-abuse. It did not: every upload costs Vercel Blob storage and
+# transfer, billed with no ceiling, and a single authenticated account can
+# loop 8 MB requests forever.
+#
+# Real usage, per the product owner: about 4 photos per user per report. The
+# hourly ceiling is set an order of magnitude above that, so it is invisible
+# to anyone working normally and only ever trips on a loop.
+
+
+@pytest.mark.django_db
+def test_subidas_normales_no_tocan_el_techo(sesion_de_creador):
+    """F-06 RED: the ceiling must be invisible in real use. Typical usage is
+    ~4 photos per user per report, so a run of them must all succeed."""
+    from reportes.adjuntos import SUBIDAS_MAXIMAS_POR_HORA
+
+    client, reporte = sesion_de_creador
+    assert SUBIDAS_MAXIMAS_POR_HORA >= 40, (
+        "el techo debe quedar un orden de magnitud sobre el uso real (~4), "
+        "o deja de ser un limite de abuso y pasa a ser un limite de producto"
+    )
+
+    for _ in range(6):
+        respuesta = client.post(
+            reverse("reportes_adjuntos_subir", args=[reporte.id]),
+            {
+                "archivo": SimpleUploadedFile(
+                    "foto.jpg", _jpeg_con_metadatos(), content_type="image/jpeg"
+                ),
+                "seccion_id": SECCION_DE_ADJUNTOS,
+                "categoria": CategoriaDeAdjunto.EVIDENCIA,
+            },
+        )
+        assert respuesta.status_code == 201
+
+    assert Adjunto.objects.count() == 6
+
+
+@pytest.mark.django_db
+def test_pasado_el_techo_por_hora_la_subida_se_rechaza(
+    sesion_de_creador, usuario_factory
+):
+    """F-06 RED: past the hourly ceiling the endpoint answers 429 and
+    creates no row. `429` (not 400) so the client can tell "try later" from
+    "this file is wrong" -- `adjuntos.js` shows a different message."""
+    from django.utils import timezone
+
+    from reportes.adjuntos import SUBIDAS_MAXIMAS_POR_HORA
+
+    client, reporte = sesion_de_creador
+    autor = reporte.creador
+    for indice in range(SUBIDAS_MAXIMAS_POR_HORA):
+        Adjunto.objects.create(
+            reporte=reporte,
+            seccion_id=SECCION_DE_ADJUNTOS,
+            categoria=CategoriaDeAdjunto.EVIDENCIA,
+            archivo=SimpleUploadedFile(f"previa{indice}.jpg", b"x"),
+            nombre_original=f"previa{indice}.jpg",
+            formato_original="image/jpeg",
+            tamano_bytes=1,
+            autor=autor,
+        )
+    antes = Adjunto.objects.count()
+
+    respuesta = client.post(
+        reverse("reportes_adjuntos_subir", args=[reporte.id]),
+        {
+            "archivo": SimpleUploadedFile(
+                "foto.jpg", _jpeg_con_metadatos(), content_type="image/jpeg"
+            ),
+            "seccion_id": SECCION_DE_ADJUNTOS,
+            "categoria": CategoriaDeAdjunto.EVIDENCIA,
+        },
+    )
+
+    assert respuesta.status_code == 429
+    assert respuesta.json()["error"] == "demasiadas-subidas"
+    assert Adjunto.objects.count() == antes
+
+
+@pytest.mark.django_db
+def test_el_techo_es_por_usuario_no_por_reporte(sesion_de_creador, usuario_factory):
+    """F-06 RED: the ceiling counts the ACTOR's own uploads. Another
+    participant hitting their own limit must not lock out everyone else on a
+    shared report -- that would turn an abuse control into a denial of
+    service against the team."""
+    from reportes.adjuntos import SUBIDAS_MAXIMAS_POR_HORA
+    from reportes.models import ParticipacionEnReporte
+
+    client, reporte = sesion_de_creador
+    otro = usuario_factory(username="companero-de-cuadrilla")
+    ParticipacionEnReporte.objects.create(reporte=reporte, usuario=otro)
+    for indice in range(SUBIDAS_MAXIMAS_POR_HORA):
+        Adjunto.objects.create(
+            reporte=reporte,
+            seccion_id=SECCION_DE_ADJUNTOS,
+            categoria=CategoriaDeAdjunto.EVIDENCIA,
+            archivo=SimpleUploadedFile(f"otro{indice}.jpg", b"x"),
+            nombre_original=f"otro{indice}.jpg",
+            formato_original="image/jpeg",
+            tamano_bytes=1,
+            autor=otro,
+        )
+
+    respuesta = client.post(
+        reverse("reportes_adjuntos_subir", args=[reporte.id]),
+        {
+            "archivo": SimpleUploadedFile(
+                "foto.jpg", _jpeg_con_metadatos(), content_type="image/jpeg"
+            ),
+            "seccion_id": SECCION_DE_ADJUNTOS,
+            "categoria": CategoriaDeAdjunto.EVIDENCIA,
+        },
+    )
+
+    assert respuesta.status_code == 201

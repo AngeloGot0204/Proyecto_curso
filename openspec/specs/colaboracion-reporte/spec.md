@@ -99,3 +99,44 @@ The system MUST expose a view listing all invited users plus the creator (shown 
 - GIVEN a `Reporte` with multiple `CambioDeValor` rows across different `fecha` values
 - WHEN a participant requests the participants/history view
 - THEN the rendered history list is ordered by `fecha` descending
+
+### Requirement: History Grouped Into Editing Sessions
+
+The history MUST be presented grouped into "sesiones" rather than as a flat
+row-per-field table: consecutive `CambioDeValor` rows by the SAME `autor`,
+each within 5 minutes (`UMBRAL_SESION`) of the previous one, MUST collapse
+into a single session carrying that author and the session's timestamp.
+
+Without this, a burst of edits saved in the same minute repeats the same
+author and timestamp once per field, giving the reader no signal separating
+one editing sitting from unrelated changes made on different days.
+
+Each item within a session MUST render the field's human-readable label taken
+from the report's current `DefinicionDeTipo.estructura`. When the current
+structure no longer declares a field id — for example after its definition was
+edited — the item MUST fall back to the raw id: stale ids MUST never make the
+history raise or 404.
+
+#### Scenario: Consecutive edits by one author collapse into one session
+
+- GIVEN a `Reporte` with 7 `CambioDeValor` rows by user A, all within the same minute
+- WHEN a participant requests the participants/history view
+- THEN the history shows one session for user A containing all 7 items
+
+#### Scenario: A different author opens a new session
+
+- GIVEN two consecutive `CambioDeValor` rows one minute apart, the first by user A and the second by user B
+- WHEN a participant requests the participants/history view
+- THEN the history shows two separate sessions
+
+#### Scenario: The same author beyond the threshold opens a new session
+
+- GIVEN two `CambioDeValor` rows by user A more than 5 minutes apart
+- WHEN a participant requests the participants/history view
+- THEN the history shows two separate sessions for user A
+
+#### Scenario: Unknown field id falls back to its raw identifier
+
+- GIVEN a `CambioDeValor` whose `identificador_de_campo` is no longer declared in the report's current `estructura`
+- WHEN a participant requests the participants/history view
+- THEN the item renders with the raw identifier as its label and the response is 200

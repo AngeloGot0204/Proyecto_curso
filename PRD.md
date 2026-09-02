@@ -105,14 +105,14 @@ definición declarativa por tipo de reporte y almacenamiento genérico de valore
   genera como espacio en blanco para firmar en el documento descargado, igual que hoy.
 - No incluye edición del reporte una vez generado y descargado (para corregir habría que volver
   a completar el formulario o editar el archivo descargado fuera de la app).
-- **(Corrección, decisión #14 de RESOLUCION-ADVERSARIAL.md)** Sí existe una pantalla de historial y
-  búsqueda de reportes pasados propios: "Mis reportes" (S-02 del DESIGN) agrupa los reportes por
-  estado (en progreso, pendientes de otra parte, listos para generar) con buscador y filtros. Lo
+- Sí existe una pantalla de historial y búsqueda de reportes pasados propios: "Mis reportes" (S-02 del DESIGN) agrupa los reportes por
+  estado (en progreso, listos para generar, terminados) con buscador y filtros. Lo
   que **no** incluye esta versión son reportes de gestión ni analítica agregada sobre reportes
   pasados (comparativas, estadísticas entre reportes, exportables de gestión).
 - No incluye soporte multi-tenant / multi-empresa con branding distinto por cliente.
-- No incluye la creación de nuevos tipos de reporte desde la interfaz de usuario final (agregar
-  un tipo de reporte nuevo es tarea de configuración/administración, no self-service en el MVP).
+- La creación de nuevos tipos de reporte se hace desde la interfaz web, en la pantalla de
+  administración (S-14): un administrador carga el tipo, su plantilla `.xlsx` y su definición sin
+  tocar código. No incluye self-service para usuarios no administradores.
 - No incluye integración automática con otros sistemas (ERP, sistemas de gestión de calidad,
   firma electrónica) para traer o enviar datos.
 - No incluye auto-registro de usuarios (las cuentas las crea únicamente el administrador).
@@ -143,9 +143,10 @@ definición declarativa por tipo de reporte y almacenamiento genérico de valore
 - El usuario completa el formulario sin conexión y cierra la app antes de subirlo: el progreso
   debe quedar guardado localmente y sincronizarse solo cuando vuelva a haber internet, sin
   perder datos ni duplicar el reporte al sincronizar.
-- Falla de sincronización o reintento duplicado — resuelto vía ID local idempotente (ver
-  "Supuestos y riesgos abiertos"): el servidor asigna el número de registro solo al sincronizar
-  y descarta reintentos con el mismo ID local.
+- Falla de sincronización o reintento duplicado al crear el reporte — resuelto vía ID local
+  idempotente (ver "Supuestos y riesgos abiertos"): el reporte se crea online y el número de
+  registro se asigna en ese momento; el ID local solo evita que un reintento del mismo POST
+  duplique el `Reporte`.
 - Un checklist tiene un ítem marcado "No cumple" (falla): el sistema solo advierte al usuario,
   no bloquea la generación del reporte (queda registrado con su observación).
 - Dos horas ingresadas (inicio/término) son inconsistentes (término antes que inicio, o fuera de
@@ -173,24 +174,22 @@ definición declarativa por tipo de reporte y almacenamiento genérico de valore
 - El reporte **no se cierra automáticamente** al completarse los campos: la persona encargada de
   revisarlo da el visto bueno y lo marca como terminado. Ese acto habilita la generación del
   documento final.
-- **(Corrección, decisión #14 de RESOLUCION-ADVERSARIAL.md)** El ciclo de vida del reporte **no**
-  arranca en el servidor: arranca como **borrador local** en el dispositivo donde se crea (estado
-  `borrador local`, ver TECH-DESIGN y ADR-0004/ADR-0005), y sólo pasa a existir en el servidor
-  cuando el dispositivo sincroniza. El supuesto anterior de esta sección — que el reporte "vive" en
-  el servidor desde que se crea — quedaba en contradicción directa con el diseño offline y se
-  corrige aquí. El modo offline cubre la captura de datos sin señal desde el primer campo, no sólo
-  un corte puntual; cuando el usuario recupera conexión y sincroniza, recién ahí su aporte queda
-  visible para los demás participantes.
-- **Un borrador sin sincronizar vive solo en el dispositivo donde se capturó** (el navegador de
-  ese equipo). No aparece en los otros dispositivos del mismo usuario hasta que sincroniza. La
-  app debe comunicarlo de forma explícita para que el usuario no crea que perdió el reporte.
-- Mecanismo de sincronización offline→online definido: mientras el reporte está sin conexión,
-  solo tiene un ID local (generado en el dispositivo, invisible para el usuario). El número de
-  registro oficial lo asigna el servidor recién al sincronizar, en orden de llegada — así nunca
-  hay choque de correlativos entre dispositivos. Ese mismo ID local funciona como llave para
-  evitar duplicados: si el dispositivo reintenta subir el mismo reporte dos veces, el servidor
-  lo reconoce y no lo crea de nuevo. La app muestra una lista simple de "reportes pendientes de
-  subir" con opción de reintentar.
+- El `Reporte` se crea **online**: el POST a "Nuevo reporte"
+  necesita conexión, y el número de registro oficial lo asigna el servidor en ese mismo momento
+  (secuencia de BD sobre `numero_registro`), no "al sincronizar". No existe un estado
+  `borrador local` previo a la creación del `Reporte` en el servidor.
+  El `id_local` que viaja en ese POST no es para crear offline-first: es la llave de idempotencia
+  que evita duplicar el `Reporte` si el dispositivo reintenta el mismo POST (doble click, reintento
+  de red) — ver `reporte-idempotent-creation`.
+  Donde sí aplica el modo offline es **después** de creado el `Reporte`: cada paso del formulario
+  (`paso-offline.js` + IndexedDB) puede completarse sin señal y queda en cola local hasta
+  sincronizar; recién ahí ese paso queda visible para los demás participantes. La pantalla de
+  sincronización agregada (S-15) lista esos pasos pendientes/fallidos entre reportes, con
+  reintento por fila.
+- **Un paso sin sincronizar vive solo en el dispositivo donde se capturó** (el navegador de ese
+  equipo, vía IndexedDB). No aparece en los otros dispositivos del mismo usuario hasta que
+  sincroniza. La app debe comunicarlo de forma explícita para que el usuario no crea que perdió
+  su avance.
 - La meta de reducción de tiempo (45%) se toma como dada por el usuario, sin línea base medida
   formalmente. Se recomienda validarla informalmente comparando el tiempo real de un caso de uso
   antes de anunciarla como métrica de éxito hacia terceros.

@@ -1,0 +1,126 @@
+name: CI
+
+# Corre en cada push y en cada pull request. El objetivo no es decorar el repo
+# con un badge verde: es que un cambio que rompe algo se vea ANTES de llegar a
+# producción, sin depender de que alguien se acuerde de correr `pytest`.
+#
+# Nota honesta sobre el alcance: Vercel despliega solo en cada push por su
+# integración con Git, así que hoy esto es un check informativo, no un gate —
+# un check rojo y un deploy en vivo pueden coexistir. Convertirlo en gate real
+# está diseñado en DEPLOY-PLAN.md (apagar el auto-deploy y disparar el Deploy
+# Hook desde acá) y es una decisión pendiente del dueño del proyecto.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  # Un push nuevo sobre la misma rama cancela la corrida anterior: la suite
+  # tarda ~19 minutos y no tiene sentido pagar dos veces por un commit viejo.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Suite completa (Python 3.12 + PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      # Postgres de verdad, no SQLite: el proyecto usa `db_default` con
+      # `gen_random_uuid()` y `nextval()`, y `CheckConstraint` a nivel de
+      # motor. En SQLite la mitad de los tests no probaría nada.
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: reportes
+          POSTGRES_PASSWORD: reportes
+          POSTGRES_DB: reportes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Entorno del job: el de DESARROLLO, porque lo que corre acá son tests.
+    # El paso que simula un despliegue sobreescribe lo que necesita, abajo.
+    #
+    # `DJANGO_DEBUG=True` no es descuido: `STORAGES["default"]` se elige por
+    # `not DEBUG` (spec `despliegue-e-infraestructura`), así que con `False` el
+    # backend sería `VercelBlobStorage` y cada test que toque un archivo pediría
+    # un `BLOB_READ_WRITE_TOKEN` real. Un runner de CI no debe tener credenciales
+    # de producción para correr tests, así que corre igual que una máquina de
+    # desarrollo: `FileSystemStorage` sobre disco efímero.
+    env:
+      # Las cuatro obligatorias que `require_env()`/`require_bool_env()` exigen
+      # al arrancar. Son valores de test, no secretos: la base vive y muere con
+      # el runner, y no hay nada real detrás.
+      DATABASE_URL: postgres://reportes:reportes@localhost:5432/reportes
+      DJANGO_SECRET_KEY: clave-solo-para-ci-sin-valor-fuera-de-este-runner-efimero
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      DJANGO_HTTPS_ONLY: "False"
+      DJANGO_DEBUG: "True"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 3.12 (la misma versión que corre en producción)
+        uses: actions/setup-python@v5
+        with:
+          # Leída de `.python-version`, para que no haya dos lugares que
+          # declaren la versión y puedan divergir (spec
+          # `despliegue-e-infraestructura`, "Explicitly Pinned Python Version").
+          python-version-file: .python-version
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Verificar que la versión coincide con .python-version
+        # Barato, y cierra el hueco que este mismo proyecto ya sufrió: correr
+        # los tests en un intérprete distinto al de producción y creer que
+        # verde significa algo (SECURITY-REPORT.md F-14).
+        run: |
+          esperada=$(cat .python-version)
+          real=$(python -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
+          echo "esperada=$esperada  real=$real"
+          test "$esperada" = "$real"
+
+      - name: Chequeo de despliegue de Django
+        # `--fail-level WARNING` es deliberadamente estricto: una advertencia de
+        # seguridad de Django es exactamente lo que no queremos que llegue a
+        # producción sin que nadie la mire.
+        #
+        # Este paso, y solo este, corre con el entorno de PRODUCCIÓN: es lo
+        # único del job que simula un despliegue.
+        #
+        # Con el entorno de desarrollo del job se quejaría de exactamente las
+        # protecciones que ese entorno apaga (W004, W008, W012, W016 por
+        # `HTTPS_ONLY=False`, y W018 por `DEBUG=True`) — un fallo circular que
+        # no dice nada sobre el código.
+        env:
+          DJANGO_HTTPS_ONLY: "True"
+          DJANGO_DEBUG: "False"
+        run: python manage.py check --deploy --fail-level WARNING
+
+      - name: Verificar que no falten migraciones por crear
+        # Un modelo cambiado sin su migración pasa todos los tests en local
+        # (donde la base ya tiene la columna) y revienta en el primer deploy.
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Suite completa
+        run: pytest -q --create-db
+
+      - name: Verificar la integridad de las librerías vendorizadas
+        # `static/vendor/PROVENANCE.md` registra el SHA-256 de cada archivo
+        # traído de un registro externo. Si el contenido cambia sin que se
+        # actualice ese registro, la procedencia deja de ser comprobable — que
+        # es justamente por lo que se vendorizaron (SECURITY-REPORT.md F-02).
+        run: |
+          cd static/vendor
+          grep -oE '^[0-9a-f]{64}  [^ ]+\.js$' PROVENANCE.md | sha256sum -c -

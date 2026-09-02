@@ -13,6 +13,7 @@ dependencies = [
     "Pillow>=11.3,<13",
     "sentry-sdk>=2.0,<3",
     "vercel_blob>=0.4,<1",
+    "requests>=2.32,<3",
 ]
 
 [tool.vercel]

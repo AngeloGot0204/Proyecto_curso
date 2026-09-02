@@ -53,7 +53,6 @@ capa offline propia en el navegador (ADR-0001).
    │ (Neon)          │   │ · plantillas .xlsx  │
    │                 │   │ · logos             │
    │                 │   │ · adjuntos          │
-   │                 │   │ · .xlsx generados   │
    └─────────────────┘   └─────────────────────┘
 
 Hosting → Vercel, HTTPS automático (ADR-0009)
@@ -74,9 +73,9 @@ sin ADR propia por no constituir una decisión con alternativas reales.
 | [ADR-0001](adrs/0001-arquitectura-de-componentes.md) | Aplicación Django monolítica con capa offline mínima en JavaScript | Aceptado |
 | [ADR-0002](adrs/0002-motor-de-generacion-de-excel.md) | Generar el `.xlsx` rellenando la plantilla original con openpyxl | Aceptado |
 | [ADR-0003](adrs/0003-modelo-de-datos-y-plantillas.md) | Tipos de reporte definidos por configuración declarativa y valores en almacenamiento genérico | Aceptado |
-| [ADR-0004](adrs/0004-estrategia-offline-y-sincronizacion.md) | Offline con IndexedDB, service worker y sincronización por sección de rol | Aceptado |
-| [ADR-0005](adrs/0005-autenticacion-y-sesion.md) | Autenticación con sesiones de Django y sesión tolerante al modo offline | Aceptado |
-| [ADR-0006](adrs/0006-colaboracion-permisos-y-cierre-del-reporte.md) | Colaboración por invitación explícita, edición abierta con registro de cambios y cierre manual | Aceptado |
+| [ADR-0004](adrs/0004-estrategia-offline-y-sincronizacion.md) | Offline con IndexedDB, service worker y sincronización por sección de rol | Aceptado, con salvedades |
+| [ADR-0005](adrs/0005-autenticacion-y-sesion.md) | Autenticación con sesiones de Django y sesión tolerante al modo offline | Aceptado, sin la mitad offline |
+| [ADR-0006](adrs/0006-colaboracion-permisos-y-cierre-del-reporte.md) | Colaboración por invitación explícita, edición abierta con registro de cambios y cierre manual | Aceptado, sin el bloqueo de edición |
 | [ADR-0007](adrs/0007-sin-vista-previa-en-la-aplicacion.md) | Sin vista previa del reporte dentro de la aplicación | Aceptado |
 | [ADR-0008](adrs/0008-resiliencia-y-observabilidad.md) | Fallo limpio en generación, validación anticipada de configuración y observabilidad con Sentry | Aceptado |
 | [ADR-0009](adrs/0009-despliegue-e-infraestructura.md) | Despliegue en Vercel, base de datos en Neon y almacenamiento en Vercel Blob | Aceptado |
@@ -116,7 +115,7 @@ definición declarativa (ADR-0003).
 | `Usuario` | Cuenta creada por el administrador. Rol: administrador o usuario (ADR-0005). |
 | `TipoDeReporte` | Metadatos del formato: nombre, código, versión, logo, plantilla `.xlsx` asociada y estado activo/inactivo. Su estructura interna proviene del archivo de definición. |
 | `DefinicionDeTipo` | Archivo declarativo con secciones, campos, ítems, tipos de dato, roles y mapeo campo → celda. Validado al activar el tipo (ADR-0008). |
-| `Reporte` | Instancia concreta. Guarda ID local de origen (clave de idempotencia, `unique` en base de datos — ADR-0004), número de registro oficial asignado al sincronizar mediante secuencia de base de datos (no `max()+1`, ADR-0004), tipo, creador (`creado_por`), fecha, estado de cierre y la **versión de la definición del tipo de reporte** vigente cuando el borrador se creó localmente (ADR-0004, decisión #18). |
+| `Reporte` | Instancia concreta, creada online. Guarda `id_local` (clave de idempotencia contra reintento de creación, `unique` en base de datos — ver `reporte-idempotent-creation`), número de registro oficial asignado en el momento de la creación mediante secuencia de base de datos (no `max()+1`), tipo, creador (`creado_por`), fecha, `estado` (`en_progreso`/`terminado`, ver "Ciclo de vida del reporte" abajo) y la **versión de la definición del tipo de reporte** vigente cuando el reporte se creó (decisión #18). Los pasos posteriores del formulario sí pueden completarse offline (ADR-0004) y sincronizan por separado. |
 | `ParticipacionEnReporte` | Invitación explícita: qué usuario tiene acceso a qué reporte (ADR-0006). No lleva un campo de "responsable de cierre": marcar como terminado se decide comparando contra `Reporte.creado_por` (ver ADR-0006). |
 | `ValorDeReporte` | Almacenamiento genérico: reporte, identificador de campo, valor, autor y fecha. Una fila por valor capturado. **No lleva un campo de rol**: no hay roles de usuario ni permisos por sección, cualquier usuario con acceso edita cualquier campo, como una hoja de cálculo compartida (ADR-0003). |
 | `CambioDeValor` | Historial de auditoría: quién editó qué campo, valor anterior y cuándo. Contrapartida obligatoria de la edición abierta (ADR-0006). Retención: cola FIFO de los **últimos 30 cambios por reporte completo** (no por campo individual); al registrarse el cambio 31 de un reporte, se elimina el más antiguo de ese mismo reporte. |
@@ -131,13 +130,26 @@ S-14 exige que la imagen sea un dato de `TipoDeReporte` y no parte del código.
 
 ### Ciclo de vida del reporte
 
+`Reporte.estado` solo persiste dos valores: `en_progreso` y
+`terminado` (`EstadoDeReporte`). No existe un tercer valor de esquema para "completo" ni para
+"generado" — no hay campo que registre si ya se descargó el `.xlsx` (eso lo audita `Generacion`,
+una entidad aparte, no un estado del reporte).
+
+Lo que sí existen son **tres grupos derivados** que se calculan en cada consulta a "Mis reportes"
+(`bucket_de_reporte`, sin persistir), por prioridad:
+
 ```
-borrador local → en progreso (sincronizado) → completo → terminado (visto bueno) → generado
+terminado (tiene VistoBueno)
+  > listo_para_generar (no faltan campos obligatorios, aún sin VistoBueno)
+  > en_progreso (todo lo demás)
 ```
 
-`completo` significa que no faltan campos, pero **no** habilita la generación por sí solo: hace
-falta el visto bueno manual (ADR-0006). Un borrador sin sincronizar existe **únicamente en el
-dispositivo donde se capturó** (ADR-0004 y ADR-0005).
+"Listo para generar" y "terminado" no bloquean edición: cualquier participante puede seguir
+editando un reporte en cualquiera de los tres grupos; el visto bueno (`VistoBueno`, solo el
+creador) es lo único que habilita la generación del documento.
+
+Cada paso individual del formulario sí puede completarse offline (`paso-offline.js` + IndexedDB,
+ADR-0004) y sincroniza por separado del reporte ya existente en el servidor.
 
 ## Criterios de aceptación por flujo
 
