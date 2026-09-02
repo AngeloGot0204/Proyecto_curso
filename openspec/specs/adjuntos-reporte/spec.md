@@ -81,13 +81,20 @@ compression.
 ### Requirement: Client-Side Best-Effort Compression with Fallback
 
 The client MUST attempt compression via `browser-image-compression` before upload.
-If HEIC conversion fails, compression fails, or the CDN is unreachable, the client
+If HEIC conversion fails, compression fails, or a library fails to load, the client
 MUST fall back to the original file (still validated against the 8MB ceiling) rather
 than blocking capture.
 
-#### Scenario: CDN unreachable falls back to original file
+`heic2any` and `browser-image-compression` MUST be served from this application's
+own origin, never from a third-party CDN: a CDN script with no integrity check runs
+arbitrary code on an authenticated capture screen, and a CDN request also fails on
+exactly the first-visit-without-signal case the offline layer exists for. Both are
+vendored under `static/vendor/`, with version and SHA-256 recorded in
+`static/vendor/PROVENANCE.md`.
 
-- GIVEN the compression/conversion CDN libraries fail to load
+#### Scenario: A library that fails to load falls back to the original file
+
+- GIVEN the compression/conversion libraries fail to load or are unavailable
 - WHEN the user submits an attachment under 8MB
 - THEN the original, uncompressed file is queued/uploaded without blocking capture
 
@@ -133,6 +140,115 @@ The system MUST NOT impose a maximum number of attachments per `Reporte`.
 - GIVEN a report already has several valid attachments
 - WHEN another valid attachment is submitted
 - THEN it is accepted and stored, with no count-based rejection
+
+### Requirement: Per-User Abuse Ceiling on Upload Rate
+
+Distinct from "No Hard Cap on Attachment Count", which is a *product* rule and
+still holds: nobody in the field is ever told they have uploaded enough photos.
+This is an *abuse* rule. Every upload costs Vercel Blob storage and transfer,
+billed with no ceiling, and one authenticated account can loop 8MB requests
+indefinitely.
+
+The system MUST reject an upload when the requesting user has already created
+`reportes.adjuntos.SUBIDAS_MAXIMAS_POR_HORA` attachments in the preceding hour,
+counted across all reports. The rejection MUST use HTTP 429 (not 400) so the
+client can distinguish "retry later" from "this file is wrong".
+
+The ceiling MUST be counted per USER, never per `Reporte`: one participant
+reaching their own limit MUST NOT prevent other participants from uploading to
+a shared report, which would turn an abuse control into a denial of service
+against the crew.
+
+The ceiling MUST be set far enough above real usage to be invisible in normal
+work. Observed usage is ~4 attachments per user per report; the configured
+value is 60 per hour.
+
+#### Scenario: Normal field usage never reaches the ceiling
+
+- GIVEN a user uploading attachments at a realistic pace for one report
+- WHEN they submit several valid attachments in a row
+- THEN every one is accepted, with no rate-based rejection
+
+#### Scenario: Upload past the hourly ceiling is rejected
+
+- GIVEN a user who has already created `SUBIDAS_MAXIMAS_POR_HORA` attachments within the last hour
+- WHEN they submit another valid attachment
+- THEN the response is HTTP 429 with error id `demasiadas-subidas`, and no `Adjunto` row is created
+
+#### Scenario: One participant's ceiling does not block another
+
+- GIVEN participant B has reached the ceiling on a shared report
+- WHEN creator A submits a valid attachment to that same report
+- THEN it is accepted
+
+### Requirement: Metadata Stripping Before Storage
+
+A stored attachment is served from a public, permanent Vercel Blob URL: the
+listing is access-scoped, the file itself is not. Whatever a phone camera
+embedded therefore leaves the application readable by anyone holding the link.
+
+The system MUST strip embedded metadata — EXIF including the GPS sub-IFD —
+from every attachment it can decode, BEFORE writing it to storage. Stripping
+MUST run after format/size validation, so a rejected upload costs no work.
+
+Stripping MUST NOT degrade the image: a JPEG MUST be re-encoded reusing its
+original quantization tables so decoded pixels are unchanged, PNG is lossless
+by definition, and WEBP MUST be written lossless.
+
+Stripping MUST NOT become a new way for an upload to fail. When the file
+cannot be decoded, its format is not re-encodable, or the result would exceed
+the size ceiling, the system MUST store the ORIGINAL file unchanged rather
+than raising — mirroring the "skip, never block" posture of attachment
+embedding during generation.
+
+KNOWN LIMIT: the deployed Pillow build ships no HEIF codec, so an unconverted
+HEIC/HEIF attachment cannot be decoded and retains its metadata, GPS included.
+Client-side conversion to JPEG normally prevents this, but it is best-effort
+and the server MUST NOT rely on it.
+
+This requirement reduces what the public URL exposes. It does NOT make the URL
+private; that remains an open architectural question.
+
+#### Scenario: GPS coordinates are removed from an uploaded photo
+
+- GIVEN a JPEG carrying EXIF GPS coordinates, camera make and a timestamp
+- WHEN it is uploaded through the attachment endpoint
+- THEN the stored file carries no EXIF block and no GPS sub-IFD
+
+#### Scenario: Stripping preserves the photograph
+
+- GIVEN a JPEG attachment
+- WHEN its metadata is stripped
+- THEN the stored image has identical dimensions, mode and decoded pixels
+
+#### Scenario: Undecodable file is stored unchanged instead of failing
+
+- GIVEN an attachment the image library cannot decode
+- WHEN it is uploaded
+- THEN the original bytes are stored, the upload succeeds, and no error is raised
+
+### Requirement: Attachment Files Deleted When a Report Is Deleted
+
+`Reporte` deletion is deliberately a SOFT delete: every related row, `Adjunto`
+included, survives for audit and recovery. Attachment BYTES are a separate
+question — they live at a public, permanent URL that no session check guards,
+so leaving them behind means a report its creator deleted stays readable
+forever by anyone holding the link, including someone whose access was revoked.
+
+The system MUST delete the stored file behind every `Adjunto` of a deleted
+`Reporte`, while KEEPING the `Adjunto` rows so the audit trail still records
+who uploaded what and when.
+
+Deletion MUST be attempted per attachment and MUST NOT be transactional: a
+storage backend failing on one file MUST NOT abort the deletion the user asked
+for, nor leave the remaining files behind. A failure MUST be logged so an
+orphaned blob can be cleaned up out of band.
+
+#### Scenario: Deleting a report removes its attachment files but keeps the rows
+
+- GIVEN a report with a stored attachment
+- WHEN its creator deletes the report
+- THEN the report is marked deleted, the `Adjunto` row still exists, and the stored file no longer exists
 
 ### Requirement: Server-Side Listing and Download
 
