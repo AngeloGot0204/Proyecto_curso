@@ -9,7 +9,7 @@ from reportes import listado
 from reportes.models import VistoBueno
 from usuarios.decorators import solo_administradores
 from usuarios.forms import ResetearPasswordForm, UsuarioCrearForm, UsuarioEditarForm
-from usuarios.models import Usuario
+from usuarios.models import Rol, Usuario
 
 TAMANO_DE_PAGINA = 20
 
@@ -78,6 +78,23 @@ def usuarios_editar(request, usuario_id):
     if request.method == "POST":
         form = UsuarioEditarForm(request.POST, instance=usuario)
         if form.is_valid():
+            # Same reasoning as `usuarios_suspender`'s self-suspend guard:
+            # dropping your own administrator role locks you out of every
+            # `solo_administradores` screen with no self-service way back
+            # in, and recovering needs database or `manage.py` access
+            # against production. Demoting a DIFFERENT admin stays
+            # unrestricted — the actor is mid-request as an active admin, so
+            # no single request can leave zero administrators.
+            se_autodegrada = (
+                usuario.id == request.user.id
+                and form.cleaned_data["rol"] != Rol.ADMINISTRADOR
+            )
+            if se_autodegrada:
+                messages.error(
+                    request,
+                    "No podés quitarte a vos mismo el rol de administrador.",
+                )
+                return redirect("usuarios_lista")
             form.save()
             messages.success(request, "Usuario actualizado correctamente.")
             return redirect("usuarios_lista")
