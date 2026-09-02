@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Nuevo reporte{% endblock %}
 
@@ -50,19 +51,5 @@
     </ul>
 </section>
 
-<script>
-document.querySelectorAll(".js-nuevo-reporte").forEach(function (form) {
-    form.addEventListener("submit", function () {
-        // id_local: same value on a double-click resubmit makes the
-        // server-side get_or_create() idempotent instead of creating a
-        // duplicate Reporte (spec `reporte-idempotent-creation`).
-        var campo = form.querySelector(".js-id-local");
-        if (!campo.value) {
-            campo.value = crypto.randomUUID();
-        }
-        var boton = form.querySelector("button[type=submit]");
-        boton.disabled = true;
-    });
-});
-</script>
+<script src="{% static 'reportes/nuevo-reporte-form.js' %}" defer></script>
 {% endblock %}

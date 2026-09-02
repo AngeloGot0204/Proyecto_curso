@@ -20,7 +20,7 @@
         </div>
         <a class="adjuntos__descarga" href="{{ adjunto.archivo.url }}">Descargar</a>
         {% if reporte.creador_id == request.user.id or adjunto.autor_id == request.user.id %}
-        <form method="post" class="adjuntos__eliminar" action="{% url 'reportes_adjuntos_eliminar' reporte.id adjunto.id %}" onsubmit="return confirm('¿Eliminar este adjunto? No se puede deshacer.')">
+        <form method="post" class="adjuntos__eliminar" action="{% url 'reportes_adjuntos_eliminar' reporte.id adjunto.id %}" data-confirmar="¿Eliminar este adjunto? No se puede deshacer.">
             {% csrf_token %}
             <input type="hidden" name="siguiente" value="adjuntos">
             <button type="submit" class="lista__eliminar" aria-label="Eliminar {{ adjunto.nombre_original }}">

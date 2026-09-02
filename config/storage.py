@@ -14,6 +14,13 @@ from django.utils.deconstruct import deconstructible
 
 import vercel_blob.blob_store as blob_store
 
+# Single owner of the Blob public hostname (`test_a7_blob_consumption_scoped_
+# to_storage_module` enforces that nothing else names it). `config.seguridad`
+# imports this for the CSP's `img-src`: attachments and logos are served from
+# here, so a policy that omitted it would blank every photo in the app.
+# Wildcarded because each Vercel Blob store gets its own subdomain.
+HOST_PUBLICO_DE_BLOB = "https://*.public.blob.vercel-storage.com"
+
 
 @deconstructible
 class VercelBlobStorage(Storage):

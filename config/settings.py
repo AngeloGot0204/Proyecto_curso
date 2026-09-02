@@ -105,6 +105,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Content-Security-Policy (SECURITY-REPORT.md F-02). Listed early so the
+    # header is attached on the way out of every response, including those
+    # short-circuited by middleware below it (redirects, 403s, 404s).
+    'config.seguridad.content_security_policy',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

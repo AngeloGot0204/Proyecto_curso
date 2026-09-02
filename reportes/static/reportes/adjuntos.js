@@ -9,8 +9,10 @@
  * never block or roll back the step's field values (spec "Per-Attachment
  * Failure Isolation", "Offline Queueing Through Shared Dexie Schema").
  *
- * Vanilla JS only, no build step (ADR-0001). Two third-party CDN
- * libraries are used, both strictly best-effort and feature-detected via
+ * Vanilla JS only, no build step (ADR-0001). Two third-party libraries
+ * are used, both vendored under `static/vendor/` (SECURITY-REPORT.md F-02;
+ * they used to load from a CDN with no `integrity`) and both strictly
+ * best-effort, feature-detected via
  * `typeof … === "function"` (never a hard import, mirroring the
  * `typeof Dexie === "undefined"` guard both existing offline scripts open
  * with):
@@ -19,10 +21,11 @@
  *   - `window.imageCompression` (`browser-image-compression`'s UMD global)
  *     — best-effort size reduction (spec "Client-Side Best-Effort
  *     Compression with Fallback").
- * Either library missing, throwing, or the CDN being unreachable falls
- * back to the ORIGINAL file, still checked against the 8MiB ceiling before
- * any upload attempt — capture is never hard-blocked by a CDN outage
- * (design D3 pipeline diagram).
+ * Either library missing or throwing falls back to the ORIGINAL file,
+ * still checked against the 8MiB ceiling before any upload attempt —
+ * capture is never hard-blocked by a library that did not load (design D3
+ * pipeline diagram). Self-hosting makes that far less likely than it was,
+ * but the guards stay: they also cover a decode error on a real file.
  *
  * Depends on the rendered-attribute contract on a dedicated container
  * (deliberately decoupled from `paso-offline.js`'s `form[data-reporte-id]
@@ -42,9 +45,10 @@
     "use strict";
 
     if (typeof Dexie === "undefined") {
-        // Dexie failed to load (e.g. offline first visit, CDN unreachable)
-        // — offline queueing is unavailable this load; same degrade
-        // contract as paso-offline.js/nuevo-reporte.js.
+        // Dexie failed to load — offline queueing is unavailable this
+        // load; same degrade contract as paso-offline.js/nuevo-reporte.js.
+        // Since vendoring (F-02) this no longer happens on a first visit
+        // without signal, which is exactly when the offline layer matters.
         return;
     }
 

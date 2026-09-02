@@ -7,21 +7,11 @@
 {# Change `vista-sincronizacion-pendientes`, task 3.4 (design's File #}
 {# Changes / Data Flow) — render-only shell (D1); everything below reads #}
 {# Dexie client-side, mirroring `paso.html`'s script order. #}
-<script src="https://unpkg.com/dexie@3/dist/dexie.js" crossorigin="anonymous"></script>
+<script src="{% static 'vendor/dexie.js' %}"></script>
 <script src="{% static 'reportes/offline-db.js' %}"></script>
 <script src="{% static 'reportes/envio-paso.js' %}"></script>
 <script src="{% static 'reportes/sincronizacion.js' %}" defer></script>
-<script>
-    if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-            navigator.serviceWorker.register("/sw.js").catch(function () {
-                // Registration failure must never block the page — same
-                // degrade-to-online-only contract as `paso.html` (change
-                // `capa-offline`).
-            });
-        });
-    }
-</script>
+<script src="{% static 'js/registrar-sw.js' %}" defer></script>
 {% endblock %}
 
 {% block barra %}
