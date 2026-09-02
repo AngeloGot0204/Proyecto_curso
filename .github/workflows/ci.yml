@@ -86,6 +86,14 @@ jobs:
         # `--fail-level WARNING` es deliberadamente estricto: una advertencia de
         # seguridad de Django es exactamente lo que no queremos que llegue a
         # producción sin que nadie la mire.
+        #
+        # `DJANGO_HTTPS_ONLY=True` acá y solo acá: el resto del job corre en
+        # `False` porque los tests no hablan HTTPS, pero este chequeo simula el
+        # despliegue y con el flag apagado se quejaría de las protecciones que
+        # el flag mismo apaga (W004, W008, W012, W016) — un fallo circular que
+        # no dice nada sobre el código.
+        env:
+          DJANGO_HTTPS_ONLY: "True"
         run: python manage.py check --deploy --fail-level WARNING
 
       - name: Verificar que no falten migraciones por crear
