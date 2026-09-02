@@ -45,6 +45,15 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+    # Entorno del job: el de DESARROLLO, porque lo que corre acá son tests.
+    # El paso que simula un despliegue sobreescribe lo que necesita, abajo.
+    #
+    # `DJANGO_DEBUG=True` no es descuido: `STORAGES["default"]` se elige por
+    # `not DEBUG` (spec `despliegue-e-infraestructura`), así que con `False` el
+    # backend sería `VercelBlobStorage` y cada test que toque un archivo pediría
+    # un `BLOB_READ_WRITE_TOKEN` real. Un runner de CI no debe tener credenciales
+    # de producción para correr tests, así que corre igual que una máquina de
+    # desarrollo: `FileSystemStorage` sobre disco efímero.
     env:
       # Las cuatro obligatorias que `require_env()`/`require_bool_env()` exigen
       # al arrancar. Son valores de test, no secretos: la base vive y muere con
@@ -53,7 +62,7 @@ jobs:
       DJANGO_SECRET_KEY: clave-solo-para-ci-sin-valor-fuera-de-este-runner-efimero
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
       DJANGO_HTTPS_ONLY: "False"
-      DJANGO_DEBUG: "False"
+      DJANGO_DEBUG: "True"
 
     steps:
       - uses: actions/checkout@v4
@@ -87,13 +96,16 @@ jobs:
         # seguridad de Django es exactamente lo que no queremos que llegue a
         # producción sin que nadie la mire.
         #
-        # `DJANGO_HTTPS_ONLY=True` acá y solo acá: el resto del job corre en
-        # `False` porque los tests no hablan HTTPS, pero este chequeo simula el
-        # despliegue y con el flag apagado se quejaría de las protecciones que
-        # el flag mismo apaga (W004, W008, W012, W016) — un fallo circular que
+        # Este paso, y solo este, corre con el entorno de PRODUCCIÓN: es lo
+        # único del job que simula un despliegue.
+        #
+        # Con el entorno de desarrollo del job se quejaría de exactamente las
+        # protecciones que ese entorno apaga (W004, W008, W012, W016 por
+        # `HTTPS_ONLY=False`, y W018 por `DEBUG=True`) — un fallo circular que
         # no dice nada sobre el código.
         env:
           DJANGO_HTTPS_ONLY: "True"
+          DJANGO_DEBUG: "False"
         run: python manage.py check --deploy --fail-level WARNING
 
       - name: Verificar que no falten migraciones por crear
